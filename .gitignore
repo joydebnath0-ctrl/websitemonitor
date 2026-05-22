@@ -1,0 +1,10 @@
+security-reports/
+all-reports/
+audit-report/
+security-summary.md
+trivy-fs-report.txt
+trivy-config-report.txt
+*.log
+*.zip
+__pycache__/
+*.pyc

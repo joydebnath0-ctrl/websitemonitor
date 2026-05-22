@@ -1,0 +1,7 @@
+# ZAP rule configuration.
+#
+# Format:
+# RULE_ID	LEVEL	NEW_LEVEL	URL
+#
+# Example:
+# 10015	IGNORE	-	https://example.com/.*

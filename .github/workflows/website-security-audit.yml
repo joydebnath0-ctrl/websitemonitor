@@ -1,0 +1,129 @@
+name: Website Security Audit
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    # Runs every Monday at 08:00 UTC.
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+    inputs:
+      target_urls:
+        description: "Optional comma/newline-separated URLs. Leave blank to use config/domains.txt."
+        required: false
+        default: ""
+
+jobs:
+  website-security-audit:
+    name: Website Security Audit
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install scanner tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y curl dnsutils jq nikto nmap openssl
+
+      - name: Prepare target domains
+        env:
+          TARGET_URLS: ${{ github.event.inputs.target_urls || '' }}
+          TARGET_MATRIX_FILE: audit-targets.json
+        run: python3 scripts/security/build_target_matrix.py
+
+      - name: Run website scans for all domains
+        run: bash scripts/security/run_domain_scans.sh audit-targets.json
+
+      - name: Run OWASP ZAP scans for all domains
+        run: |
+          python3 - <<'PY' > zap-targets.tsv
+          import json
+          with open("audit-targets.json", encoding="utf-8") as handle:
+              matrix = json.load(handle)
+          for target in matrix.get("include", []):
+              print(f"{target['url']}\t{target['slug']}")
+          PY
+
+          while IFS=$'\t' read -r url slug; do
+            mkdir -p "all-reports/${slug}/zap"
+
+            docker run --rm \
+              -v "${PWD}/all-reports/${slug}/zap:/zap/wrk:rw" \
+              ghcr.io/zaproxy/zaproxy:stable \
+              zap-baseline.py \
+              -t "$url" \
+              -a \
+              -J "zap-baseline.json" \
+              -r "zap-baseline.html" \
+              -w "zap-baseline.md" || true
+
+            docker run --rm \
+              -v "${PWD}/all-reports/${slug}/zap:/zap/wrk:rw" \
+              ghcr.io/zaproxy/zaproxy:stable \
+              zap-full-scan.py \
+              -t "$url" \
+              -J "zap-full-scan.json" \
+              -r "zap-full-scan.html" \
+              -w "zap-full-scan.md" || true
+          done < zap-targets.tsv
+
+      - name: Prepare repository report folder
+        run: mkdir -p all-reports/repository
+
+      - name: Run Trivy dependency and config scans
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          format: "table"
+          output: "all-reports/repository/trivy-fs-report.txt"
+          severity: "CRITICAL,HIGH,MEDIUM"
+          exit-code: "0"
+
+      - name: Run Trivy IaC scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "config"
+          scan-ref: "."
+          format: "table"
+          output: "all-reports/repository/trivy-config-report.txt"
+          severity: "CRITICAL,HIGH,MEDIUM"
+          exit-code: "0"
+
+      - name: Run Gitleaks secret scan
+        run: |
+          mkdir -p all-reports/repository
+          docker run --rm \
+            -v "${PWD}:/repo" \
+            zricethezav/gitleaks:latest \
+            detect \
+            --source /repo \
+            --report-format sarif \
+            --report-path /repo/all-reports/repository/gitleaks-results.sarif \
+            --no-banner || true
+
+      - name: Run TruffleHog credential scan
+        run: |
+          mkdir -p all-reports/repository
+          docker run --rm \
+            -v "${PWD}:/repo" \
+            trufflesecurity/trufflehog:latest \
+            filesystem /repo \
+            --only-verified \
+            --json > all-reports/repository/trufflehog-results.json || true
+
+      - name: Generate one document report
+        run: bash scripts/security/generate_summary.sh
+
+      - name: Upload one consolidated artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-security-audit
+          path: audit-report/
+          retention-days: 30
