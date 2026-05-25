@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import html
 import os
 import shutil
 import zipfile
@@ -10,6 +11,7 @@ from xml.sax.saxutils import escape
 REPORTS_DIR = Path("all-reports")
 BUNDLE_DIR = Path("audit-report")
 SUMMARY_MD = BUNDLE_DIR / "security-summary.md"
+HTML_REPORT = BUNDLE_DIR / "index.html"
 PDF_REPORT = BUNDLE_DIR / "website-security-audit-report.pdf"
 DOCX_REPORT = BUNDLE_DIR / "security-audit-report.docx"
 RAW_REPORTS_DIR = BUNDLE_DIR / "raw-reports"
@@ -60,6 +62,9 @@ def all_counts(reports):
     return counts
 
 
+STATUS_PRIORITY = {"critical": 4, "high": 3, "warning": 2, "ok": 1}
+
+
 def scan_label(name):
     lowered = name.lower()
     labels = [
@@ -94,11 +99,69 @@ def report_status(report):
 
 def status_label(status):
     return {
-        "critical": "Critical",
-        "high": "High",
-        "warning": "Review",
-        "ok": "Clean",
+        "critical": "Fix now",
+        "high": "Needs attention",
+        "warning": "Review soon",
+        "ok": "Looks good",
     }.get(status, "Review")
+
+
+def status_message(status):
+    return {
+        "critical": "Critical wording was found in the scanner output. Treat this as the first item to investigate.",
+        "high": "High-risk, vulnerable, or error wording was found. Review this target before routine cleanup work.",
+        "warning": "The scan found missing controls or warnings. These are usually configuration improvements.",
+        "ok": "No obvious high-risk keywords were found in the captured scanner output.",
+    }.get(status, "Review the scanner output for details.")
+
+
+def overall_status(status_totals):
+    if sum(status_totals.values()) == 0:
+        return "No report data yet", "The workflow did not collect scanner output for this run."
+    if status_totals["critical"]:
+        return "Fix now", "At least one monitored target has critical findings."
+    if status_totals["high"]:
+        return "Needs attention", "At least one monitored target has high-risk findings or scan errors."
+    if status_totals["warning"]:
+        return "Review soon", "No critical/high wording was found, but some controls need review."
+    return "Looks good", "No obvious issues were detected in the collected reports."
+
+
+def health_score(status_totals):
+    total = sum(status_totals.values())
+    if total == 0:
+        return 0
+    penalty = (
+        status_totals["critical"] * 35
+        + status_totals["high"] * 24
+        + status_totals["warning"] * 10
+    )
+    return max(0, min(100, 100 - round(penalty / total)))
+
+
+def sorted_reports_by_priority(reports):
+    return sorted(
+        reports,
+        key=lambda report: (STATUS_PRIORITY[report_status(report)], report["name"].lower()),
+        reverse=True,
+    )
+
+
+def next_actions(reports, limit=6):
+    actions = []
+    seen = set()
+    for report in sorted_reports_by_priority(reports):
+        if report_status(report) == "ok":
+            continue
+        for item in remediation_items(report):
+            key = item["title"].lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            actions.append({"target": report["name"], **item})
+            if len(actions) >= limit:
+                return actions
+    return actions
 
 
 def report_preview(report, limit=260):
@@ -225,6 +288,10 @@ def remediation_items(report):
     return items
 
 
+def html_attr(value):
+    return html.escape(str(value), quote=True)
+
+
 def reset_bundle_dir():
     if BUNDLE_DIR.exists():
         shutil.rmtree(BUNDLE_DIR)
@@ -238,34 +305,75 @@ def reset_bundle_dir():
 
 def write_markdown(reports):
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    status_totals = {"critical": 0, "high": 0, "warning": 0, "ok": 0}
+    for report in reports:
+        status_totals[report_status(report)] += 1
+    overall_title, overall_detail = overall_status(status_totals)
+    actions = next_actions(reports)
     lines = [
-        "# Website Security Audit Summary",
+        "# Website Monitoring Report",
         "",
         f"**Date:** {generated_at}",
         f"**Triggered by:** {os.environ.get('GITHUB_EVENT_NAME', 'local')}",
         "",
-        "## Report Bundle",
+        "## Quick read",
         "",
-        "- Open `website-security-audit-report.pdf` for the PDF report.",
-        "- Open `security-audit-report.docx` for the document report.",
-        "- Open `raw-reports/` for original scanner artifacts.",
+        f"**Overall status:** {overall_title}",
         "",
-        "## Scan Results",
+        overall_detail,
+        "",
+        f"**Targets reviewed:** {len(reports)}",
+        f"**Targets needing attention:** {status_totals['critical'] + status_totals['high'] + status_totals['warning']}",
+        f"**Targets that look good:** {status_totals['ok']}",
+        "",
+        "## What to do next",
         "",
     ]
+
+    if actions:
+        for action in actions:
+            lines.append(f"- **{action['target']} - {action['title']}:** {action['detail']}")
+    else:
+        lines.append("- Keep the current monitoring schedule and rerun scans after website or infrastructure changes.")
+
+    lines.extend(
+        [
+            "",
+            "## Files in this bundle",
+            "",
+            "- Open `website-security-audit-report.pdf` for the formal PDF report.",
+            "- Open `security-audit-report.docx` for the Word-compatible report.",
+            "- Open `raw-reports/` for original scanner artifacts.",
+            "",
+            "## Monitored targets",
+            "",
+        ]
+    )
 
     if not reports:
         lines.append("No downloaded reports were found.")
     else:
-        for report in reports:
-            lines.extend([f"### {report['name']}", ""])
-            lines.extend(["#### Recommended fixes", ""])
+        for report in sorted_reports_by_priority(reports):
+            status = report_status(report)
+            lines.extend(
+                [
+                    f"### {report['name']}",
+                    "",
+                    f"**Status:** {status_label(status)}",
+                    "",
+                    status_message(status),
+                    "",
+                    "**Recommended actions**",
+                    "",
+                ]
+            )
             for item in remediation_items(report):
                 lines.append(f"- **{item['title']}:** {item['detail']}")
             lines.append("")
             if not report["files"]:
                 lines.extend(["No files found in this artifact.", ""])
                 continue
+            lines.extend(["<details>", "<summary>Raw scanner output</summary>", ""])
             for file_info in report["files"]:
                 lines.extend(
                     [
@@ -277,8 +385,840 @@ def write_markdown(reports):
                         "",
                     ]
                 )
+            lines.extend(["</details>", ""])
 
     SUMMARY_MD.write_text("\n".join(lines), encoding="utf-8")
+
+
+def write_html(reports):
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    counts = all_counts(reports)
+    total_files = sum(len(report["files"]) for report in reports)
+    status_totals = {"critical": 0, "high": 0, "warning": 0, "ok": 0}
+    for report in reports:
+        status_totals[report_status(report)] += 1
+    overall_title, overall_detail = overall_status(status_totals)
+    actions = next_actions(reports)
+    attention_count = status_totals["critical"] + status_totals["high"] + status_totals["warning"]
+    priority_reports = sorted_reports_by_priority(reports)[:4]
+    score = health_score(status_totals)
+    total_reports = len(reports) or 1
+    status_breakdown = [
+        ("critical", "Fix now", status_totals["critical"]),
+        ("high", "Needs attention", status_totals["high"]),
+        ("warning", "Review soon", status_totals["warning"]),
+        ("ok", "Looks good", status_totals["ok"]),
+    ]
+    status_breakdown_html = "\n".join(
+        f"""
+        <div class="status-row">
+          <div class="status-row__label">
+            <span class="dot dot--{html_attr(status)}"></span>
+            <strong>{html.escape(label)}</strong>
+            <em>{value}</em>
+          </div>
+          <div class="status-row__track">
+            <span class="status-row__fill status-row__fill--{html_attr(status)}" style="width: {round((value / total_reports) * 100)}%"></span>
+          </div>
+        </div>
+        """
+        for status, label, value in status_breakdown
+    )
+
+    priority_html = "\n".join(
+        f"""
+        <li>
+          <span class="priority-list__status badge badge--{html_attr(report_status(report))}">{html.escape(status_label(report_status(report)))}</span>
+          <a href="#{html_attr(report["name"])}">{html.escape(report["name"])}</a>
+          <small>{html.escape(status_message(report_status(report)))}</small>
+        </li>
+        """
+        for report in priority_reports
+    )
+
+    actions_html = "\n".join(
+        f"""
+        <li>
+          <b>{index}</b>
+          <strong>{html.escape(action["title"])}</strong>
+          <span>{html.escape(action["detail"])}</span>
+          <em>{html.escape(action["target"])}</em>
+        </li>
+        """
+        for index, action in enumerate(actions, start=1)
+    ) or """
+        <li>
+          <b>1</b>
+          <strong>Keep monitoring</strong>
+          <span>No urgent findings were detected. Rerun scans after website, DNS, hosting, or dependency changes.</span>
+          <em>All targets</em>
+        </li>
+    """
+
+    nav_items = "\n".join(
+        f"""
+        <a href="#{html_attr(report["name"])}">
+          <span>{html.escape(scan_label(report["name"]))}</span>
+          <small>{html.escape(report["name"])}</small>
+        </a>
+        """
+        for report in reports
+    )
+
+    sections = []
+    for report in reports:
+        status = report_status(report)
+        scan = scan_label(report["name"])
+        preview = report_preview(report)
+        remedies = remediation_items(report)
+        remedies_html = "\n".join(
+            f"""
+            <li>
+              <strong>{html.escape(item["title"])}</strong>
+              <span>{html.escape(item["detail"])}</span>
+            </li>
+            """
+            for item in remedies
+        )
+        files_html = []
+        for file_info in report["files"]:
+            content = html.escape(file_info["content"])
+            path = html.escape(file_info["relative_path"])
+            file_counts = severity_counts(file_info["content"])
+            file_meta = " / ".join(
+                f"{label}: {file_counts[key]}"
+                for key, label in [("critical", "Critical"), ("high", "High"), ("warning", "Review")]
+                if file_counts[key]
+            ) or "No keyword alerts"
+            files_html.append(
+                f"""
+                <details class="file-panel">
+                  <summary>
+                    <span>{path}</span>
+                    <em>{html.escape(file_meta)}</em>
+                  </summary>
+                  <pre>{content}</pre>
+                </details>
+                """
+            )
+
+        sections.append(
+            f"""
+            <section class="report-card" id="{html_attr(report["name"])}" data-report data-search="{html_attr(report["name"] + " " + scan + " " + preview)}" data-status="{html_attr(status)}">
+              <div class="report-card__stripe report-card__stripe--{html_attr(status)}"></div>
+              <div class="report-card__head">
+                <div>
+                  <p>{html.escape(scan)}</p>
+                  <h2>{html.escape(report["name"])}</h2>
+                </div>
+                <span class="badge badge--{html_attr(status)}">{html.escape(status_label(status))}</span>
+              </div>
+              <p class="meaning">{html.escape(status_message(status))}</p>
+              <div class="report-card__preview">{html.escape(preview)}</div>
+              <div class="remedies">
+                <div class="remedies__title">Recommended actions</div>
+                <ul>{remedies_html}</ul>
+              </div>
+              <div class="raw-title">Raw scanner output</div>
+              <div class="report-card__files">
+                {''.join(files_html) if files_html else '<p class="empty">No files found in this artifact.</p>'}
+              </div>
+            </section>
+            """
+        )
+
+    HTML_REPORT.write_text(
+        f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Website Monitoring Report</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --bg: #eef3f7;
+      --panel: #ffffff;
+      --panel-soft: #f7fafc;
+      --ink: #111827;
+      --muted: #64748b;
+      --line: #d7dee8;
+      --accent: #0f766e;
+      --accent-strong: #115e59;
+      --blue: #2563eb;
+      --danger: #b42318;
+      --danger-bg: #fee4e2;
+      --warn: #b54708;
+      --warn-bg: #fef0c7;
+      --ok: #027a48;
+      --ok-bg: #dcfae6;
+      --shadow: 0 12px 28px rgba(15, 23, 42, 0.10);
+    }}
+    * {{ box-sizing: border-box; }}
+    html {{ scroll-behavior: smooth; }}
+    body {{
+      margin: 0;
+      background: linear-gradient(180deg, #f8fbfd 0%, var(--bg) 56%, #e8eef5 100%);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.45;
+    }}
+    .shell {{ min-height: 100vh; }}
+    .hero {{
+      padding: 34px 32px;
+      color: #ffffff;
+      background:
+        linear-gradient(135deg, rgba(11, 18, 32, 0.98), rgba(18, 88, 100, 0.96) 58%, rgba(21, 94, 117, 0.98)),
+        linear-gradient(45deg, rgba(14, 165, 233, 0.20), transparent);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+    }}
+    .hero__inner {{
+      max-width: 1280px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 24px;
+      align-items: center;
+    }}
+    .eyebrow {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 999px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }}
+    h1, h2, h3, p {{ margin: 0; }}
+    h1 {{
+      max-width: 760px;
+      margin-top: 14px;
+      font-size: 44px;
+      line-height: 1.08;
+      letter-spacing: 0;
+    }}
+    .hero__meta {{
+      margin-top: 12px;
+      color: rgba(255, 255, 255, 0.78);
+      font-size: 14px;
+    }}
+    .hero__actions {{
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }}
+    .score-card {{
+      width: 220px;
+      padding: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.20);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.11);
+      backdrop-filter: blur(12px);
+    }}
+    .score-ring {{
+      width: 154px;
+      height: 154px;
+      margin: 0 auto 12px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at center, #102436 0 57%, transparent 58%),
+        conic-gradient(#22c55e calc(var(--score) * 1%), rgba(255, 255, 255, 0.20) 0);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+    }}
+    .score-ring strong {{
+      display: block;
+      font-size: 38px;
+      line-height: 1;
+    }}
+    .score-ring span {{
+      display: block;
+      margin-top: 4px;
+      color: rgba(255, 255, 255, 0.72);
+      font-size: 12px;
+      text-align: center;
+    }}
+    .score-card p {{
+      color: rgba(255, 255, 255, 0.78);
+      font-size: 13px;
+      text-align: center;
+    }}
+    .action {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 40px;
+      padding: 9px 14px;
+      border-radius: 7px;
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      background: rgba(255, 255, 255, 0.12);
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 14px;
+    }}
+    .action--primary {{ background: #ffffff; color: #0f172a; }}
+    .layout {{
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr);
+      gap: 24px;
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 24px 32px 36px;
+    }}
+    nav {{
+      position: sticky;
+      top: 20px;
+      align-self: start;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      max-height: calc(100vh - 32px);
+      overflow: auto;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    }}
+    nav strong {{
+      display: block;
+      margin-bottom: 10px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      color: var(--muted);
+    }}
+    nav a {{
+      display: grid;
+      gap: 2px;
+      padding: 10px;
+      color: var(--ink);
+      text-decoration: none;
+      border-radius: 6px;
+      font-size: 14px;
+      overflow-wrap: anywhere;
+    }}
+    nav a:hover {{ background: #eef6f5; color: var(--accent-strong); }}
+    nav small {{ color: var(--muted); font-size: 12px; }}
+    .overview {{
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr));
+      gap: 14px;
+      margin-bottom: 16px;
+    }}
+    .quick-summary,
+    .next-actions {{
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      margin-bottom: 16px;
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+    }}
+    .quick-summary {{
+      display: grid;
+      grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+      gap: 18px;
+      align-items: start;
+    }}
+    .summary-copy {{
+      display: grid;
+      gap: 14px;
+    }}
+    .summary-callout {{
+      padding: 14px;
+      border: 1px solid #b6ece5;
+      border-radius: 8px;
+      background: #f0fdfa;
+    }}
+    .section-label {{
+      margin-bottom: 5px;
+      color: var(--accent-strong);
+      font-size: 12px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }}
+    .quick-summary h2 {{
+      margin-bottom: 8px;
+      font-size: 26px;
+      line-height: 1.15;
+    }}
+    .quick-summary p,
+    .next-actions span,
+    .priority-list small {{
+      color: var(--muted);
+    }}
+    .priority-list {{
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 10px;
+    }}
+    .priority-list li {{
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 4px 10px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-soft);
+    }}
+    .priority-list a {{
+      color: var(--ink);
+      font-weight: 800;
+      text-decoration: none;
+      overflow-wrap: anywhere;
+    }}
+    .priority-list small {{
+      grid-column: 2;
+      font-size: 13px;
+    }}
+    .priority-list__status {{
+      align-self: start;
+    }}
+    .status-board {{
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-soft);
+    }}
+    .status-row {{
+      display: grid;
+      gap: 7px;
+    }}
+    .status-row__label {{
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--ink);
+      font-size: 13px;
+    }}
+    .status-row__label em {{
+      margin-left: auto;
+      color: var(--muted);
+      font-style: normal;
+      font-weight: 800;
+    }}
+    .status-row__track {{
+      height: 9px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e2e8f0;
+    }}
+    .status-row__fill {{
+      display: block;
+      height: 100%;
+      min-width: 0;
+      border-radius: inherit;
+    }}
+    .status-row__fill--critical, .status-row__fill--high {{ background: #ef4444; }}
+    .status-row__fill--warning {{ background: #f59e0b; }}
+    .status-row__fill--ok {{ background: #22c55e; }}
+    .dot {{
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--muted);
+    }}
+    .dot--critical, .dot--high {{ background: #ef4444; }}
+    .dot--warning {{ background: #f59e0b; }}
+    .dot--ok {{ background: #22c55e; }}
+    .next-actions ul {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin: 10px 0 0;
+      padding: 0;
+      list-style: none;
+    }}
+    .next-actions li {{
+      position: relative;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 4px 10px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-soft);
+    }}
+    .next-actions b {{
+      grid-row: span 3;
+      display: grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      background: #0f766e;
+      color: #ffffff;
+      font-size: 13px;
+    }}
+    .next-actions strong {{
+      font-size: 15px;
+    }}
+    .next-actions em {{
+      color: var(--accent-strong);
+      font-style: normal;
+      font-size: 12px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }}
+    .metric {{
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+    }}
+    .metric__value {{ font-size: 28px; font-weight: 800; line-height: 1; }}
+    .metric__label {{ margin-top: 7px; color: var(--muted); font-size: 13px; }}
+    .toolbar {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 16px;
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+    }}
+    .search {{
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 10px 12px;
+      font: inherit;
+      color: var(--ink);
+      background: var(--panel-soft);
+    }}
+    .filters {{ display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }}
+    .filter {{
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #ffffff;
+      color: var(--ink);
+      padding: 7px 11px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }}
+    .filter.is-active {{
+      color: #ffffff;
+      background: var(--accent);
+      border-color: var(--accent);
+    }}
+    .report-card {{
+      position: relative;
+      background: rgba(255, 255, 255, 0.94);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin-bottom: 16px;
+      padding: 20px 18px 18px;
+      box-shadow: var(--shadow);
+      scroll-margin-top: 24px;
+      overflow: hidden;
+    }}
+    .report-card__stripe {{
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 5px;
+      background: var(--muted);
+    }}
+    .report-card__stripe--critical, .report-card__stripe--high {{ background: #ef4444; }}
+    .report-card__stripe--warning {{ background: #f59e0b; }}
+    .report-card__stripe--ok {{ background: #22c55e; }}
+    .report-card.is-hidden {{ display: none; }}
+    .report-card__head {{
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }}
+    .report-card__head p {{
+      color: var(--accent-strong);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }}
+    .report-card h2 {{
+      margin-top: 4px;
+      font-size: 21px;
+      line-height: 1.2;
+      overflow-wrap: anywhere;
+    }}
+    .report-card__preview {{
+      margin: 12px 0 14px;
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }}
+    .meaning {{
+      margin-top: 10px;
+      color: var(--ink);
+      font-weight: 600;
+    }}
+    .remedies {{
+      margin: 0 0 14px;
+      padding: 14px;
+      background: #f0fdfa;
+      border: 1px solid #b6ece5;
+      border-radius: 8px;
+    }}
+    .remedies__title {{
+      margin-bottom: 8px;
+      color: var(--accent-strong);
+      font-size: 12px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }}
+    .remedies ul {{
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 8px;
+    }}
+    .remedies li {{ padding-left: 2px; }}
+    .remedies strong {{
+      display: block;
+      color: var(--ink);
+      margin-bottom: 2px;
+    }}
+    .remedies span {{
+      display: block;
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }}
+    .badge {{
+      flex: 0 0 auto;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 800;
+      border: 1px solid transparent;
+    }}
+    .badge--critical, .badge--high {{
+      background: var(--danger-bg);
+      color: var(--danger);
+      border-color: #fecdca;
+    }}
+    .badge--warning {{
+      background: var(--warn-bg);
+      color: var(--warn);
+      border-color: #fedf89;
+    }}
+    .badge--ok {{
+      background: var(--ok-bg);
+      color: var(--ok);
+      border-color: #abefc6;
+    }}
+    .report-card__files {{ display: grid; gap: 10px; }}
+    .raw-title {{
+      margin: 4px 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }}
+    details.file-panel {{
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #ffffff;
+    }}
+    summary {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      cursor: pointer;
+      padding: 11px 12px;
+      background: #f8fafc;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }}
+    summary em {{
+      color: var(--muted);
+      font-style: normal;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }}
+    pre {{
+      margin: 0;
+      padding: 16px;
+      overflow: auto;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font-size: 12px;
+      line-height: 1.55;
+      background: #0b1220;
+      color: #e5edf7;
+    }}
+    .danger {{ color: var(--danger); }}
+    .warn {{ color: var(--warn); }}
+    .ok {{ color: var(--ok); }}
+    .empty {{
+      padding: 14px;
+      color: var(--muted);
+      background: var(--panel-soft);
+      border-radius: 7px;
+    }}
+    .no-results {{
+      display: none;
+      padding: 22px;
+      background: var(--panel);
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      text-align: center;
+    }}
+    .no-results.is-visible {{ display: block; }}
+    @media (max-width: 980px) {{
+      .hero__inner {{ grid-template-columns: 1fr; }}
+      .hero__actions {{ justify-content: flex-start; }}
+      .score-card {{ width: 100%; max-width: 320px; }}
+      .layout {{ grid-template-columns: 1fr; padding: 18px; }}
+      nav {{ position: static; max-height: none; }}
+      .overview {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+      .quick-summary {{ grid-template-columns: 1fr; }}
+      .next-actions ul {{ grid-template-columns: 1fr; }}
+      .toolbar {{ grid-template-columns: 1fr; }}
+      .filters {{ justify-content: flex-start; }}
+    }}
+    @media (max-width: 560px) {{
+      .hero {{ padding: 24px 18px; }}
+      h1 {{ font-size: 31px; }}
+      .score-ring {{ width: 132px; height: 132px; }}
+      .overview {{ grid-template-columns: 1fr; }}
+      .next-actions li {{ grid-template-columns: 1fr; }}
+      .next-actions b {{ grid-row: auto; }}
+      .report-card__head {{ display: grid; }}
+      summary {{ align-items: flex-start; flex-direction: column; }}
+      summary em {{ white-space: normal; }}
+    }}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <div class="hero__inner">
+        <div>
+          <div class="eyebrow">Website Monitoring Report</div>
+          <h1>{html.escape(overall_title)}</h1>
+          <p class="hero__meta">{html.escape(overall_detail)} Generated {html.escape(generated_at)}.</p>
+          <div class="hero__actions">
+            <a class="action action--primary" href="security-audit-report.docx">Word Report</a>
+            <a class="action" href="security-summary.md">Summary</a>
+            <a class="action" href="raw-reports/">Raw Logs</a>
+          </div>
+        </div>
+        <div class="score-card" aria-label="Website health score">
+          <div class="score-ring" style="--score: {score}">
+            <div>
+              <strong>{score}</strong>
+              <span>Health score</span>
+            </div>
+          </div>
+          <p>Higher is better. The score drops when targets have critical, high-risk, or review findings.</p>
+        </div>
+      </div>
+    </header>
+    <main class="layout">
+      <nav>
+        <strong>Monitored Targets</strong>
+        {nav_items or '<p>No artifacts found.</p>'}
+      </nav>
+      <div>
+        <section class="quick-summary">
+          <div class="summary-copy">
+            <p class="section-label">Priority</p>
+            <h2>Start here</h2>
+            <div class="summary-callout">
+              <p>{html.escape(overall_detail)}</p>
+            </div>
+            <div class="status-board" aria-label="Status distribution">
+              {status_breakdown_html}
+            </div>
+          </div>
+          <ol class="priority-list">
+            {priority_html or '<li><strong>No targets found</strong><small>The workflow did not collect scanner reports.</small></li>'}
+          </ol>
+        </section>
+        <section class="next-actions">
+          <p class="section-label">Next actions</p>
+          <ul>{actions_html}</ul>
+        </section>
+        <div class="overview">
+          <div class="metric"><div class="metric__value">{len(reports)}</div><div class="metric__label">Targets Reviewed</div></div>
+          <div class="metric"><div class="metric__value danger">{attention_count}</div><div class="metric__label">Need Attention</div></div>
+          <div class="metric"><div class="metric__value ok">{status_totals["ok"]}</div><div class="metric__label">Look Good</div></div>
+          <div class="metric"><div class="metric__value">{total_files}</div><div class="metric__label">Raw Log Files</div></div>
+          <div class="metric"><div class="metric__value warn">{counts["warning"]}</div><div class="metric__label">Warnings Found</div></div>
+        </div>
+        <div class="toolbar">
+          <input class="search" id="reportSearch" type="search" placeholder="Search reports, domains, scanners, findings">
+          <div class="filters" aria-label="Report filters">
+            <button class="filter is-active" type="button" data-filter="all">All</button>
+            <button class="filter" type="button" data-filter="critical">Critical</button>
+            <button class="filter" type="button" data-filter="high">High</button>
+            <button class="filter" type="button" data-filter="warning">Review</button>
+            <button class="filter" type="button" data-filter="ok">Clean</button>
+          </div>
+        </div>
+        <div class="no-results" id="noResults">No matching reports found.</div>
+        {''.join(sections) if sections else '<section class="report-card"><h2>No reports found</h2><p class="empty">No downloaded reports were found.</p></section>'}
+      </div>
+    </main>
+  </div>
+  <script>
+    const searchInput = document.querySelector("#reportSearch");
+    const cards = Array.from(document.querySelectorAll("[data-report]"));
+    const buttons = Array.from(document.querySelectorAll("[data-filter]"));
+    const noResults = document.querySelector("#noResults");
+    let activeFilter = "all";
+
+    function applyFilters() {{
+      const query = (searchInput.value || "").trim().toLowerCase();
+      let visible = 0;
+
+      cards.forEach((card) => {{
+        const matchesText = !query || card.dataset.search.toLowerCase().includes(query) || card.textContent.toLowerCase().includes(query);
+        const matchesFilter = activeFilter === "all" || card.dataset.status === activeFilter;
+        const shouldShow = matchesText && matchesFilter;
+        card.classList.toggle("is-hidden", !shouldShow);
+        if (shouldShow) visible += 1;
+      }});
+
+      noResults.classList.toggle("is-visible", visible === 0 && cards.length > 0);
+    }}
+
+    searchInput.addEventListener("input", applyFilters);
+    buttons.forEach((button) => {{
+      button.addEventListener("click", () => {{
+        activeFilter = button.dataset.filter;
+        buttons.forEach((item) => item.classList.toggle("is-active", item === button));
+        applyFilters();
+      }});
+    }});
+  </script>
+</body>
+</html>
+""",
+        encoding="utf-8",
+    )
 
 
 def paragraph(text, style=None):
@@ -287,11 +1227,7 @@ def paragraph(text, style=None):
     return f"<w:p>{style_xml}<w:r><w:t xml:space=\"preserve\">{escaped}</w:t></w:r></w:p>"
 
 
-def pdf_escape(text):
-    return str(text).replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-
-
-def wrap_text(text, width=92):
+def wrap_pdf_text(text, width=92):
     words = str(text).replace("\t", " ").split()
     if not words:
         return [""]
@@ -299,76 +1235,128 @@ def wrap_text(text, width=92):
     lines = []
     current = ""
     for word in words:
+        if len(word) > width:
+            if current:
+                lines.append(current)
+                current = ""
+            while len(word) > width:
+                lines.append(word[:width])
+                word = word[width:]
         candidate = word if not current else f"{current} {word}"
         if len(candidate) <= width:
             current = candidate
-            continue
-        if current:
+        else:
             lines.append(current)
-        current = word
+            current = word
     if current:
         lines.append(current)
     return lines
 
 
-def write_pdf(reports):
+def pdf_escape(text):
+    return str(text).replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def build_pdf_lines(reports):
+    status_totals = {"critical": 0, "high": 0, "warning": 0, "ok": 0}
+    for report in reports:
+        status_totals[report_status(report)] += 1
+    overall_title, overall_detail = overall_status(status_totals)
+    actions = next_actions(reports)
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
     lines = [
         ("title", "Website Security Audit Report"),
-        ("body", f"Generated: {generated_at}"),
-        ("body", f"Triggered by: {os.environ.get('GITHUB_EVENT_NAME', 'local')}"),
-        ("space", ""),
-        ("heading", "Report Bundle"),
-        ("body", "This PDF summarizes the consolidated website security audit artifact."),
-        ("body", "Original scanner outputs are included in raw-reports/."),
-        ("space", ""),
-        ("heading", "Scan Results"),
+        ("small", f"Generated: {generated_at}"),
+        ("small", f"Triggered by: {os.environ.get('GITHUB_EVENT_NAME', 'local')}"),
+        ("spacer", ""),
+        ("heading", f"Overall Status: {overall_title}"),
+        ("body", overall_detail),
+        (
+            "body",
+            f"Targets reviewed: {len(reports)} | Need attention: "
+            f"{status_totals['critical'] + status_totals['high'] + status_totals['warning']} | "
+            f"Look good: {status_totals['ok']}",
+        ),
+        ("spacer", ""),
+        ("heading", "What To Do Next"),
     ]
+
+    if actions:
+        for index, action in enumerate(actions, start=1):
+            lines.append(("body", f"{index}. {action['target']} - {action['title']}: {action['detail']}"))
+    else:
+        lines.append(("body", "1. Keep monitoring and rerun scans after website or infrastructure changes."))
+
+    lines.extend([("spacer", ""), ("heading", "Monitored Targets")])
 
     if not reports:
         lines.append(("body", "No downloaded reports were found."))
-    else:
-        for report in reports:
-            lines.extend([("space", ""), ("heading", report["name"]), ("subheading", "Recommended fixes")])
-            for item in remediation_items(report):
-                lines.append(("body", f"- {item['title']}: {item['detail']}"))
-            if not report["files"]:
-                lines.append(("body", "No files found in this artifact."))
-                continue
-            lines.append(("subheading", "Evidence files"))
-            for file_info in report["files"]:
-                counts = severity_counts(file_info["content"])
-                meta = f"critical={counts['critical']}, high={counts['high']}, review={counts['warning']}"
-                lines.append(("body", f"- {file_info['relative_path']} ({meta})"))
+        return lines
 
-    styles = {
-        "title": ("F2", 18, 24, 60),
-        "heading": ("F2", 13, 18, 80),
-        "subheading": ("F2", 10, 14, 90),
-        "body": ("F1", 9, 13, 96),
-        "space": ("F1", 8, 8, 1),
-    }
+    for report in sorted_reports_by_priority(reports):
+        status = report_status(report)
+        lines.extend(
+            [
+                ("spacer", ""),
+                ("subheading", report["name"]),
+                ("body", f"Status: {status_label(status)}"),
+                ("body", status_message(status)),
+                ("body", f"Preview: {report_preview(report)}"),
+                ("small", "Recommended actions:"),
+            ]
+        )
+        for item in remediation_items(report):
+            lines.append(("body", f"- {item['title']}: {item['detail']}"))
+
+        if report["files"]:
+            lines.append(("small", "Evidence files included in artifact:"))
+            for file_info in report["files"]:
+                file_counts = severity_counts(file_info["content"])
+                meta = (
+                    f"critical={file_counts['critical']}, high={file_counts['high']}, "
+                    f"review={file_counts['warning']}"
+                )
+                lines.append(("small", f"- {file_info['relative_path']} ({meta})"))
+        else:
+            lines.append(("small", "No files found in this artifact."))
+
+    return lines
+
+
+def write_pdf(reports):
     page_width = 612
     page_height = 792
     margin_x = 54
     margin_top = 60
     margin_bottom = 54
-    pages = []
-    current_page = []
-    used_height = 0
+    line_gap = 4
+    styles = {
+        "title": {"font": "F2", "size": 18, "leading": 24, "width": 60},
+        "heading": {"font": "F2", "size": 13, "leading": 18, "width": 78},
+        "subheading": {"font": "F2", "size": 11, "leading": 16, "width": 84},
+        "body": {"font": "F1", "size": 9, "leading": 13, "width": 96},
+        "small": {"font": "F1", "size": 8, "leading": 11, "width": 104},
+        "spacer": {"font": "F1", "size": 8, "leading": 8, "width": 1},
+    }
 
-    for style_name, text in lines:
-        font, size, leading, width = styles[style_name]
-        wrapped = [""] if style_name == "space" else wrap_text(text, width)
-        block_height = len(wrapped) * leading + 3
-        if current_page and used_height + block_height > page_height - margin_top - margin_bottom:
-            pages.append(current_page)
-            current_page = []
-            used_height = 0
-        current_page.append((style_name, wrapped))
-        used_height += block_height
-    if current_page:
-        pages.append(current_page)
+    pages = []
+    current = []
+    y_used = 0
+
+    for style_name, text in build_pdf_lines(reports):
+        style = styles[style_name]
+        wrapped = [""] if style_name == "spacer" else wrap_pdf_text(text, style["width"])
+        block_height = len(wrapped) * style["leading"] + line_gap
+        if current and y_used + block_height > page_height - margin_top - margin_bottom:
+            pages.append(current)
+            current = []
+            y_used = 0
+        current.append((style_name, wrapped))
+        y_used += block_height
+
+    if current:
+        pages.append(current)
 
     objects = []
 
@@ -380,25 +1368,28 @@ def write_pdf(reports):
     font_bold = add_object("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>")
     page_refs = []
 
-    for page_number, page in enumerate(pages, start=1):
+    for page_index, page in enumerate(pages, start=1):
         commands = [
             "q",
-            "0.95 0.96 0.98 rg",
+            "0.93 0.95 0.97 rg",
             f"0 {page_height - 38} {page_width} 38 re f",
-            "Q",
+            "0.07 0.12 0.20 rg",
             "BT /F2 9 Tf 54 768 Td (Website Security Audit) Tj ET",
+            "Q",
         ]
         y = page_height - margin_top
         for style_name, wrapped in page:
-            font, size, leading, _ = styles[style_name]
-            if style_name == "space":
-                y -= leading
+            style = styles[style_name]
+            if style_name == "spacer":
+                y -= style["leading"]
                 continue
             for line in wrapped:
-                commands.append(f"BT /{font} {size} Tf {margin_x} {y} Td ({pdf_escape(line)}) Tj ET")
-                y -= leading
-            y -= 3
-        commands.append(f"BT /F1 8 Tf 54 28 Td (Page {page_number} of {len(pages)}) Tj ET")
+                commands.append(
+                    f"BT /{style['font']} {style['size']} Tf {margin_x} {y} Td ({pdf_escape(line)}) Tj ET"
+                )
+                y -= style["leading"]
+            y -= line_gap
+        commands.append(f"BT /F1 8 Tf 54 28 Td (Page {page_index} of {len(pages)}) Tj ET")
         stream = "\n".join(commands).encode("latin-1", errors="replace")
         content_ref = add_object(f"<< /Length {len(stream)} >>\nstream\n{stream.decode('latin-1')}\nendstream")
         page_ref = add_object(
@@ -436,26 +1427,48 @@ def write_pdf(reports):
 
 
 def write_docx(reports):
+    status_totals = {"critical": 0, "high": 0, "warning": 0, "ok": 0}
+    for report in reports:
+        status_totals[report_status(report)] += 1
+    overall_title, overall_detail = overall_status(status_totals)
+    actions = next_actions(reports)
     body = [
-        paragraph("Website Security Audit", "Title"),
+        paragraph("Website Monitoring Report", "Title"),
         paragraph(f"Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"),
-        paragraph("This document summarizes all reports included in the full-security-audit artifact."),
-        paragraph("Scan Results", "Heading1"),
+        paragraph(f"Overall status: {overall_title}", "Heading1"),
+        paragraph(overall_detail),
+        paragraph(
+            f"Targets reviewed: {len(reports)}. Targets needing attention: "
+            f"{status_totals['critical'] + status_totals['high'] + status_totals['warning']}. "
+            f"Targets that look good: {status_totals['ok']}."
+        ),
+        paragraph("What to do next", "Heading1"),
     ]
+
+    if actions:
+        for action in actions:
+            body.append(paragraph(f"{action['target']} - {action['title']}: {action['detail']}"))
+    else:
+        body.append(paragraph("Keep the current monitoring schedule and rerun scans after website or infrastructure changes."))
+
+    body.append(paragraph("Monitored targets", "Heading1"))
 
     if not reports:
         body.append(paragraph("No downloaded reports were found."))
     else:
-        for report in reports:
+        for report in sorted_reports_by_priority(reports):
+            status = report_status(report)
             body.append(paragraph(report["name"], "Heading2"))
-            body.append(paragraph("Recommended fixes", "Heading3"))
+            body.append(paragraph(f"Status: {status_label(status)}"))
+            body.append(paragraph(status_message(status)))
+            body.append(paragraph("Recommended actions", "Heading3"))
             for item in remediation_items(report):
                 body.append(paragraph(f"{item['title']}: {item['detail']}"))
             if not report["files"]:
                 body.append(paragraph("No files found in this artifact."))
                 continue
             for file_info in report["files"]:
-                body.append(paragraph(file_info["relative_path"], "Heading3"))
+                body.append(paragraph(f"Raw scanner output: {file_info['relative_path']}", "Heading3"))
                 for line in file_info["content"].splitlines() or [""]:
                     body.append(paragraph(line))
 
