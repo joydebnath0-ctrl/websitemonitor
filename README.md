@@ -71,7 +71,7 @@ It does not upload each scanner result as a separate GitHub artifact.
 
 Inside `full-security-audit` you will find:
 
-- `website-security-audit-report.pdf` - a formal PDF report with overall status, priority actions, monitored targets, and evidence file references
+- `website-security-audit-report.pdf` - a PDF report with recommended fixes and evidence file references
 - `security-audit-report.docx` - one Word-compatible document containing all reports
 - `security-summary.md` - a Markdown summary
 - `raw-reports/` - all original scanner artifacts in one place
