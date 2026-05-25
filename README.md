@@ -80,7 +80,8 @@ Inside `full-security-audit` you will find:
 The HTML, DOCX, and Markdown reports include recommended fixes/remedies for
 common findings such as missing security headers, weak TLS, exposed ports,
 cookie flag issues, DNS email authentication gaps, vulnerable dependencies, and
-secret leakage.
+secret leakage. Each recommended action includes a step-by-step process and a
+verification check so the operator knows how to apply and confirm the fix.
 
 The workflow also captures proof-of-concern evidence under each target's
 `raw-reports/<slug>/poc/` folder, plus a consolidated

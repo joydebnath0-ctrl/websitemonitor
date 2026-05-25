@@ -194,6 +194,257 @@ def report_text(report):
     return "\n".join(file_info["content"] for file_info in report["files"])
 
 
+def process_for_action(title):
+    playbooks = {
+        "Enable HSTS": {
+            "steps": [
+                "Confirm the site and every required subdomain loads correctly over HTTPS.",
+                "Add the Strict-Transport-Security response header at the edge proxy, load balancer, CDN, or web server.",
+                "Start with max-age=31536000; includeSubDomains only when all subdomains are HTTPS-ready.",
+                "After at least one successful release cycle, consider preload and submit only if you understand the permanent browser preload impact.",
+            ],
+            "verify": "Run curl -sI https://your-domain and confirm Strict-Transport-Security is present.",
+        },
+        "Add a Content Security Policy": {
+            "steps": [
+                "Inventory the scripts, styles, images, frames, fonts, and API endpoints the site legitimately uses.",
+                "Deploy Content-Security-Policy-Report-Only first so violations are logged without breaking users.",
+                "Tighten sources to trusted domains, remove unsafe-inline/unsafe-eval where possible, and fix reported violations.",
+                "Switch from Report-Only to enforcing Content-Security-Policy after the report noise is understood.",
+            ],
+            "verify": "Run curl -sI https://your-domain and test key pages in the browser console for CSP violations.",
+        },
+        "Prevent MIME sniffing": {
+            "steps": [
+                "Add X-Content-Type-Options: nosniff globally in the web server, CDN, or app middleware.",
+                "Confirm static assets are served with the correct Content-Type header.",
+                "Redeploy and clear CDN/proxy cache if headers are cached upstream.",
+            ],
+            "verify": "Run curl -sI https://your-domain and confirm X-Content-Type-Options: nosniff.",
+        },
+        "Protect against clickjacking": {
+            "steps": [
+                "Decide whether the site may be embedded in an iframe by any trusted parent site.",
+                "If embedding is not needed, set X-Frame-Options: DENY or CSP frame-ancestors 'none'.",
+                "If same-site embedding is needed, use SAMEORIGIN or an explicit CSP frame-ancestors allowlist.",
+            ],
+            "verify": "Run curl -sI https://your-domain and confirm X-Frame-Options or CSP frame-ancestors is present.",
+        },
+        "Limit referrer leakage": {
+            "steps": [
+                "Choose a policy based on analytics needs; strict-origin-when-cross-origin is a good default.",
+                "Set Referrer-Policy at the web server, CDN, or application middleware.",
+                "Check login, payment, and private pages for sensitive URL data before release.",
+            ],
+            "verify": "Run curl -sI https://your-domain and confirm the Referrer-Policy header.",
+        },
+        "Restrict browser features": {
+            "steps": [
+                "List browser capabilities the site actually needs, such as camera, microphone, geolocation, or payment.",
+                "Set Permissions-Policy to disable everything not required.",
+                "Test pages that use browser APIs to avoid blocking intended functionality.",
+            ],
+            "verify": "Run curl -sI https://your-domain and confirm the Permissions-Policy header.",
+        },
+        "Control sensitive caching": {
+            "steps": [
+                "Classify pages as public static content, public dynamic content, or sensitive/authenticated content.",
+                "Set Cache-Control: no-store for sensitive pages and API responses containing private data.",
+                "Use long-lived immutable caching only for fingerprinted static assets.",
+            ],
+            "verify": "Run curl -sI against sensitive pages and confirm Cache-Control prevents storage.",
+        },
+        "Set HttpOnly on session cookies": {
+            "steps": [
+                "Find where session cookies are created in the app or framework session configuration.",
+                "Enable the HttpOnly flag for session and authentication cookies.",
+                "Avoid storing tokens in JavaScript-readable cookies or localStorage unless there is a clear design reason.",
+            ],
+            "verify": "Inspect Set-Cookie headers and confirm HttpOnly appears on session cookies.",
+        },
+        "Set Secure on cookies": {
+            "steps": [
+                "Confirm the site is served over HTTPS in every environment where the cookie is used.",
+                "Enable the Secure attribute for session and authentication cookies.",
+                "Redirect HTTP to HTTPS before authentication flows start.",
+            ],
+            "verify": "Run curl -sI https://your-domain and confirm Set-Cookie includes Secure.",
+        },
+        "Set SameSite on cookies": {
+            "steps": [
+                "Identify whether the cookie is used only first-party or must be sent cross-site.",
+                "Set SameSite=Lax for normal session cookies.",
+                "Use SameSite=None; Secure only for cookies that must work in third-party contexts.",
+            ],
+            "verify": "Inspect Set-Cookie headers and confirm SameSite is set appropriately.",
+        },
+        "Enable DNSSEC": {
+            "steps": [
+                "Enable DNSSEC signing in the authoritative DNS provider.",
+                "Copy the generated DS record to the domain registrar.",
+                "Wait for DNS propagation and monitor for validation errors.",
+            ],
+            "verify": "Run dig +dnssec your-domain and confirm DNSSEC validation from an external resolver.",
+        },
+        "Publish an SPF record": {
+            "steps": [
+                "List every service allowed to send email for the domain.",
+                "Create or update the domain TXT record with those include/ip mechanisms.",
+                "Use -all only after confirming no legitimate sender is omitted; use ~all during rollout if needed.",
+            ],
+            "verify": "Run dig +short TXT your-domain and confirm one valid v=spf1 record exists.",
+        },
+        "Publish a DMARC record": {
+            "steps": [
+                "Create _dmarc.your-domain as a TXT record with p=none and a rua mailbox.",
+                "Review aggregate reports for legitimate senders that fail SPF or DKIM alignment.",
+                "Move policy gradually to quarantine and then reject once alignment is clean.",
+            ],
+            "verify": "Run dig +short TXT _dmarc.your-domain and confirm a v=DMARC1 record exists.",
+        },
+        "Restrict certificate authorities": {
+            "steps": [
+                "Identify the certificate authorities used for the domain and wildcard certificates.",
+                "Publish CAA issue/issuewild records for only those authorities.",
+                "Include iodef reporting if your DNS provider and process support it.",
+            ],
+            "verify": "Run dig +short CAA your-domain and confirm only approved CAs are listed.",
+        },
+        "Renew the TLS certificate": {
+            "steps": [
+                "Renew or reissue the certificate through the current CA or ACME automation.",
+                "Install the new certificate and full chain on the CDN, load balancer, or web server.",
+                "Restart/reload the service and verify auto-renewal jobs are enabled.",
+            ],
+            "verify": "Run openssl s_client -servername your-domain -connect your-domain:443 and check the notAfter date.",
+        },
+        "Disable obsolete TLS versions": {
+            "steps": [
+                "Update the TLS configuration to allow only TLS 1.2 and TLS 1.3.",
+                "Remove SSLv3, TLS 1.0, and TLS 1.1 from CDN/load balancer/web server settings.",
+                "Deploy during a maintenance window if legacy client support is uncertain.",
+            ],
+            "verify": "Run nmap --script ssl-enum-ciphers -p 443 your-domain and confirm old protocols are absent.",
+        },
+        "Harden cipher configuration": {
+            "steps": [
+                "Prefer modern AEAD cipher suites such as AES-GCM and ChaCha20-Poly1305.",
+                "Disable weak CBC, RC4, 3DES, export, anonymous, and null ciphers.",
+                "Use Mozilla SSL Configuration Generator or your cloud provider baseline as a reference.",
+            ],
+            "verify": "Run nmap --script ssl-enum-ciphers -p 443 your-domain and review cipher grades.",
+        },
+        "Reduce server fingerprinting": {
+            "steps": [
+                "Disable or minimize Server and X-Powered-By headers in the web server and framework.",
+                "Remove default pages, sample files, and verbose error pages from production.",
+                "Make sure application errors return generic messages to users and detailed logs only to operators.",
+            ],
+            "verify": "Run curl -sI https://your-domain and confirm unnecessary version banners are gone.",
+        },
+        "Review Nikto findings": {
+            "steps": [
+                "Open the Nikto section and group findings by server config, default files, headers, and methods.",
+                "Patch server/framework versions, remove default files, and disable unnecessary HTTP methods.",
+                "Document accepted false positives so they do not hide real findings later.",
+            ],
+            "verify": "Rerun the workflow and confirm the same Nikto finding no longer appears.",
+        },
+        "Triage ZAP alerts": {
+            "steps": [
+                "Open zap-high-findings.txt and start with high-risk alerts, then medium-risk alerts.",
+                "Reproduce each alert using the captured URL and evidence.",
+                "Fix the underlying control, such as validation, encoding, authentication, access control, or headers.",
+                "Mark false positives only after a developer or security reviewer confirms the behavior is intended.",
+            ],
+            "verify": "Rerun ZAP and confirm the alert is removed or downgraded with documented justification.",
+        },
+        "Fix XSS risks": {
+            "steps": [
+                "Find the reflected or stored input shown in the ZAP/Nikto evidence.",
+                "Apply output encoding for the exact context: HTML, attribute, JavaScript, CSS, or URL.",
+                "Sanitize allowed rich HTML with an allowlist sanitizer and avoid unsafe DOM APIs.",
+                "Add or tighten CSP as a defense-in-depth layer.",
+            ],
+            "verify": "Retest the payload and confirm it renders as text or is rejected.",
+        },
+        "Fix SQL injection risks": {
+            "steps": [
+                "Trace the vulnerable request parameter to the database query.",
+                "Replace string-built SQL with parameterized queries or ORM bind parameters.",
+                "Add input validation for expected types and ranges.",
+                "Add a regression test for the injection payload.",
+            ],
+            "verify": "Rerun the scanner and confirm the injection payload no longer changes query behavior.",
+        },
+        "Patch vulnerable dependencies": {
+            "steps": [
+                "Open the Trivy report and list each package, installed version, fixed version, and severity.",
+                "Upgrade direct dependencies first, then refresh lockfiles or base images.",
+                "Run the application test suite and rebuild artifacts/images.",
+                "If no fix exists, document compensating controls and monitor the CVE.",
+            ],
+            "verify": "Rerun Trivy and confirm the CVE is absent or documented as accepted risk.",
+        },
+        "Fix IaC misconfigurations": {
+            "steps": [
+                "Open the Trivy config report and identify the affected file and rule.",
+                "Apply the recommended secure value in Terraform, Kubernetes, Dockerfile, or CI configuration.",
+                "Review the change with the infrastructure owner before deployment.",
+            ],
+            "verify": "Rerun the Trivy config scan and confirm the rule no longer fails.",
+        },
+        "Rotate exposed secrets": {
+            "steps": [
+                "Treat every exposed token, password, key, or private certificate as compromised.",
+                "Revoke it at the provider, create a replacement, and update the consuming system through GitHub Secrets or a vault.",
+                "Remove the secret from the current tree and, if required, purge it from Git history.",
+                "Add secret scanning/pre-commit checks to prevent recurrence.",
+            ],
+            "verify": "Rerun Gitleaks/TruffleHog and confirm the same secret is no longer detected.",
+        },
+        "Review scanner output": {
+            "steps": [
+                "Open the raw scanner output and identify the exact URL, header, port, package, or DNS record involved.",
+                "Prioritize critical and high-risk items before informational cleanup.",
+                "Apply the vendor or scanner recommendation and document any accepted risk.",
+            ],
+            "verify": "Rerun the workflow and confirm the finding count decreases or the accepted risk is documented.",
+        },
+        "Maintain current controls": {
+            "steps": [
+                "Keep automatic scans scheduled and review artifacts after releases.",
+                "Patch dependencies and base images regularly.",
+                "Recheck DNS, TLS, and header settings after hosting/CDN changes.",
+            ],
+            "verify": "Confirm the next scheduled workflow still produces clean or expected results.",
+        },
+    }
+
+    if title.startswith("Review exposed "):
+        return {
+            "steps": [
+                "Confirm the service owner and whether the port must be reachable from the public internet.",
+                "If public access is unnecessary, restrict it with cloud security groups, firewall rules, VPN, or private networking.",
+                "If public access is required, enforce strong authentication, patch the service, and limit source IP ranges where possible.",
+                "Log and monitor connection attempts for abuse.",
+            ],
+            "verify": "Rerun nmap -T4 --open your-domain and confirm only intended ports are open.",
+        }
+
+    return playbooks.get(
+        title,
+        {
+            "steps": [
+                "Review the scanner evidence and identify the affected component.",
+                "Apply the recommended secure configuration or patch.",
+                "Document any accepted risk with owner and expiry date.",
+            ],
+            "verify": "Rerun the audit workflow and confirm the finding is resolved or documented.",
+        },
+    )
+
+
 def remediation_items(report):
     name = report["name"].lower()
     content = report_text(report).lower()
@@ -201,7 +452,15 @@ def remediation_items(report):
 
     def add(title, detail):
         if not any(item["title"] == title for item in items):
-            items.append({"title": title, "detail": detail})
+            playbook = process_for_action(title)
+            items.append(
+                {
+                    "title": title,
+                    "detail": detail,
+                    "steps": playbook["steps"],
+                    "verify": playbook["verify"],
+                }
+            )
 
     if "headers" in name or "security headers" in content:
         if "strict-transport-security" in content and "missing: strict-transport-security" in content:
@@ -349,7 +608,19 @@ def write_markdown(reports):
 
     if actions:
         for action in actions:
-            lines.append(f"- **{action['target']} - {action['title']}:** {action['detail']}")
+            lines.extend(
+                [
+                    f"### {action['target']} - {action['title']}",
+                    "",
+                    action["detail"],
+                    "",
+                    "**Process**",
+                    "",
+                ]
+            )
+            for index, step in enumerate(action["steps"], start=1):
+                lines.append(f"{index}. {step}")
+            lines.extend(["", f"**Verify:** {action['verify']}", ""])
     else:
         lines.append("- Keep the current monitoring schedule and rerun scans after website or infrastructure changes.")
 
@@ -385,7 +656,10 @@ def write_markdown(reports):
                 ]
             )
             for item in remediation_items(report):
-                lines.append(f"- **{item['title']}:** {item['detail']}")
+                lines.extend([f"#### {item['title']}", "", item["detail"], "", "**Process**", ""])
+                for index, step in enumerate(item["steps"], start=1):
+                    lines.append(f"{index}. {step}")
+                lines.extend(["", f"**Verify:** {item['verify']}", ""])
             lines.append("")
             if not report["files"]:
                 lines.extend(["No files found in this artifact.", ""])
@@ -457,8 +731,13 @@ def write_html(reports):
         f"""
         <li>
           <b>{index}</b>
-          <strong>{html.escape(action["title"])}</strong>
-          <span>{html.escape(action["detail"])}</span>
+          <div class="action-plan">
+            <strong>{html.escape(action["title"])}</strong>
+            <span>{html.escape(action["detail"])}</span>
+            <div class="process-title">Process</div>
+            <ol>{''.join(f'<li>{html.escape(step)}</li>' for step in action["steps"])}</ol>
+            <p class="verify"><strong>Verify:</strong> {html.escape(action["verify"])}</p>
+          </div>
           <em>{html.escape(action["target"])}</em>
         </li>
         """
@@ -493,6 +772,9 @@ def write_html(reports):
             <li>
               <strong>{html.escape(item["title"])}</strong>
               <span>{html.escape(item["detail"])}</span>
+              <div class="process-title">Process</div>
+              <ol>{''.join(f'<li>{html.escape(step)}</li>' for step in item["steps"])}</ol>
+              <p class="verify"><strong>Verify:</strong> {html.escape(item["verify"])}</p>
             </li>
             """
             for item in remedies
@@ -867,7 +1149,7 @@ def write_html(reports):
       background: var(--panel-soft);
     }}
     .next-actions b {{
-      grid-row: span 3;
+      grid-row: span 2;
       display: grid;
       place-items: center;
       width: 30px;
@@ -880,7 +1162,39 @@ def write_html(reports):
     .next-actions strong {{
       font-size: 15px;
     }}
+    .action-plan {{
+      display: grid;
+      gap: 7px;
+      min-width: 0;
+    }}
+    .process-title {{
+      margin-top: 4px;
+      color: var(--accent-strong);
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }}
+    .action-plan ol,
+    .remedies ol {{
+      margin: 0;
+      padding-left: 20px;
+      color: var(--ink);
+      display: grid;
+      gap: 5px;
+    }}
+    .verify {{
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      overflow-wrap: anywhere;
+    }}
+    .verify strong {{
+      display: inline;
+      color: var(--accent-strong);
+    }}
     .next-actions em {{
+      grid-column: 2;
       color: var(--accent-strong);
       font-style: normal;
       font-size: 12px;
@@ -1004,9 +1318,9 @@ def write_html(reports):
       margin: 0;
       padding-left: 18px;
       display: grid;
-      gap: 8px;
+      gap: 12px;
     }}
-    .remedies li {{ padding-left: 2px; }}
+    .remedies li {{ padding-left: 2px; display: grid; gap: 7px; }}
     .remedies strong {{
       display: block;
       color: var(--ink);
@@ -1265,7 +1579,12 @@ def write_docx(reports):
 
     if actions:
         for action in actions:
-            body.append(paragraph(f"{action['target']} - {action['title']}: {action['detail']}"))
+            body.append(paragraph(f"{action['target']} - {action['title']}", "Heading2"))
+            body.append(paragraph(action["detail"]))
+            body.append(paragraph("Process", "Heading3"))
+            for index, step in enumerate(action["steps"], start=1):
+                body.append(paragraph(f"{index}. {step}"))
+            body.append(paragraph(f"Verify: {action['verify']}"))
     else:
         body.append(paragraph("Keep the current monitoring schedule and rerun scans after website or infrastructure changes."))
 
@@ -1281,7 +1600,12 @@ def write_docx(reports):
             body.append(paragraph(status_message(status)))
             body.append(paragraph("Recommended actions", "Heading3"))
             for item in remediation_items(report):
-                body.append(paragraph(f"{item['title']}: {item['detail']}"))
+                body.append(paragraph(item["title"], "Heading3"))
+                body.append(paragraph(item["detail"]))
+                body.append(paragraph("Process"))
+                for index, step in enumerate(item["steps"], start=1):
+                    body.append(paragraph(f"{index}. {step}"))
+                body.append(paragraph(f"Verify: {item['verify']}"))
             if not report["files"]:
                 body.append(paragraph("No files found in this artifact."))
                 continue
