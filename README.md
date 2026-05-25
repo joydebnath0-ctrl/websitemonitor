@@ -13,6 +13,7 @@ config/domains.txt                            Default target domain list
 scripts/security/common.sh                    Shared script helpers
 scripts/security/build_target_matrix.py       Builds the GitHub Actions domain matrix
 scripts/security/run_domain_scans.sh          Runs all domain scanners for every configured target
+scripts/security/collect_poc_evidence.sh      Captures proof-of-concern evidence files
 scripts/security/generate_report_bundle.py    Builds HTML, DOCX, Markdown, and raw report bundle
 scripts/security/ssl_tls_scan.sh              TLS and certificate checks
 scripts/security/headers_scan.sh              HTTP security header checks
@@ -80,3 +81,7 @@ The HTML, DOCX, and Markdown reports include recommended fixes/remedies for
 common findings such as missing security headers, weak TLS, exposed ports,
 cookie flag issues, DNS email authentication gaps, vulnerable dependencies, and
 secret leakage.
+
+The workflow also captures proof-of-concern evidence under each target's
+`raw-reports/<slug>/poc/` folder, plus a consolidated
+`raw-reports/poc-summary.txt` index.

@@ -28,6 +28,22 @@ def collect_reports():
     if not REPORTS_DIR.exists():
         return reports
 
+    root_files = sorted(path for path in REPORTS_DIR.iterdir() if path.is_file())
+    if root_files:
+        reports.append(
+            {
+                "name": "proof-of-concern-summary",
+                "files": [
+                    {
+                        "name": file_path.name,
+                        "relative_path": file_path.relative_to(REPORTS_DIR).as_posix(),
+                        "content": read_text(file_path),
+                    }
+                    for file_path in root_files
+                ],
+            }
+        )
+
     for artifact_dir in sorted(path for path in REPORTS_DIR.iterdir() if path.is_dir()):
         files = []
         for file_path in sorted(path for path in artifact_dir.rglob("*") if path.is_file()):
@@ -77,6 +93,8 @@ def scan_label(name):
         ("trivy", "Dependency Scan"),
         ("gitleaks", "Secrets Scan"),
         ("trufflehog", "Credential Scan"),
+        ("proof-of-concern", "Proof of Concern"),
+        ("poc", "Proof of Concern"),
     ]
 
     for needle, label in labels:
