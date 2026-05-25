@@ -111,6 +111,121 @@ def report_preview(report, limit=260):
     return "No report content was captured."
 
 
+def report_text(report):
+    return "\n".join(file_info["content"] for file_info in report["files"])
+
+
+def remediation_items(report):
+    name = report["name"].lower()
+    content = report_text(report).lower()
+    items = []
+
+    def add(title, detail):
+        if not any(item["title"] == title for item in items):
+            items.append({"title": title, "detail": detail})
+
+    if "headers" in name or "security headers" in content:
+        if "strict-transport-security" in content and "missing: strict-transport-security" in content:
+            add(
+                "Enable HSTS",
+                "Add a Strict-Transport-Security header after confirming HTTPS works everywhere. Start with max-age=31536000; includeSubDomains, then consider preload only when all subdomains are HTTPS-ready.",
+            )
+        if "content-security-policy" in content and "missing: content-security-policy" in content:
+            add(
+                "Add a Content Security Policy",
+                "Create a CSP that allows only trusted script, style, image, font, frame, and connect sources. Roll it out first with Content-Security-Policy-Report-Only, then enforce after fixing violations.",
+            )
+        if "x-content-type-options" in content and "missing: x-content-type-options" in content:
+            add("Prevent MIME sniffing", "Set X-Content-Type-Options: nosniff on all HTTP responses.")
+        if "x-frame-options" in content and "missing: x-frame-options" in content:
+            add("Protect against clickjacking", "Set X-Frame-Options: DENY or SAMEORIGIN, or use CSP frame-ancestors for more precise framing rules.")
+        if "referrer-policy" in content and "missing: referrer-policy" in content:
+            add("Limit referrer leakage", "Set Referrer-Policy to strict-origin-when-cross-origin or a stricter value if the application does not need referrer data.")
+        if "permissions-policy" in content and "missing: permissions-policy" in content:
+            add("Restrict browser features", "Set Permissions-Policy to disable unused browser capabilities such as camera, microphone, geolocation, payment, and USB.")
+        if "cache-control" in content and "missing: cache-control" in content:
+            add("Control sensitive caching", "For authenticated or sensitive pages, set Cache-Control: no-store. For static assets, use explicit immutable cache rules with hashed filenames.")
+
+    if "cookie" in name or "set-cookie" in content:
+        if "missing httponly" in content:
+            add("Set HttpOnly on session cookies", "Add the HttpOnly attribute to session cookies so client-side JavaScript cannot read them after an XSS issue.")
+        if "missing secure" in content:
+            add("Set Secure on cookies", "Add the Secure attribute so cookies are sent only over HTTPS.")
+        if "missing samesite" in content:
+            add("Set SameSite on cookies", "Use SameSite=Lax for most session cookies. Use SameSite=None; Secure only when cross-site cookie usage is required.")
+
+    if "dns" in name:
+        if "no dnssec" in content:
+            add("Enable DNSSEC", "Enable DNSSEC signing at the DNS provider and publish DS records at the registrar, then verify validation from an external resolver.")
+        if "no spf" in content or "missing: no spf" in content:
+            add("Publish an SPF record", "Add a TXT record such as v=spf1 include:your-mail-provider -all, adjusted to match every legitimate sending service.")
+        if "no dmarc" in content or "missing: no dmarc" in content:
+            add("Publish a DMARC record", "Start with v=DMARC1; p=none; rua=mailto:security@example.com, review reports, then move to quarantine or reject when mail flow is verified.")
+        if "no caa" in content:
+            add("Restrict certificate authorities", "Publish CAA records for the certificate authorities allowed to issue certificates for the domain.")
+
+    if "ssl" in name or "tls" in name:
+        if "expires in less than 30 days" in content or "days until expiry: -" in content:
+            add("Renew the TLS certificate", "Renew or replace the certificate and confirm automated renewal is working before the next expiry window.")
+        if "ssl3" in content or "tls1:" in content or "tls1_1" in content:
+            add("Disable obsolete TLS versions", "Disable SSLv3, TLS 1.0, and TLS 1.1. Prefer TLS 1.2 and TLS 1.3 with modern cipher suites.")
+        if "medium" in content or "weak" in content:
+            add("Harden cipher configuration", "Remove weak ciphers, enable forward secrecy, and prefer strong AEAD suites such as AES-GCM or ChaCha20-Poly1305.")
+
+    if "port" in name or "/tcp" in content:
+        risky_ports = {
+            "21": "FTP",
+            "22": "SSH",
+            "23": "Telnet",
+            "25": "SMTP",
+            "3306": "MySQL",
+            "5432": "PostgreSQL",
+            "6379": "Redis",
+            "27017": "MongoDB",
+        }
+        for port, service in risky_ports.items():
+            if f"{port}/tcp" in content and "open" in content:
+                add(
+                    f"Review exposed {service} service",
+                    f"Port {port} appears exposed. If public access is not required, restrict it with firewall/security-group rules, VPN access, or private networking.",
+                )
+
+    if "nikto" in name:
+        if "server leaks" in content or "x-powered-by" in content:
+            add("Reduce server fingerprinting", "Hide unnecessary version banners and X-Powered-By headers from the web server and application framework.")
+        if "osvdb" in content or "vulnerable" in content or "allowed http methods" in content:
+            add("Review Nikto findings", "Patch the affected web server, framework, or plugin, remove risky default files, and disable unnecessary HTTP methods.")
+
+    if "zap" in name:
+        if "alert" in content or "risk" in content or "fail" in content:
+            add("Triage ZAP alerts", "Review each ZAP alert by risk level, reproduce the request, then fix the underlying issue such as missing validation, weak headers, exposed files, or unsafe redirects.")
+        if "cross site scripting" in content or "xss" in content:
+            add("Fix XSS risks", "Encode output by context, sanitize trusted HTML with an allowlist sanitizer, and use CSP as a second layer of protection.")
+        if "sql injection" in content:
+            add("Fix SQL injection risks", "Use parameterized queries or ORM bindings everywhere user input reaches a database query.")
+
+    if "trivy" in name or "dependency" in name or "cve-" in content:
+        if "critical" in content or "high" in content or "cve-" in content:
+            add("Patch vulnerable dependencies", "Upgrade affected packages to fixed versions, rebuild lockfiles/images, and rerun Trivy to confirm the CVEs are gone.")
+        if "misconfiguration" in content:
+            add("Fix IaC misconfigurations", "Apply the Trivy recommendation for each misconfiguration and enforce the corrected baseline in infrastructure code.")
+
+    if "gitleaks" in name or "trufflehog" in name or "secret" in content:
+        if "secret" in content or "verified" in content or "private key" in content:
+            add("Rotate exposed secrets", "Revoke and rotate any exposed tokens, keys, or passwords immediately. Remove them from Git history if needed and move secrets into GitHub Actions secrets or a vault.")
+
+    if not items and report_status(report) != "ok":
+        add(
+            "Review scanner output",
+            "Inspect the detailed scanner output, prioritize critical and high-risk items, apply vendor guidance, then rerun the workflow to verify remediation.",
+        )
+
+    if not items:
+        add("Maintain current controls", "No obvious remediation rule matched this report. Keep monitoring, patch dependencies regularly, and rerun scans after infrastructure or application changes.")
+
+    return items
+
+
 def html_attr(value):
     return html.escape(str(value), quote=True)
 
@@ -149,6 +264,10 @@ def write_markdown(reports):
     else:
         for report in reports:
             lines.extend([f"### {report['name']}", ""])
+            lines.extend(["#### Recommended fixes", ""])
+            for item in remediation_items(report):
+                lines.append(f"- **{item['title']}:** {item['detail']}")
+            lines.append("")
             if not report["files"]:
                 lines.extend(["No files found in this artifact.", ""])
                 continue
@@ -190,6 +309,16 @@ def write_html(reports):
         status = report_status(report)
         scan = scan_label(report["name"])
         preview = report_preview(report)
+        remedies = remediation_items(report)
+        remedies_html = "\n".join(
+            f"""
+            <li>
+              <strong>{html.escape(item["title"])}</strong>
+              <span>{html.escape(item["detail"])}</span>
+            </li>
+            """
+            for item in remedies
+        )
         files_html = []
         for file_info in report["files"]:
             content = html.escape(file_info["content"])
@@ -223,6 +352,10 @@ def write_html(reports):
                 <span class="badge badge--{html_attr(status)}">{html.escape(status_label(status))}</span>
               </div>
               <div class="report-card__preview">{html.escape(preview)}</div>
+              <div class="remedies">
+                <div class="remedies__title">Recommended fixes</div>
+                <ul>{remedies_html}</ul>
+              </div>
               <div class="report-card__files">
                 {''.join(files_html) if files_html else '<p class="empty">No files found in this artifact.</p>'}
               </div>
@@ -459,6 +592,38 @@ def write_html(reports):
       color: var(--muted);
       overflow-wrap: anywhere;
     }}
+    .remedies {{
+      margin: 0 0 14px;
+      padding: 14px;
+      background: linear-gradient(180deg, #f0fdfa, #f8fafc);
+      border: 1px solid #b6ece5;
+      border-radius: 8px;
+    }}
+    .remedies__title {{
+      margin-bottom: 8px;
+      color: var(--accent-strong);
+      font-size: 12px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }}
+    .remedies ul {{
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 8px;
+    }}
+    .remedies li {{ padding-left: 2px; }}
+    .remedies strong {{
+      display: block;
+      color: var(--ink);
+      margin-bottom: 2px;
+    }}
+    .remedies span {{
+      display: block;
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }}
     .badge {{
       flex: 0 0 auto;
       border-radius: 999px;
@@ -657,6 +822,9 @@ def write_docx(reports):
     else:
         for report in reports:
             body.append(paragraph(report["name"], "Heading2"))
+            body.append(paragraph("Recommended fixes", "Heading3"))
+            for item in remediation_items(report):
+                body.append(paragraph(f"{item['title']}: {item['detail']}"))
             if not report["files"]:
                 body.append(paragraph("No files found in this artifact."))
                 continue

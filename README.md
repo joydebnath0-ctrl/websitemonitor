@@ -75,3 +75,8 @@ Inside `full-security-audit` you will find:
 - `security-audit-report.docx` - one Word-compatible document containing all reports
 - `security-summary.md` - a Markdown summary
 - `raw-reports/` - all original scanner artifacts in one place
+
+The HTML, DOCX, and Markdown reports include recommended fixes/remedies for
+common findings such as missing security headers, weak TLS, exposed ports,
+cookie flag issues, DNS email authentication gaps, vulnerable dependencies, and
+secret leakage.
