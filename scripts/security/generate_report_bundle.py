@@ -12,7 +12,6 @@ REPORTS_DIR = Path("all-reports")
 BUNDLE_DIR = Path("audit-report")
 SUMMARY_MD = BUNDLE_DIR / "security-summary.md"
 HTML_REPORT = BUNDLE_DIR / "index.html"
-PDF_REPORT = BUNDLE_DIR / "website-security-audit-report.pdf"
 DOCX_REPORT = BUNDLE_DIR / "security-audit-report.docx"
 RAW_REPORTS_DIR = BUNDLE_DIR / "raw-reports"
 
@@ -341,7 +340,7 @@ def write_markdown(reports):
             "",
             "## Files in this bundle",
             "",
-            "- Open `website-security-audit-report.pdf` for the formal PDF report.",
+            "- Open `index.html` for the simple dashboard.",
             "- Open `security-audit-report.docx` for the Word-compatible report.",
             "- Open `raw-reports/` for original scanner artifacts.",
             "",
@@ -1227,205 +1226,6 @@ def paragraph(text, style=None):
     return f"<w:p>{style_xml}<w:r><w:t xml:space=\"preserve\">{escaped}</w:t></w:r></w:p>"
 
 
-def wrap_pdf_text(text, width=92):
-    words = str(text).replace("\t", " ").split()
-    if not words:
-        return [""]
-
-    lines = []
-    current = ""
-    for word in words:
-        if len(word) > width:
-            if current:
-                lines.append(current)
-                current = ""
-            while len(word) > width:
-                lines.append(word[:width])
-                word = word[width:]
-        candidate = word if not current else f"{current} {word}"
-        if len(candidate) <= width:
-            current = candidate
-        else:
-            lines.append(current)
-            current = word
-    if current:
-        lines.append(current)
-    return lines
-
-
-def pdf_escape(text):
-    return str(text).replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-
-
-def build_pdf_lines(reports):
-    status_totals = {"critical": 0, "high": 0, "warning": 0, "ok": 0}
-    for report in reports:
-        status_totals[report_status(report)] += 1
-    overall_title, overall_detail = overall_status(status_totals)
-    actions = next_actions(reports)
-    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-
-    lines = [
-        ("title", "Website Security Audit Report"),
-        ("small", f"Generated: {generated_at}"),
-        ("small", f"Triggered by: {os.environ.get('GITHUB_EVENT_NAME', 'local')}"),
-        ("spacer", ""),
-        ("heading", f"Overall Status: {overall_title}"),
-        ("body", overall_detail),
-        (
-            "body",
-            f"Targets reviewed: {len(reports)} | Need attention: "
-            f"{status_totals['critical'] + status_totals['high'] + status_totals['warning']} | "
-            f"Look good: {status_totals['ok']}",
-        ),
-        ("spacer", ""),
-        ("heading", "What To Do Next"),
-    ]
-
-    if actions:
-        for index, action in enumerate(actions, start=1):
-            lines.append(("body", f"{index}. {action['target']} - {action['title']}: {action['detail']}"))
-    else:
-        lines.append(("body", "1. Keep monitoring and rerun scans after website or infrastructure changes."))
-
-    lines.extend([("spacer", ""), ("heading", "Monitored Targets")])
-
-    if not reports:
-        lines.append(("body", "No downloaded reports were found."))
-        return lines
-
-    for report in sorted_reports_by_priority(reports):
-        status = report_status(report)
-        lines.extend(
-            [
-                ("spacer", ""),
-                ("subheading", report["name"]),
-                ("body", f"Status: {status_label(status)}"),
-                ("body", status_message(status)),
-                ("body", f"Preview: {report_preview(report)}"),
-                ("small", "Recommended actions:"),
-            ]
-        )
-        for item in remediation_items(report):
-            lines.append(("body", f"- {item['title']}: {item['detail']}"))
-
-        if report["files"]:
-            lines.append(("small", "Evidence files included in artifact:"))
-            for file_info in report["files"]:
-                file_counts = severity_counts(file_info["content"])
-                meta = (
-                    f"critical={file_counts['critical']}, high={file_counts['high']}, "
-                    f"review={file_counts['warning']}"
-                )
-                lines.append(("small", f"- {file_info['relative_path']} ({meta})"))
-        else:
-            lines.append(("small", "No files found in this artifact."))
-
-    return lines
-
-
-def write_pdf(reports):
-    page_width = 612
-    page_height = 792
-    margin_x = 54
-    margin_top = 60
-    margin_bottom = 54
-    line_gap = 4
-    styles = {
-        "title": {"font": "F2", "size": 18, "leading": 24, "width": 60},
-        "heading": {"font": "F2", "size": 13, "leading": 18, "width": 78},
-        "subheading": {"font": "F2", "size": 11, "leading": 16, "width": 84},
-        "body": {"font": "F1", "size": 9, "leading": 13, "width": 96},
-        "small": {"font": "F1", "size": 8, "leading": 11, "width": 104},
-        "spacer": {"font": "F1", "size": 8, "leading": 8, "width": 1},
-    }
-
-    pages = []
-    current = []
-    y_used = 0
-
-    for style_name, text in build_pdf_lines(reports):
-        style = styles[style_name]
-        wrapped = [""] if style_name == "spacer" else wrap_pdf_text(text, style["width"])
-        block_height = len(wrapped) * style["leading"] + line_gap
-        if current and y_used + block_height > page_height - margin_top - margin_bottom:
-            pages.append(current)
-            current = []
-            y_used = 0
-        current.append((style_name, wrapped))
-        y_used += block_height
-
-    if current:
-        pages.append(current)
-
-    objects = []
-
-    def add_object(payload):
-        objects.append(payload)
-        return len(objects)
-
-    font_regular = add_object("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
-    font_bold = add_object("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>")
-    page_refs = []
-
-    for page_index, page in enumerate(pages, start=1):
-        commands = [
-            "q",
-            "0.93 0.95 0.97 rg",
-            f"0 {page_height - 38} {page_width} 38 re f",
-            "0.07 0.12 0.20 rg",
-            "BT /F2 9 Tf 54 768 Td (Website Security Audit) Tj ET",
-            "Q",
-        ]
-        y = page_height - margin_top
-        for style_name, wrapped in page:
-            style = styles[style_name]
-            if style_name == "spacer":
-                y -= style["leading"]
-                continue
-            for line in wrapped:
-                commands.append(
-                    f"BT /{style['font']} {style['size']} Tf {margin_x} {y} Td ({pdf_escape(line)}) Tj ET"
-                )
-                y -= style["leading"]
-            y -= line_gap
-        commands.append(f"BT /F1 8 Tf 54 28 Td (Page {page_index} of {len(pages)}) Tj ET")
-        stream = "\n".join(commands).encode("latin-1", errors="replace")
-        content_ref = add_object(f"<< /Length {len(stream)} >>\nstream\n{stream.decode('latin-1')}\nendstream")
-        page_ref = add_object(
-            "<< /Type /Page /Parent 0 0 R "
-            f"/MediaBox [0 0 {page_width} {page_height}] "
-            f"/Resources << /Font << /F1 {font_regular} 0 R /F2 {font_bold} 0 R >> >> "
-            f"/Contents {content_ref} 0 R >>"
-        )
-        page_refs.append(page_ref)
-
-    pages_ref = len(objects) + 1
-    for page_ref in page_refs:
-        objects[page_ref - 1] = objects[page_ref - 1].replace("/Parent 0 0 R", f"/Parent {pages_ref} 0 R")
-    kids = " ".join(f"{page_ref} 0 R" for page_ref in page_refs)
-    add_object(f"<< /Type /Pages /Kids [{kids}] /Count {len(page_refs)} >>")
-    catalog_ref = add_object(f"<< /Type /Catalog /Pages {pages_ref} 0 R >>")
-
-    output = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
-    offsets = [0]
-    for index, payload in enumerate(objects, start=1):
-        offsets.append(len(output))
-        output.extend(f"{index} 0 obj\n{payload}\nendobj\n".encode("latin-1", errors="replace"))
-    xref_offset = len(output)
-    output.extend(f"xref\n0 {len(objects) + 1}\n".encode("ascii"))
-    output.extend(b"0000000000 65535 f \n")
-    for offset in offsets[1:]:
-        output.extend(f"{offset:010d} 00000 n \n".encode("ascii"))
-    output.extend(
-        (
-            f"trailer\n<< /Size {len(objects) + 1} /Root {catalog_ref} 0 R >>\n"
-            f"startxref\n{xref_offset}\n%%EOF\n"
-        ).encode("ascii")
-    )
-    PDF_REPORT.write_bytes(output)
-
-
 def write_docx(reports):
     status_totals = {"critical": 0, "high": 0, "warning": 0, "ok": 0}
     for report in reports:
@@ -1516,9 +1316,9 @@ def main():
     reset_bundle_dir()
     reports = collect_reports()
     write_markdown(reports)
-    write_pdf(reports)
+    write_html(reports)
     write_docx(reports)
-    print(f"Generated {BUNDLE_DIR}/ with PDF, DOCX, Markdown, and raw reports.")
+    print(f"Generated {BUNDLE_DIR}/ with HTML, DOCX, Markdown, and raw reports.")
 
 
 if __name__ == "__main__":
