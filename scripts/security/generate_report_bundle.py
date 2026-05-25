@@ -61,9 +61,6 @@ def all_counts(reports):
     return counts
 
 
-STATUS_PRIORITY = {"critical": 4, "high": 3, "warning": 2, "ok": 1}
-
-
 def scan_label(name):
     lowered = name.lower()
     labels = [
@@ -98,69 +95,11 @@ def report_status(report):
 
 def status_label(status):
     return {
-        "critical": "Fix now",
-        "high": "Needs attention",
-        "warning": "Review soon",
-        "ok": "Looks good",
+        "critical": "Critical",
+        "high": "High",
+        "warning": "Review",
+        "ok": "Clean",
     }.get(status, "Review")
-
-
-def status_message(status):
-    return {
-        "critical": "Critical wording was found in the scanner output. Treat this as the first item to investigate.",
-        "high": "High-risk, vulnerable, or error wording was found. Review this target before routine cleanup work.",
-        "warning": "The scan found missing controls or warnings. These are usually configuration improvements.",
-        "ok": "No obvious high-risk keywords were found in the captured scanner output.",
-    }.get(status, "Review the scanner output for details.")
-
-
-def overall_status(status_totals):
-    if sum(status_totals.values()) == 0:
-        return "No report data yet", "The workflow did not collect scanner output for this run."
-    if status_totals["critical"]:
-        return "Fix now", "At least one monitored target has critical findings."
-    if status_totals["high"]:
-        return "Needs attention", "At least one monitored target has high-risk findings or scan errors."
-    if status_totals["warning"]:
-        return "Review soon", "No critical/high wording was found, but some controls need review."
-    return "Looks good", "No obvious issues were detected in the collected reports."
-
-
-def health_score(status_totals):
-    total = sum(status_totals.values())
-    if total == 0:
-        return 0
-    penalty = (
-        status_totals["critical"] * 35
-        + status_totals["high"] * 24
-        + status_totals["warning"] * 10
-    )
-    return max(0, min(100, 100 - round(penalty / total)))
-
-
-def sorted_reports_by_priority(reports):
-    return sorted(
-        reports,
-        key=lambda report: (STATUS_PRIORITY[report_status(report)], report["name"].lower()),
-        reverse=True,
-    )
-
-
-def next_actions(reports, limit=6):
-    actions = []
-    seen = set()
-    for report in sorted_reports_by_priority(reports):
-        if report_status(report) == "ok":
-            continue
-        for item in remediation_items(report):
-            key = item["title"].lower()
-            if key in seen:
-                continue
-            seen.add(key)
-            actions.append({"target": report["name"], **item})
-            if len(actions) >= limit:
-                return actions
-    return actions
 
 
 def report_preview(report, limit=260):
@@ -304,75 +243,34 @@ def reset_bundle_dir():
 
 def write_markdown(reports):
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    status_totals = {"critical": 0, "high": 0, "warning": 0, "ok": 0}
-    for report in reports:
-        status_totals[report_status(report)] += 1
-    overall_title, overall_detail = overall_status(status_totals)
-    actions = next_actions(reports)
     lines = [
-        "# Website Monitoring Report",
+        "# Website Security Audit Summary",
         "",
         f"**Date:** {generated_at}",
         f"**Triggered by:** {os.environ.get('GITHUB_EVENT_NAME', 'local')}",
         "",
-        "## Quick read",
+        "## Report Bundle",
         "",
-        f"**Overall status:** {overall_title}",
+        "- Open `index.html` for the GUI report.",
+        "- Open `security-audit-report.docx` for the document report.",
+        "- Open `raw-reports/` for original scanner artifacts.",
         "",
-        overall_detail,
-        "",
-        f"**Targets reviewed:** {len(reports)}",
-        f"**Targets needing attention:** {status_totals['critical'] + status_totals['high'] + status_totals['warning']}",
-        f"**Targets that look good:** {status_totals['ok']}",
-        "",
-        "## What to do next",
+        "## Scan Results",
         "",
     ]
-
-    if actions:
-        for action in actions:
-            lines.append(f"- **{action['target']} - {action['title']}:** {action['detail']}")
-    else:
-        lines.append("- Keep the current monitoring schedule and rerun scans after website or infrastructure changes.")
-
-    lines.extend(
-        [
-            "",
-            "## Files in this bundle",
-            "",
-            "- Open `index.html` for the simple dashboard.",
-            "- Open `security-audit-report.docx` for the Word-compatible report.",
-            "- Open `raw-reports/` for original scanner artifacts.",
-            "",
-            "## Monitored targets",
-            "",
-        ]
-    )
 
     if not reports:
         lines.append("No downloaded reports were found.")
     else:
-        for report in sorted_reports_by_priority(reports):
-            status = report_status(report)
-            lines.extend(
-                [
-                    f"### {report['name']}",
-                    "",
-                    f"**Status:** {status_label(status)}",
-                    "",
-                    status_message(status),
-                    "",
-                    "**Recommended actions**",
-                    "",
-                ]
-            )
+        for report in reports:
+            lines.extend([f"### {report['name']}", ""])
+            lines.extend(["#### Recommended fixes", ""])
             for item in remediation_items(report):
                 lines.append(f"- **{item['title']}:** {item['detail']}")
             lines.append("")
             if not report["files"]:
                 lines.extend(["No files found in this artifact.", ""])
                 continue
-            lines.extend(["<details>", "<summary>Raw scanner output</summary>", ""])
             for file_info in report["files"]:
                 lines.extend(
                     [
@@ -384,7 +282,6 @@ def write_markdown(reports):
                         "",
                     ]
                 )
-            lines.extend(["</details>", ""])
 
     SUMMARY_MD.write_text("\n".join(lines), encoding="utf-8")
 
@@ -396,63 +293,6 @@ def write_html(reports):
     status_totals = {"critical": 0, "high": 0, "warning": 0, "ok": 0}
     for report in reports:
         status_totals[report_status(report)] += 1
-    overall_title, overall_detail = overall_status(status_totals)
-    actions = next_actions(reports)
-    attention_count = status_totals["critical"] + status_totals["high"] + status_totals["warning"]
-    priority_reports = sorted_reports_by_priority(reports)[:4]
-    score = health_score(status_totals)
-    total_reports = len(reports) or 1
-    status_breakdown = [
-        ("critical", "Fix now", status_totals["critical"]),
-        ("high", "Needs attention", status_totals["high"]),
-        ("warning", "Review soon", status_totals["warning"]),
-        ("ok", "Looks good", status_totals["ok"]),
-    ]
-    status_breakdown_html = "\n".join(
-        f"""
-        <div class="status-row">
-          <div class="status-row__label">
-            <span class="dot dot--{html_attr(status)}"></span>
-            <strong>{html.escape(label)}</strong>
-            <em>{value}</em>
-          </div>
-          <div class="status-row__track">
-            <span class="status-row__fill status-row__fill--{html_attr(status)}" style="width: {round((value / total_reports) * 100)}%"></span>
-          </div>
-        </div>
-        """
-        for status, label, value in status_breakdown
-    )
-
-    priority_html = "\n".join(
-        f"""
-        <li>
-          <span class="priority-list__status badge badge--{html_attr(report_status(report))}">{html.escape(status_label(report_status(report)))}</span>
-          <a href="#{html_attr(report["name"])}">{html.escape(report["name"])}</a>
-          <small>{html.escape(status_message(report_status(report)))}</small>
-        </li>
-        """
-        for report in priority_reports
-    )
-
-    actions_html = "\n".join(
-        f"""
-        <li>
-          <b>{index}</b>
-          <strong>{html.escape(action["title"])}</strong>
-          <span>{html.escape(action["detail"])}</span>
-          <em>{html.escape(action["target"])}</em>
-        </li>
-        """
-        for index, action in enumerate(actions, start=1)
-    ) or """
-        <li>
-          <b>1</b>
-          <strong>Keep monitoring</strong>
-          <span>No urgent findings were detected. Rerun scans after website, DNS, hosting, or dependency changes.</span>
-          <em>All targets</em>
-        </li>
-    """
 
     nav_items = "\n".join(
         f"""
@@ -491,7 +331,7 @@ def write_html(reports):
             ) or "No keyword alerts"
             files_html.append(
                 f"""
-                <details class="file-panel">
+                <details class="file-panel" open>
                   <summary>
                     <span>{path}</span>
                     <em>{html.escape(file_meta)}</em>
@@ -504,7 +344,6 @@ def write_html(reports):
         sections.append(
             f"""
             <section class="report-card" id="{html_attr(report["name"])}" data-report data-search="{html_attr(report["name"] + " " + scan + " " + preview)}" data-status="{html_attr(status)}">
-              <div class="report-card__stripe report-card__stripe--{html_attr(status)}"></div>
               <div class="report-card__head">
                 <div>
                   <p>{html.escape(scan)}</p>
@@ -512,13 +351,11 @@ def write_html(reports):
                 </div>
                 <span class="badge badge--{html_attr(status)}">{html.escape(status_label(status))}</span>
               </div>
-              <p class="meaning">{html.escape(status_message(status))}</p>
               <div class="report-card__preview">{html.escape(preview)}</div>
               <div class="remedies">
-                <div class="remedies__title">Recommended actions</div>
+                <div class="remedies__title">Recommended fixes</div>
                 <ul>{remedies_html}</ul>
               </div>
-              <div class="raw-title">Raw scanner output</div>
               <div class="report-card__files">
                 {''.join(files_html) if files_html else '<p class="empty">No files found in this artifact.</p>'}
               </div>
@@ -532,7 +369,7 @@ def write_html(reports):
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Website Monitoring Report</title>
+  <title>Website Security Audit</title>
   <style>
     :root {{
       color-scheme: light;
@@ -551,24 +388,26 @@ def write_html(reports):
       --warn-bg: #fef0c7;
       --ok: #027a48;
       --ok-bg: #dcfae6;
-      --shadow: 0 12px 28px rgba(15, 23, 42, 0.10);
+      --shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
     }}
     * {{ box-sizing: border-box; }}
     html {{ scroll-behavior: smooth; }}
     body {{
       margin: 0;
-      background: linear-gradient(180deg, #f8fbfd 0%, var(--bg) 56%, #e8eef5 100%);
+      background:
+        radial-gradient(circle at top left, rgba(15, 118, 110, 0.16), transparent 34rem),
+        linear-gradient(180deg, #f8fbfd 0%, var(--bg) 52%, #e8eef5 100%);
       color: var(--ink);
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       line-height: 1.45;
     }}
     .shell {{ min-height: 100vh; }}
     .hero {{
-      padding: 34px 32px;
+      padding: 32px;
       color: #ffffff;
       background:
-        linear-gradient(135deg, rgba(11, 18, 32, 0.98), rgba(18, 88, 100, 0.96) 58%, rgba(21, 94, 117, 0.98)),
-        linear-gradient(45deg, rgba(14, 165, 233, 0.20), transparent);
+        linear-gradient(135deg, rgba(17, 24, 39, 0.98), rgba(15, 118, 110, 0.94)),
+        linear-gradient(45deg, rgba(37, 99, 235, 0.24), transparent);
       border-bottom: 1px solid rgba(255, 255, 255, 0.16);
     }}
     .hero__inner {{
@@ -577,7 +416,7 @@ def write_html(reports):
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
       gap: 24px;
-      align-items: center;
+      align-items: end;
     }}
     .eyebrow {{
       display: inline-flex;
@@ -595,7 +434,7 @@ def write_html(reports):
     h1 {{
       max-width: 760px;
       margin-top: 14px;
-      font-size: 44px;
+      font-size: 40px;
       line-height: 1.08;
       letter-spacing: 0;
     }}
@@ -609,43 +448,6 @@ def write_html(reports):
       gap: 10px;
       flex-wrap: wrap;
       justify-content: flex-end;
-    }}
-    .score-card {{
-      width: 220px;
-      padding: 18px;
-      border: 1px solid rgba(255, 255, 255, 0.20);
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.11);
-      backdrop-filter: blur(12px);
-    }}
-    .score-ring {{
-      width: 154px;
-      height: 154px;
-      margin: 0 auto 12px;
-      border-radius: 50%;
-      display: grid;
-      place-items: center;
-      background:
-        radial-gradient(circle at center, #102436 0 57%, transparent 58%),
-        conic-gradient(#22c55e calc(var(--score) * 1%), rgba(255, 255, 255, 0.20) 0);
-      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
-    }}
-    .score-ring strong {{
-      display: block;
-      font-size: 38px;
-      line-height: 1;
-    }}
-    .score-ring span {{
-      display: block;
-      margin-top: 4px;
-      color: rgba(255, 255, 255, 0.72);
-      font-size: 12px;
-      text-align: center;
-    }}
-    .score-card p {{
-      color: rgba(255, 255, 255, 0.78);
-      font-size: 13px;
-      text-align: center;
     }}
     .action {{
       display: inline-flex;
@@ -708,167 +510,6 @@ def write_html(reports):
       gap: 14px;
       margin-bottom: 16px;
     }}
-    .quick-summary,
-    .next-actions {{
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 18px;
-      margin-bottom: 16px;
-      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
-    }}
-    .quick-summary {{
-      display: grid;
-      grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
-      gap: 18px;
-      align-items: start;
-    }}
-    .summary-copy {{
-      display: grid;
-      gap: 14px;
-    }}
-    .summary-callout {{
-      padding: 14px;
-      border: 1px solid #b6ece5;
-      border-radius: 8px;
-      background: #f0fdfa;
-    }}
-    .section-label {{
-      margin-bottom: 5px;
-      color: var(--accent-strong);
-      font-size: 12px;
-      font-weight: 900;
-      text-transform: uppercase;
-      letter-spacing: 0;
-    }}
-    .quick-summary h2 {{
-      margin-bottom: 8px;
-      font-size: 26px;
-      line-height: 1.15;
-    }}
-    .quick-summary p,
-    .next-actions span,
-    .priority-list small {{
-      color: var(--muted);
-    }}
-    .priority-list {{
-      margin: 0;
-      padding: 0;
-      list-style: none;
-      display: grid;
-      gap: 10px;
-    }}
-    .priority-list li {{
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
-      gap: 4px 10px;
-      align-items: center;
-      padding: 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel-soft);
-    }}
-    .priority-list a {{
-      color: var(--ink);
-      font-weight: 800;
-      text-decoration: none;
-      overflow-wrap: anywhere;
-    }}
-    .priority-list small {{
-      grid-column: 2;
-      font-size: 13px;
-    }}
-    .priority-list__status {{
-      align-self: start;
-    }}
-    .status-board {{
-      display: grid;
-      gap: 12px;
-      padding: 14px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel-soft);
-    }}
-    .status-row {{
-      display: grid;
-      gap: 7px;
-    }}
-    .status-row__label {{
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: var(--ink);
-      font-size: 13px;
-    }}
-    .status-row__label em {{
-      margin-left: auto;
-      color: var(--muted);
-      font-style: normal;
-      font-weight: 800;
-    }}
-    .status-row__track {{
-      height: 9px;
-      overflow: hidden;
-      border-radius: 999px;
-      background: #e2e8f0;
-    }}
-    .status-row__fill {{
-      display: block;
-      height: 100%;
-      min-width: 0;
-      border-radius: inherit;
-    }}
-    .status-row__fill--critical, .status-row__fill--high {{ background: #ef4444; }}
-    .status-row__fill--warning {{ background: #f59e0b; }}
-    .status-row__fill--ok {{ background: #22c55e; }}
-    .dot {{
-      width: 10px;
-      height: 10px;
-      border-radius: 999px;
-      background: var(--muted);
-    }}
-    .dot--critical, .dot--high {{ background: #ef4444; }}
-    .dot--warning {{ background: #f59e0b; }}
-    .dot--ok {{ background: #22c55e; }}
-    .next-actions ul {{
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-      margin: 10px 0 0;
-      padding: 0;
-      list-style: none;
-    }}
-    .next-actions li {{
-      position: relative;
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
-      gap: 4px 10px;
-      padding: 14px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel-soft);
-    }}
-    .next-actions b {{
-      grid-row: span 3;
-      display: grid;
-      place-items: center;
-      width: 30px;
-      height: 30px;
-      border-radius: 999px;
-      background: #0f766e;
-      color: #ffffff;
-      font-size: 13px;
-    }}
-    .next-actions strong {{
-      font-size: 15px;
-    }}
-    .next-actions em {{
-      color: var(--accent-strong);
-      font-style: normal;
-      font-size: 12px;
-      font-weight: 800;
-      overflow-wrap: anywhere;
-    }}
     .metric {{
       background: var(--panel);
       border: 1px solid var(--line);
@@ -918,25 +559,14 @@ def write_html(reports):
       border-color: var(--accent);
     }}
     .report-card {{
-      position: relative;
       background: rgba(255, 255, 255, 0.94);
       border: 1px solid var(--line);
       border-radius: 8px;
       margin-bottom: 16px;
-      padding: 20px 18px 18px;
+      padding: 18px;
       box-shadow: var(--shadow);
       scroll-margin-top: 24px;
-      overflow: hidden;
     }}
-    .report-card__stripe {{
-      position: absolute;
-      inset: 0 0 auto 0;
-      height: 5px;
-      background: var(--muted);
-    }}
-    .report-card__stripe--critical, .report-card__stripe--high {{ background: #ef4444; }}
-    .report-card__stripe--warning {{ background: #f59e0b; }}
-    .report-card__stripe--ok {{ background: #22c55e; }}
     .report-card.is-hidden {{ display: none; }}
     .report-card__head {{
       display: flex;
@@ -962,15 +592,10 @@ def write_html(reports):
       color: var(--muted);
       overflow-wrap: anywhere;
     }}
-    .meaning {{
-      margin-top: 10px;
-      color: var(--ink);
-      font-weight: 600;
-    }}
     .remedies {{
       margin: 0 0 14px;
       padding: 14px;
-      background: #f0fdfa;
+      background: linear-gradient(180deg, #f0fdfa, #f8fafc);
       border: 1px solid #b6ece5;
       border-radius: 8px;
     }}
@@ -1023,14 +648,6 @@ def write_html(reports):
       border-color: #abefc6;
     }}
     .report-card__files {{ display: grid; gap: 10px; }}
-    .raw-title {{
-      margin: 4px 0 8px;
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 900;
-      text-transform: uppercase;
-      letter-spacing: 0;
-    }}
     details.file-panel {{
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -1088,22 +705,16 @@ def write_html(reports):
     @media (max-width: 980px) {{
       .hero__inner {{ grid-template-columns: 1fr; }}
       .hero__actions {{ justify-content: flex-start; }}
-      .score-card {{ width: 100%; max-width: 320px; }}
       .layout {{ grid-template-columns: 1fr; padding: 18px; }}
       nav {{ position: static; max-height: none; }}
       .overview {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
-      .quick-summary {{ grid-template-columns: 1fr; }}
-      .next-actions ul {{ grid-template-columns: 1fr; }}
       .toolbar {{ grid-template-columns: 1fr; }}
       .filters {{ justify-content: flex-start; }}
     }}
     @media (max-width: 560px) {{
       .hero {{ padding: 24px 18px; }}
       h1 {{ font-size: 31px; }}
-      .score-ring {{ width: 132px; height: 132px; }}
       .overview {{ grid-template-columns: 1fr; }}
-      .next-actions li {{ grid-template-columns: 1fr; }}
-      .next-actions b {{ grid-row: auto; }}
       .report-card__head {{ display: grid; }}
       summary {{ align-items: flex-start; flex-direction: column; }}
       summary em {{ white-space: normal; }}
@@ -1115,57 +726,29 @@ def write_html(reports):
     <header class="hero">
       <div class="hero__inner">
         <div>
-          <div class="eyebrow">Website Monitoring Report</div>
-          <h1>{html.escape(overall_title)}</h1>
-          <p class="hero__meta">{html.escape(overall_detail)} Generated {html.escape(generated_at)}.</p>
-          <div class="hero__actions">
-            <a class="action action--primary" href="security-audit-report.docx">Word Report</a>
-            <a class="action" href="security-summary.md">Summary</a>
-            <a class="action" href="raw-reports/">Raw Logs</a>
-          </div>
+          <div class="eyebrow">Security Audit Report</div>
+          <h1>Website security posture across domains and scanners</h1>
+          <p class="hero__meta">Generated {html.escape(generated_at)}. Consolidated from every scanner output in this workflow run.</p>
         </div>
-        <div class="score-card" aria-label="Website health score">
-          <div class="score-ring" style="--score: {score}">
-            <div>
-              <strong>{score}</strong>
-              <span>Health score</span>
-            </div>
-          </div>
-          <p>Higher is better. The score drops when targets have critical, high-risk, or review findings.</p>
+        <div class="hero__actions">
+          <a class="action action--primary" href="security-audit-report.docx">Open DOCX</a>
+          <a class="action" href="security-summary.md">Markdown</a>
+          <a class="action" href="raw-reports/">Raw Reports</a>
         </div>
       </div>
     </header>
     <main class="layout">
       <nav>
-        <strong>Monitored Targets</strong>
+        <strong>Report Index</strong>
         {nav_items or '<p>No artifacts found.</p>'}
       </nav>
       <div>
-        <section class="quick-summary">
-          <div class="summary-copy">
-            <p class="section-label">Priority</p>
-            <h2>Start here</h2>
-            <div class="summary-callout">
-              <p>{html.escape(overall_detail)}</p>
-            </div>
-            <div class="status-board" aria-label="Status distribution">
-              {status_breakdown_html}
-            </div>
-          </div>
-          <ol class="priority-list">
-            {priority_html or '<li><strong>No targets found</strong><small>The workflow did not collect scanner reports.</small></li>'}
-          </ol>
-        </section>
-        <section class="next-actions">
-          <p class="section-label">Next actions</p>
-          <ul>{actions_html}</ul>
-        </section>
         <div class="overview">
-          <div class="metric"><div class="metric__value">{len(reports)}</div><div class="metric__label">Targets Reviewed</div></div>
-          <div class="metric"><div class="metric__value danger">{attention_count}</div><div class="metric__label">Need Attention</div></div>
-          <div class="metric"><div class="metric__value ok">{status_totals["ok"]}</div><div class="metric__label">Look Good</div></div>
-          <div class="metric"><div class="metric__value">{total_files}</div><div class="metric__label">Raw Log Files</div></div>
-          <div class="metric"><div class="metric__value warn">{counts["warning"]}</div><div class="metric__label">Warnings Found</div></div>
+          <div class="metric"><div class="metric__value">{len(reports)}</div><div class="metric__label">Report Groups</div></div>
+          <div class="metric"><div class="metric__value">{total_files}</div><div class="metric__label">Files Captured</div></div>
+          <div class="metric"><div class="metric__value danger">{counts["critical"]}</div><div class="metric__label">Critical Mentions</div></div>
+          <div class="metric"><div class="metric__value danger">{counts["high"]}</div><div class="metric__label">High Mentions</div></div>
+          <div class="metric"><div class="metric__value warn">{counts["warning"]}</div><div class="metric__label">Warnings / Missing</div></div>
         </div>
         <div class="toolbar">
           <input class="search" id="reportSearch" type="search" placeholder="Search reports, domains, scanners, findings">
@@ -1227,48 +810,26 @@ def paragraph(text, style=None):
 
 
 def write_docx(reports):
-    status_totals = {"critical": 0, "high": 0, "warning": 0, "ok": 0}
-    for report in reports:
-        status_totals[report_status(report)] += 1
-    overall_title, overall_detail = overall_status(status_totals)
-    actions = next_actions(reports)
     body = [
-        paragraph("Website Monitoring Report", "Title"),
+        paragraph("Website Security Audit", "Title"),
         paragraph(f"Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"),
-        paragraph(f"Overall status: {overall_title}", "Heading1"),
-        paragraph(overall_detail),
-        paragraph(
-            f"Targets reviewed: {len(reports)}. Targets needing attention: "
-            f"{status_totals['critical'] + status_totals['high'] + status_totals['warning']}. "
-            f"Targets that look good: {status_totals['ok']}."
-        ),
-        paragraph("What to do next", "Heading1"),
+        paragraph("This document summarizes all reports included in the full-security-audit artifact."),
+        paragraph("Scan Results", "Heading1"),
     ]
-
-    if actions:
-        for action in actions:
-            body.append(paragraph(f"{action['target']} - {action['title']}: {action['detail']}"))
-    else:
-        body.append(paragraph("Keep the current monitoring schedule and rerun scans after website or infrastructure changes."))
-
-    body.append(paragraph("Monitored targets", "Heading1"))
 
     if not reports:
         body.append(paragraph("No downloaded reports were found."))
     else:
-        for report in sorted_reports_by_priority(reports):
-            status = report_status(report)
+        for report in reports:
             body.append(paragraph(report["name"], "Heading2"))
-            body.append(paragraph(f"Status: {status_label(status)}"))
-            body.append(paragraph(status_message(status)))
-            body.append(paragraph("Recommended actions", "Heading3"))
+            body.append(paragraph("Recommended fixes", "Heading3"))
             for item in remediation_items(report):
                 body.append(paragraph(f"{item['title']}: {item['detail']}"))
             if not report["files"]:
                 body.append(paragraph("No files found in this artifact."))
                 continue
             for file_info in report["files"]:
-                body.append(paragraph(f"Raw scanner output: {file_info['relative_path']}", "Heading3"))
+                body.append(paragraph(file_info["relative_path"], "Heading3"))
                 for line in file_info["content"].splitlines() or [""]:
                     body.append(paragraph(line))
 
