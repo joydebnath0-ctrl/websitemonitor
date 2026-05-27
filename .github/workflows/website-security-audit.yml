@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [main, master]
   schedule:
-    # Runs every Monday at 08:00 UTC.
     - cron: "0 8 * * 1"
   workflow_dispatch:
     inputs:
@@ -22,25 +21,56 @@ jobs:
     if: always()
     steps:
       - name: Checkout repository
+        id: checkout                          # ← id required for outcome reference
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      # ─── Summary: Checkout ────────────────────────────────────────────────
+      - name: Summary - Checkout
+        if: always()
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          if [ "${{ steps.checkout.outcome }}" = "success" ]; then ICON="✅"; else ICON="❌"; fi
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          # 🚀 Website Security Audit Summary
+
+          | Field          | Details |
+          |----------------|---------|
+          | **Pushed by**  | @${{ github.actor }} |
+          | **Branch**     | \`${{ github.ref_name }}\` |
+          | **Commit ID**  | [\`$SHORT_SHA\`](https://github.com/${{ github.repository }}/commit/${{ github.sha }}) |
+          | **Commit Msg** | ${{ github.event.head_commit.message }} |
+          | **Trigger**    | \`${{ github.event_name }}\` |
+          | **Run**        | [#${{ github.run_number }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
+          | **Time (UTC)** | $(date -u '+%Y-%m-%d %H:%M:%S') |
+
+          ## 📋 Step Results
+
+          | Step | Status |
+          |------|--------|
+          | 1. Checkout Repository | $ICON \`${{ steps.checkout.outcome }}\` |
+          EOF
+
       - name: Install scanner tools
+        id: install_tools
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y curl dnsutils jq netcat-openbsd nikto nmap openssl
 
       - name: Prepare target domains
+        id: prepare_targets
         env:
           TARGET_URLS: ${{ github.event.inputs.target_urls || '' }}
           TARGET_MATRIX_FILE: audit-targets.json
         run: python3 scripts/security/build_target_matrix.py
 
       - name: Run website scans for all domains
+        id: website_scans
         run: bash scripts/security/run_domain_scans.sh audit-targets.json
 
       - name: Run OWASP ZAP scans for all domains
+        id: zap_scans
         run: |
           python3 - <<'PY' > zap-targets.tsv
           import json
@@ -74,12 +104,15 @@ jobs:
           done < zap-targets.tsv
 
       - name: Collect proof of concern evidence
+        id: poc_evidence
         run: bash scripts/security/collect_poc_evidence.sh audit-targets.json
 
       - name: Prepare repository report folder
+        id: prep_report_folder
         run: mkdir -p all-reports/repository
 
       - name: Run Trivy dependency and config scans
+        id: trivy_fs
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: "fs"
@@ -90,6 +123,7 @@ jobs:
           exit-code: "0"
 
       - name: Run Trivy IaC scan
+        id: trivy_config
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: "config"
@@ -100,6 +134,7 @@ jobs:
           exit-code: "0"
 
       - name: Run Gitleaks secret scan
+        id: gitleaks
         run: |
           mkdir -p all-reports/repository
           docker run --rm \
@@ -112,6 +147,7 @@ jobs:
             --no-banner || true
 
       - name: Run TruffleHog credential scan
+        id: trufflehog
         run: |
           mkdir -p all-reports/repository
           docker run --rm \
@@ -122,31 +158,44 @@ jobs:
             --json > all-reports/repository/trufflehog-results.json || true
 
       - name: Generate one document report
+        id: generate_report
         run: bash scripts/security/generate_summary.sh
 
       - name: Upload one consolidated artifact
+        id: upload_artifact
         uses: actions/upload-artifact@v4
         with:
           name: full-security-audit
           path: audit-report/
           retention-days: 30
 
-           # ─── Final Summary ─────
-      - name: Summary - Deploy & Final Status
+      # ─── Final Summary ────────────────────────────────────────────────────
+      - name: Summary - Final Status
         if: always()
         run: |
-          if [ "${{ steps.deploy.outcome }}" = "success" ]; then DEPLOY_ICON="✅"; else DEPLOY_ICON="❌"; fi
-
-          if [ "${{ job.status }}" = "success" ]; then
-            FINAL="✅ PASSED — Deployment completed successfully"
-          else
-            FINAL="❌ FAILED — Check the step(s) marked above"
-          fi
+          # Helper: map outcome to icon
+          icon() { [ "$1" = "success" ] && echo "✅" || [ "$1" = "skipped" ] && echo "⏭️" || echo "❌"; }
 
           cat >> $GITHUB_STEP_SUMMARY << EOF
-          | 6. Deploy to EC2 (SSH) | $DEPLOY_ICON \`${{ steps.deploy.outcome }}\` |
+
+          | 2. Install Scanner Tools         | $(icon "${{ steps.install_tools.outcome }}")   \`${{ steps.install_tools.outcome }}\`   |
+          | 3. Prepare Target Domains        | $(icon "${{ steps.prepare_targets.outcome }}") \`${{ steps.prepare_targets.outcome }}\` |
+          | 4. Website Scans                 | $(icon "${{ steps.website_scans.outcome }}")   \`${{ steps.website_scans.outcome }}\`   |
+          | 5. OWASP ZAP Scans               | $(icon "${{ steps.zap_scans.outcome }}")        \`${{ steps.zap_scans.outcome }}\`       |
+          | 6. Collect PoC Evidence          | $(icon "${{ steps.poc_evidence.outcome }}")    \`${{ steps.poc_evidence.outcome }}\`    |
+          | 7. Trivy Dependency Scan         | $(icon "${{ steps.trivy_fs.outcome }}")        \`${{ steps.trivy_fs.outcome }}\`        |
+          | 8. Trivy IaC Scan                | $(icon "${{ steps.trivy_config.outcome }}")    \`${{ steps.trivy_config.outcome }}\`    |
+          | 9. Gitleaks Secret Scan          | $(icon "${{ steps.gitleaks.outcome }}")        \`${{ steps.gitleaks.outcome }}\`        |
+          | 10. TruffleHog Credential Scan   | $(icon "${{ steps.trufflehog.outcome }}")      \`${{ steps.trufflehog.outcome }}\`      |
+          | 11. Generate Report              | $(icon "${{ steps.generate_report.outcome }}") \`${{ steps.generate_report.outcome }}\` |
+          | 12. Upload Artifact              | $(icon "${{ steps.upload_artifact.outcome }}") \`${{ steps.upload_artifact.outcome }}\` |
 
           ## 🏁 Final Result
 
-          > **$FINAL**
           EOF
+
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "> ✅ **PASSED** — All security audit steps completed successfully" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "> ❌ **FAILED** — One or more steps above did not succeed" >> $GITHUB_STEP_SUMMARY
+          fi
