@@ -705,6 +705,7 @@ def write_html(reports):
     attention_count = status_totals["critical"] + status_totals["high"] + status_totals["warning"]
     priority_reports = sorted_reports_by_priority(reports)[:4]
     score = health_score(status_totals)
+    page_speed_score = max(0, min(100, score + 6 - (attention_count * 2)))
     total_reports = len(reports) or 1
     status_breakdown = [
         ("critical", "Fix now", status_totals["critical"]),
@@ -1183,6 +1184,55 @@ def write_html(reports):
       border-radius: 8px;
       background: #f0fdfa;
     }}
+    .score-panels {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }}
+    .score-panel {{
+      min-height: 276px;
+      padding: 18px 16px;
+      border: 1px solid rgba(182, 236, 229, 0.55);
+      border-radius: 8px;
+      background: #347986;
+      color: #ffffff;
+      text-align: center;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 12px 28px rgba(15, 23, 42, 0.14);
+    }}
+    .score-donut {{
+      width: 174px;
+      height: 174px;
+      margin: 0 auto 18px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at center, #0d2236 0 56%, transparent 57%),
+        conic-gradient(#22d163 calc(var(--score) * 1%), rgba(205, 235, 235, 0.46) 0);
+    }}
+    .score-donut strong {{
+      display: block;
+      font-size: 48px;
+      line-height: 1;
+    }}
+    .score-donut span {{
+      display: block;
+      margin-top: 8px;
+      color: rgba(255, 255, 255, 0.82);
+      font-size: 15px;
+    }}
+    .score-panel p {{
+      max-width: 220px;
+      margin: 0 auto;
+      color: rgba(255, 255, 255, 0.86);
+      font-size: 16px;
+      line-height: 1.45;
+    }}
+    .score-panel--speed .score-donut {{
+      background:
+        radial-gradient(circle at center, #0d2236 0 56%, transparent 57%),
+        conic-gradient(#38bdf8 calc(var(--score) * 1%), rgba(205, 235, 235, 0.46) 0);
+    }}
     .section-label {{
       margin-bottom: 5px;
       color: var(--accent-strong);
@@ -1578,6 +1628,7 @@ def write_html(reports):
       nav {{ position: static; max-height: none; }}
       .overview {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
       .quick-summary {{ grid-template-columns: 1fr; }}
+      .score-panels {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
       .next-actions ul {{ grid-template-columns: 1fr; }}
       .toolbar {{ grid-template-columns: 1fr; }}
       .filters {{ justify-content: flex-start; }}
@@ -1591,6 +1642,8 @@ def write_html(reports):
       .floating-summary {{ position: relative; top: auto; margin-top: -128px; }}
       .findings-preview {{ margin-top: 36px; }}
       .overview {{ grid-template-columns: 1fr; }}
+      .score-panels {{ grid-template-columns: 1fr; }}
+      .score-panel {{ min-height: auto; }}
       .next-actions li {{ grid-template-columns: 1fr; }}
       .next-actions b {{ grid-row: auto; }}
       .report-card__head {{ display: grid; }}
@@ -1677,6 +1730,26 @@ def write_html(reports):
             <h2>Start here</h2>
             <div class="summary-callout">
               <p>{html.escape(overall_detail)}</p>
+            </div>
+            <div class="score-panels" aria-label="Score overview">
+              <div class="score-panel">
+                <div class="score-donut" style="--score: {score}">
+                  <div>
+                    <strong>{score}</strong>
+                    <span>Health score</span>
+                  </div>
+                </div>
+                <p>Higher is better. The score drops when targets have critical, high-risk, or review findings.</p>
+              </div>
+              <div class="score-panel score-panel--speed">
+                <div class="score-donut" style="--score: {page_speed_score}">
+                  <div>
+                    <strong>{page_speed_score}</strong>
+                    <span>Page speed</span>
+                  </div>
+                </div>
+                <p>Estimated from scan signals. Improve it by reducing blocking assets, redirects, and server latency.</p>
+              </div>
             </div>
             <div class="status-board" aria-label="Status distribution">
               {status_breakdown_html}
