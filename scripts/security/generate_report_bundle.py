@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import base64
 import html
 import os
 import shutil
@@ -14,6 +15,8 @@ SUMMARY_MD = BUNDLE_DIR / "security-summary.md"
 HTML_REPORT = BUNDLE_DIR / "index.html"
 DOCX_REPORT = BUNDLE_DIR / "security-audit-report.docx"
 RAW_REPORTS_DIR = BUNDLE_DIR / "raw-reports"
+LOGO_FILE = Path("assets/webskitters-logo.png")
+BRAND_NAME = "webskitters website monitor"
 
 
 def read_text(path):
@@ -21,6 +24,14 @@ def read_text(path):
         return path.read_text(encoding="utf-8", errors="replace")
     except OSError as exc:
         return f"Unable to read {path}: {exc}"
+
+
+def logo_data_uri():
+    if not LOGO_FILE.exists():
+        return ""
+
+    encoded = base64.b64encode(LOGO_FILE.read_bytes()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
 
 
 def collect_reports():
@@ -683,6 +694,7 @@ def write_markdown(reports):
 
 def write_html(reports):
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    logo_src = logo_data_uri()
     counts = all_counts(reports)
     total_files = sum(len(report["files"]) for report in reports)
     status_totals = {"critical": 0, "high": 0, "warning": 0, "ok": 0}
@@ -887,15 +899,22 @@ def write_html(reports):
       font-weight: 900;
       line-height: 0.9;
     }}
-    .brand svg {{
-      width: 44px;
-      height: 52px;
+    .brand img {{
+      width: 72px;
+      height: 54px;
+      object-fit: contain;
+      padding: 5px;
+      border-radius: 8px;
+      background: #ffffff;
       flex: 0 0 auto;
     }}
     .brand span {{
       display: block;
-      font-size: 24px;
+      max-width: 190px;
+      font-size: 20px;
       letter-spacing: 0;
+      line-height: 1.05;
+      text-transform: capitalize;
     }}
     .topnav {{
       display: flex;
@@ -986,12 +1005,17 @@ def write_html(reports):
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #064d91;
+      color: #4b5563;
       font-weight: 900;
-      line-height: 0.92;
+      line-height: 1.05;
       margin-bottom: 12px;
+      text-transform: capitalize;
     }}
-    .report-sheet__brand svg {{ width: 38px; height: 45px; }}
+    .report-sheet__brand img {{
+      width: 64px;
+      height: 42px;
+      object-fit: contain;
+    }}
     .report-sheet__title {{
       padding-bottom: 12px;
       border-bottom: 4px solid #d9e8f7;
@@ -1579,13 +1603,8 @@ def write_html(reports):
   <div class="shell">
     <div class="topbar">
       <a class="brand" href="#">
-        <svg viewBox="0 0 64 76" role="img" aria-label="Pentest Tools shield">
-          <path d="M31.5 3 56 10.5C54.7 35 47.2 56.5 31.5 72 16.2 56.8 8.6 35.2 7 10.5L31.5 3Z" fill="#ffffff"/>
-          <path d="M31.5 7.5 51.3 13.3C49.8 33.5 43.6 51 31.5 64.7 19.5 51.2 13 33.6 11.6 13.3L31.5 7.5Z" fill="#2f80ed"/>
-          <path d="M31.5 7.5 51.3 13.3C50.9 18.1 50.1 22.7 49 27.1L15.3 18.3C14.7 16.7 14.2 15 13.7 13.3L31.5 7.5Z" fill="#ff6b5f"/>
-          <path d="M12.7 60.5 55.5 8.4 47.6 39.1 23.6 69.2 12.7 60.5Z" fill="#ffffff"/>
-        </svg>
-        <span>Pentest<br>Tools</span>
+        <img src="{html_attr(logo_src)}" alt="{html_attr(BRAND_NAME)} logo">
+        <span>{html.escape(BRAND_NAME)}</span>
       </a>
       <div class="topnav" aria-label="Report navigation">
         <a href="#overview">Product</a>
@@ -1610,13 +1629,8 @@ def write_html(reports):
         <div class="hero-visual" aria-label="Report preview">
           <div class="report-sheet">
             <div class="report-sheet__brand">
-              <svg viewBox="0 0 64 76" aria-hidden="true">
-                <path d="M31.5 3 56 10.5C54.7 35 47.2 56.5 31.5 72 16.2 56.8 8.6 35.2 7 10.5L31.5 3Z" fill="#ffffff"/>
-                <path d="M31.5 7.5 51.3 13.3C49.8 33.5 43.6 51 31.5 64.7 19.5 51.2 13 33.6 11.6 13.3L31.5 7.5Z" fill="#2f80ed"/>
-                <path d="M31.5 7.5 51.3 13.3C50.9 18.1 50.1 22.7 49 27.1L15.3 18.3C14.7 16.7 14.2 15 13.7 13.3L31.5 7.5Z" fill="#ff6b5f"/>
-                <path d="M12.7 60.5 55.5 8.4 47.6 39.1 23.6 69.2 12.7 60.5Z" fill="#ffffff"/>
-              </svg>
-              <span>Pentest<br>Tools</span>
+              <img src="{html_attr(logo_src)}" alt="{html_attr(BRAND_NAME)} logo">
+              <span>{html.escape(BRAND_NAME)}</span>
             </div>
             <div class="report-sheet__title">Website Vulnerability Scanner Report</div>
             <div class="findings-preview">
