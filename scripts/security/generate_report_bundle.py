@@ -700,6 +700,10 @@ def write_html(reports):
         ("warning", "Review soon", status_totals["warning"]),
         ("ok", "Looks good", status_totals["ok"]),
     ]
+    critical_bar_width = min(100, max(10, status_totals["critical"] * 18))
+    high_bar_width = min(100, max(10, status_totals["high"] * 18))
+    medium_bar_width = min(100, max(10, status_totals["warning"] * 10))
+    ok_bar_width = min(100, max(18, status_totals["ok"] * 18))
     status_breakdown_html = "\n".join(
         f"""
         <div class="status-row">
@@ -863,20 +867,72 @@ def write_html(reports):
       line-height: 1.45;
     }}
     .shell {{ min-height: 100vh; }}
+    .topbar {{
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 20px 32px 0;
+      color: #ffffff;
+    }}
+    .brand {{
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: #ffffff;
+      text-decoration: none;
+      font-weight: 900;
+      line-height: 0.9;
+    }}
+    .brand svg {{
+      width: 44px;
+      height: 52px;
+      flex: 0 0 auto;
+    }}
+    .brand span {{
+      display: block;
+      font-size: 24px;
+      letter-spacing: 0;
+    }}
+    .topnav {{
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      color: rgba(255, 255, 255, 0.84);
+      font-size: 14px;
+      font-weight: 800;
+    }}
+    .topnav a {{
+      color: inherit;
+      text-decoration: none;
+    }}
+    .topnav .nav-cta {{
+      min-height: 38px;
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 13px;
+      border-radius: 7px;
+      background: #f7c600;
+      color: #111827;
+    }}
     .hero {{
-      padding: 34px 32px;
+      margin-top: -72px;
+      padding: 150px 32px 92px;
       color: #ffffff;
       background:
-        linear-gradient(135deg, rgba(11, 18, 32, 0.98), rgba(18, 88, 100, 0.96) 58%, rgba(21, 94, 117, 0.98)),
-        linear-gradient(45deg, rgba(14, 165, 233, 0.20), transparent);
+        radial-gradient(circle at 24% 28%, rgba(166, 62, 48, 0.28), transparent 27rem),
+        linear-gradient(90deg, #211918 0%, #181818 52%, #111314 100%);
       border-bottom: 1px solid rgba(255, 255, 255, 0.16);
     }}
     .hero__inner {{
       max-width: 1280px;
       margin: 0 auto;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 24px;
+      grid-template-columns: minmax(0, 0.95fr) minmax(420px, 0.9fr);
+      gap: 56px;
       align-items: center;
     }}
     .eyebrow {{
@@ -893,9 +949,9 @@ def write_html(reports):
     }}
     h1, h2, h3, p {{ margin: 0; }}
     h1 {{
-      max-width: 760px;
+      max-width: 780px;
       margin-top: 14px;
-      font-size: 44px;
+      font-size: 48px;
       line-height: 1.08;
       letter-spacing: 0;
     }}
@@ -910,43 +966,113 @@ def write_html(reports):
       flex-wrap: wrap;
       justify-content: flex-end;
     }}
-    .score-card {{
-      width: 220px;
-      padding: 18px;
-      border: 1px solid rgba(255, 255, 255, 0.20);
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.11);
-      backdrop-filter: blur(12px);
-    }}
-    .score-ring {{
-      width: 154px;
-      height: 154px;
-      margin: 0 auto 12px;
-      border-radius: 50%;
+    .hero-visual {{
+      position: relative;
+      min-height: 370px;
       display: grid;
       place-items: center;
-      background:
-        radial-gradient(circle at center, #102436 0 57%, transparent 58%),
-        conic-gradient(#22c55e calc(var(--score) * 1%), rgba(255, 255, 255, 0.20) 0);
-      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
     }}
-    .score-ring strong {{
-      display: block;
-      font-size: 38px;
-      line-height: 1;
+    .report-sheet {{
+      width: min(420px, 100%);
+      min-height: 320px;
+      padding: 22px;
+      border-radius: 8px;
+      background: #f8fafc;
+      color: #111827;
+      box-shadow: 0 26px 80px rgba(0, 0, 0, 0.44);
+      border: 1px solid rgba(255, 255, 255, 0.7);
     }}
-    .score-ring span {{
-      display: block;
-      margin-top: 4px;
-      color: rgba(255, 255, 255, 0.72);
-      font-size: 12px;
-      text-align: center;
+    .report-sheet__brand {{
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #064d91;
+      font-weight: 900;
+      line-height: 0.92;
+      margin-bottom: 12px;
     }}
-    .score-card p {{
-      color: rgba(255, 255, 255, 0.78);
+    .report-sheet__brand svg {{ width: 38px; height: 45px; }}
+    .report-sheet__title {{
+      padding-bottom: 12px;
+      border-bottom: 4px solid #d9e8f7;
+      font-size: 15px;
+      font-weight: 900;
+    }}
+    .floating-summary {{
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 92px;
+      margin: 0 auto;
+      width: min(520px, 100%);
+      padding: 16px 18px;
+      border-radius: 8px;
+      background: #ffffff;
+      color: #111827;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+      border: 1px solid #b7d7ef;
+    }}
+    .floating-summary h3 {{
       font-size: 13px;
-      text-align: center;
+      margin-bottom: 10px;
     }}
+    .summary-grid {{
+      display: grid;
+      grid-template-columns: 1fr 1.2fr 1fr;
+      gap: 16px;
+      align-items: start;
+      font-size: 11px;
+    }}
+    .risk-pill {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 84px;
+      min-height: 28px;
+      border-radius: 3px;
+      color: #ffffff;
+      background: #a63a31;
+      font-weight: 900;
+    }}
+    .bar-row {{
+      display: grid;
+      grid-template-columns: 52px 1fr;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 6px;
+    }}
+    .bar {{
+      height: 12px;
+      border-radius: 2px;
+      background: #2f80ed;
+    }}
+    .bar--critical {{ width: {critical_bar_width}%; background: #b42318; }}
+    .bar--high {{ width: {high_bar_width}%; background: #f97316; }}
+    .bar--medium {{ width: {medium_bar_width}%; background: #facc15; }}
+    .bar--ok {{ width: {ok_bar_width}%; background: #5da348; }}
+    .findings-preview {{
+      margin-top: 118px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      overflow: hidden;
+      font-size: 10px;
+      color: #334155;
+    }}
+    .findings-preview__row {{
+      display: grid;
+      grid-template-columns: 1.1fr 0.7fr 1.4fr;
+      border-top: 1px solid #e5e7eb;
+    }}
+    .findings-preview__row:first-child {{
+      border-top: 0;
+      background: #edf2f7;
+      font-weight: 900;
+    }}
+    .findings-preview__row span {{
+      padding: 8px;
+      border-left: 1px solid #e5e7eb;
+    }}
+    .findings-preview__row span:first-child {{ border-left: 0; }}
     .action {{
       display: inline-flex;
       align-items: center;
@@ -1420,7 +1546,10 @@ def write_html(reports):
     @media (max-width: 980px) {{
       .hero__inner {{ grid-template-columns: 1fr; }}
       .hero__actions {{ justify-content: flex-start; }}
-      .score-card {{ width: 100%; max-width: 320px; }}
+      .topbar {{ display: grid; gap: 16px; }}
+      .topnav {{ flex-wrap: wrap; gap: 14px; }}
+      .hero {{ margin-top: -124px; padding-top: 190px; }}
+      .hero-visual {{ min-height: 420px; }}
       .layout {{ grid-template-columns: 1fr; padding: 18px; }}
       nav {{ position: static; max-height: none; }}
       .overview {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
@@ -1432,7 +1561,11 @@ def write_html(reports):
     @media (max-width: 560px) {{
       .hero {{ padding: 24px 18px; }}
       h1 {{ font-size: 31px; }}
-      .score-ring {{ width: 132px; height: 132px; }}
+      .topbar {{ padding: 16px 18px 0; }}
+      .topnav a:not(.nav-cta) {{ display: none; }}
+      .hero {{ margin-top: -102px; padding-top: 164px; }}
+      .floating-summary {{ position: relative; top: auto; margin-top: -128px; }}
+      .findings-preview {{ margin-top: 36px; }}
       .overview {{ grid-template-columns: 1fr; }}
       .next-actions li {{ grid-template-columns: 1fr; }}
       .next-actions b {{ grid-row: auto; }}
@@ -1444,36 +1577,87 @@ def write_html(reports):
 </head>
 <body>
   <div class="shell">
+    <div class="topbar">
+      <a class="brand" href="#">
+        <svg viewBox="0 0 64 76" role="img" aria-label="Pentest Tools shield">
+          <path d="M31.5 3 56 10.5C54.7 35 47.2 56.5 31.5 72 16.2 56.8 8.6 35.2 7 10.5L31.5 3Z" fill="#ffffff"/>
+          <path d="M31.5 7.5 51.3 13.3C49.8 33.5 43.6 51 31.5 64.7 19.5 51.2 13 33.6 11.6 13.3L31.5 7.5Z" fill="#2f80ed"/>
+          <path d="M31.5 7.5 51.3 13.3C50.9 18.1 50.1 22.7 49 27.1L15.3 18.3C14.7 16.7 14.2 15 13.7 13.3L31.5 7.5Z" fill="#ff6b5f"/>
+          <path d="M12.7 60.5 55.5 8.4 47.6 39.1 23.6 69.2 12.7 60.5Z" fill="#ffffff"/>
+        </svg>
+        <span>Pentest<br>Tools</span>
+      </a>
+      <div class="topnav" aria-label="Report navigation">
+        <a href="#overview">Product</a>
+        <a href="#actions">Solutions</a>
+        <a href="#targets">Services</a>
+        <a href="#targets">Resources</a>
+        <a class="nav-cta" href="security-audit-report.docx">Open report</a>
+      </div>
+    </div>
     <header class="hero">
       <div class="hero__inner">
         <div>
-          <div class="eyebrow">Website Monitoring Report</div>
-          <h1>{html.escape(overall_title)}</h1>
-          <p class="hero__meta">{html.escape(overall_detail)} Generated {html.escape(generated_at)}.</p>
+          <div class="eyebrow">Website Vulnerability Scanner Report</div>
+          <h1>Find exploitable web app vulnerabilities with documented evidence</h1>
+          <p class="hero__meta">{html.escape(overall_detail)} This report keeps your scan data, proof of concern files, recommended actions, and verification steps in one place. Generated {html.escape(generated_at)}.</p>
           <div class="hero__actions">
             <a class="action action--primary" href="security-audit-report.docx">Word Report</a>
             <a class="action" href="security-summary.md">Summary</a>
             <a class="action" href="raw-reports/">Raw Logs</a>
           </div>
         </div>
-        <div class="score-card" aria-label="Website health score">
-          <div class="score-ring" style="--score: {score}">
-            <div>
-              <strong>{score}</strong>
-              <span>Health score</span>
+        <div class="hero-visual" aria-label="Report preview">
+          <div class="report-sheet">
+            <div class="report-sheet__brand">
+              <svg viewBox="0 0 64 76" aria-hidden="true">
+                <path d="M31.5 3 56 10.5C54.7 35 47.2 56.5 31.5 72 16.2 56.8 8.6 35.2 7 10.5L31.5 3Z" fill="#ffffff"/>
+                <path d="M31.5 7.5 51.3 13.3C49.8 33.5 43.6 51 31.5 64.7 19.5 51.2 13 33.6 11.6 13.3L31.5 7.5Z" fill="#2f80ed"/>
+                <path d="M31.5 7.5 51.3 13.3C50.9 18.1 50.1 22.7 49 27.1L15.3 18.3C14.7 16.7 14.2 15 13.7 13.3L31.5 7.5Z" fill="#ff6b5f"/>
+                <path d="M12.7 60.5 55.5 8.4 47.6 39.1 23.6 69.2 12.7 60.5Z" fill="#ffffff"/>
+              </svg>
+              <span>Pentest<br>Tools</span>
+            </div>
+            <div class="report-sheet__title">Website Vulnerability Scanner Report</div>
+            <div class="findings-preview">
+              <div class="findings-preview__row"><span>Finding</span><span>Status</span><span>Evidence</span></div>
+              <div class="findings-preview__row"><span>Security headers</span><span>{status_totals["warning"]} review</span><span>curl proof captured</span></div>
+              <div class="findings-preview__row"><span>TLS posture</span><span>{status_totals["high"]} high</span><span>openssl + nmap evidence</span></div>
+              <div class="findings-preview__row"><span>Open ports</span><span>{attention_count} total</span><span>banner grabs included</span></div>
             </div>
           </div>
-          <p>Higher is better. The score drops when targets have critical, high-risk, or review findings.</p>
+          <div class="floating-summary">
+            <h3>Summary</h3>
+            <div class="summary-grid">
+              <div>
+                <strong>Overall risk level</strong><br>
+                <span class="risk-pill">{html.escape(overall_title)}</span>
+              </div>
+              <div>
+                <strong>Risk ratings</strong>
+                <div class="bar-row"><span>Critical</span><i class="bar bar--critical"></i></div>
+                <div class="bar-row"><span>High</span><i class="bar bar--high"></i></div>
+                <div class="bar-row"><span>Medium</span><i class="bar bar--medium"></i></div>
+                <div class="bar-row"><span>Clean</span><i class="bar bar--ok"></i></div>
+              </div>
+              <div>
+                <strong>Scan information</strong><br>
+                Groups: {len(reports)}<br>
+                Files: {total_files}<br>
+                Health score: {score}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </header>
-    <main class="layout">
+    <main class="layout" id="targets">
       <nav>
         <strong>Monitored Targets</strong>
         {nav_items or '<p>No artifacts found.</p>'}
       </nav>
       <div>
-        <section class="quick-summary">
+        <section class="quick-summary" id="overview">
           <div class="summary-copy">
             <p class="section-label">Priority</p>
             <h2>Start here</h2>
@@ -1488,7 +1672,7 @@ def write_html(reports):
             {priority_html or '<li><strong>No targets found</strong><small>The workflow did not collect scanner reports.</small></li>'}
           </ol>
         </section>
-        <section class="next-actions">
+        <section class="next-actions" id="actions">
           <p class="section-label">Next actions</p>
           <ul>{actions_html}</ul>
         </section>
