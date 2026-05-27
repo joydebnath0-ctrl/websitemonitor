@@ -986,6 +986,11 @@ def write_html(reports):
       flex-wrap: wrap;
       justify-content: flex-end;
     }}
+    .hero-score-wrap {{
+      max-width: 600px;
+      margin-top: 22px;
+      margin-left: auto;
+    }}
     .hero-visual {{
       position: relative;
       min-height: 370px;
@@ -1190,8 +1195,8 @@ def write_html(reports):
       gap: 14px;
     }}
     .score-panel {{
-      min-height: 276px;
-      padding: 18px 16px;
+      min-height: 244px;
+      padding: 16px 14px;
       border: 1px solid rgba(182, 236, 229, 0.55);
       border-radius: 8px;
       background: #347986;
@@ -1200,9 +1205,9 @@ def write_html(reports):
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 12px 28px rgba(15, 23, 42, 0.14);
     }}
     .score-donut {{
-      width: 174px;
-      height: 174px;
-      margin: 0 auto 18px;
+      width: 148px;
+      height: 148px;
+      margin: 0 auto 14px;
       border-radius: 50%;
       display: grid;
       place-items: center;
@@ -1212,7 +1217,7 @@ def write_html(reports):
     }}
     .score-donut strong {{
       display: block;
-      font-size: 48px;
+      font-size: 42px;
       line-height: 1;
     }}
     .score-donut span {{
@@ -1222,10 +1227,10 @@ def write_html(reports):
       font-size: 15px;
     }}
     .score-panel p {{
-      max-width: 220px;
+      max-width: 210px;
       margin: 0 auto;
       color: rgba(255, 255, 255, 0.86);
-      font-size: 16px;
+      font-size: 14px;
       line-height: 1.45;
     }}
     .score-panel--speed .score-donut {{
@@ -1620,6 +1625,7 @@ def write_html(reports):
     @media (max-width: 980px) {{
       .hero__inner {{ grid-template-columns: 1fr; }}
       .hero__actions {{ justify-content: flex-start; }}
+      .hero-score-wrap {{ margin-left: 0; }}
       .topbar {{ display: grid; gap: 16px; }}
       .topnav {{ flex-wrap: wrap; gap: 14px; }}
       .hero {{ margin-top: -124px; padding-top: 190px; }}
@@ -1678,6 +1684,28 @@ def write_html(reports):
             <a class="action" href="security-summary.md">Summary</a>
             <a class="action" href="raw-reports/">Raw Logs</a>
           </div>
+          <div class="hero-score-wrap">
+            <div class="score-panels" aria-label="Score overview">
+              <div class="score-panel">
+                <div class="score-donut" style="--score: {score}">
+                  <div>
+                    <strong>{score}</strong>
+                    <span>Health score</span>
+                  </div>
+                </div>
+                <p>Higher is better. The score drops when targets have critical, high-risk, or review findings.</p>
+              </div>
+              <div class="score-panel score-panel--speed">
+                <div class="score-donut" style="--score: {page_speed_score}">
+                  <div>
+                    <strong>{page_speed_score}</strong>
+                    <span>Page speed</span>
+                  </div>
+                </div>
+                <p>Estimated from scan signals. Improve it by reducing blocking assets, redirects, and server latency.</p>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="hero-visual" aria-label="Report preview">
           <div class="report-sheet">
@@ -1730,26 +1758,6 @@ def write_html(reports):
             <h2>Start here</h2>
             <div class="summary-callout">
               <p>{html.escape(overall_detail)}</p>
-            </div>
-            <div class="score-panels" aria-label="Score overview">
-              <div class="score-panel">
-                <div class="score-donut" style="--score: {score}">
-                  <div>
-                    <strong>{score}</strong>
-                    <span>Health score</span>
-                  </div>
-                </div>
-                <p>Higher is better. The score drops when targets have critical, high-risk, or review findings.</p>
-              </div>
-              <div class="score-panel score-panel--speed">
-                <div class="score-donut" style="--score: {page_speed_score}">
-                  <div>
-                    <strong>{page_speed_score}</strong>
-                    <span>Page speed</span>
-                  </div>
-                </div>
-                <p>Estimated from scan signals. Improve it by reducing blocking assets, redirects, and server latency.</p>
-              </div>
             </div>
             <div class="status-board" aria-label="Status distribution">
               {status_breakdown_html}
