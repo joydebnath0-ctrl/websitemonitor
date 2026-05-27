@@ -130,3 +130,23 @@ jobs:
           name: full-security-audit
           path: audit-report/
           retention-days: 30
+
+           # ─── Final Summary ─────
+      - name: Summary - Deploy & Final Status
+        if: always()
+        run: |
+          if [ "${{ steps.deploy.outcome }}" = "success" ]; then DEPLOY_ICON="✅"; else DEPLOY_ICON="❌"; fi
+
+          if [ "${{ job.status }}" = "success" ]; then
+            FINAL="✅ PASSED — Deployment completed successfully"
+          else
+            FINAL="❌ FAILED — Check the step(s) marked above"
+          fi
+
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          | 6. Deploy to EC2 (SSH) | $DEPLOY_ICON \`${{ steps.deploy.outcome }}\` |
+
+          ## 🏁 Final Result
+
+          > **$FINAL**
+          EOF
