@@ -17,6 +17,14 @@ while IFS=$'\t' read -r url slug; do
   bash scripts/security/ssl_tls_scan.sh || true
   bash scripts/security/port_scan.sh || true
   bash scripts/security/nikto_scan.sh || true
+
+  {
+    echo "=== Page Speed Timing Report ==="
+    echo "Target: ${url}"
+    curl -o /dev/null -sS -L --max-time 30 \
+      -w $'dns_lookup: %{time_namelookup}s\nconnect: %{time_connect}s\ntls: %{time_appconnect}s\nstart_transfer: %{time_starttransfer}s\ntotal: %{time_total}s\nhttp_code: %{http_code}\nredirects: %{num_redirects}\nsize_download: %{size_download} bytes\n' \
+      "$url" || true
+  } > "${REPORT_DIR}/page-speed-report.txt" 2>&1
 done < <(
   python3 - "$TARGETS_JSON" <<'PY'
 import json

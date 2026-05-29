@@ -78,7 +78,8 @@ It does not upload each scanner result as a separate GitHub artifact.
 
 Inside `full-security-audit` you will find:
 
-- `index.html` - a simplified visual dashboard with a health score, priority actions, filters, search, and organized scanner sections
+- `index.html` - a simplified visual dashboard with overall scores, priority actions, filters, search, and organized scanner sections
+- `reports/<slug>/index.html` - a separate per-domain HTML report with domain-specific health and page-speed scores
 - `security-audit-report.docx` - one Word-compatible document containing all reports
 - `security-summary.md` - a Markdown summary
 - `raw-reports/` - all original scanner artifacts in one place

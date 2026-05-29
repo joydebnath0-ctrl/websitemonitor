@@ -2,6 +2,7 @@
 import base64
 import html
 import os
+import re
 import shutil
 import zipfile
 from datetime import datetime, timezone
@@ -167,6 +168,63 @@ def health_score(status_totals):
     return max(0, min(100, 100 - round(penalty / total)))
 
 
+def status_totals_for(reports):
+    totals = {"critical": 0, "high": 0, "warning": 0, "ok": 0}
+    for report in reports:
+        totals[report_status(report)] += 1
+    return totals
+
+
+def finding_counts_for_report(report):
+    counts = {"critical": 0, "high": 0, "warning": 0}
+    for file_info in report["files"]:
+        file_counts = severity_counts(file_info["content"])
+        for key, value in file_counts.items():
+            counts[key] += value
+    return counts
+
+
+def health_score_for_report(report):
+    counts = finding_counts_for_report(report)
+    status = report_status(report)
+    penalty = (
+        counts["critical"] * 11
+        + counts["high"] * 7
+        + counts["warning"] * 3
+    )
+    if penalty == 0:
+        penalty = {
+            "critical": 35,
+            "high": 24,
+            "warning": 10,
+            "ok": 4,
+        }[status]
+    return max(0, min(100, 100 - penalty))
+
+
+def page_speed_score_for_report(report, health=None):
+    text = "\n".join(file_info["content"] for file_info in report["files"]).lower()
+    health = health if health is not None else health_score_for_report(report)
+    total_matches = [float(value) for value in re.findall(r"(?:total|time_total):\s*([0-9.]+)s", text)]
+    redirect_matches = [int(value) for value in re.findall(r"redirects:\s*(\d+)", text)]
+    if total_matches:
+        total_time = min(total_matches)
+        redirects = max(redirect_matches) if redirect_matches else 0
+        return max(0, min(100, round(100 - (total_time * 12) - (redirects * 7))))
+
+    counts = finding_counts_for_report(report)
+    fallback = health + 6 - (counts["warning"] * 2) - (counts["high"] * 3) - (counts["critical"] * 5)
+    return max(0, min(100, fallback))
+
+
+def aggregate_score(reports, score_func):
+    domain_reports = [report for report in reports if report["name"] != "proof-of-concern-summary"]
+    selected = domain_reports or reports
+    if not selected:
+        return 0
+    return round(sum(score_func(report) for report in selected) / len(selected))
+
+
 def sorted_reports_by_priority(reports):
     return sorted(
         reports,
@@ -198,12 +256,16 @@ def simple_summary_items(reports, limit=12):
         status = report_status(report)
         remedies = remediation_items(report)
         issue, evidence = simple_issue_and_evidence(report)
+        health = health_score_for_report(report)
+        speed = page_speed_score_for_report(report, health)
         first_action = remedies[0]["title"] if remedies else "Review report"
         rows.append(
             {
                 "target": report["name"],
                 "scan": scan_label(report["name"]),
                 "status": status_label(status),
+                "health": health,
+                "speed": speed,
                 "issue": issue,
                 "action": first_action,
                 "evidence": evidence,
@@ -668,17 +730,17 @@ def write_markdown(reports):
         "",
         "## Simple overview",
         "",
-        "| Target | Status | Main issue | First action | Evidence |",
-        "|--------|--------|------------|--------------|----------|",
+        "| Target | Status | Health | Page speed | Main issue | First action | Evidence |",
+        "|--------|--------|--------|------------|------------|--------------|----------|",
     ]
 
     if simple_rows:
         for row in simple_rows:
             lines.append(
-                f"| {row['target']} | {row['status']} | {row['issue']} | {row['action']} | {row['evidence']} |"
+                f"| {row['target']} | {row['status']} | {row['health']} | {row['speed']} | {row['issue']} | {row['action']} | {row['evidence']} |"
             )
     else:
-        lines.append("| No targets | No data | No scanner output was collected | Run the workflow again | N/A |")
+        lines.append("| No targets | No data | 0 | 0 | No scanner output was collected | Run the workflow again | N/A |")
 
     lines.extend(
         [
@@ -763,21 +825,23 @@ def write_markdown(reports):
     SUMMARY_MD.write_text("\n".join(lines), encoding="utf-8")
 
 
-def write_html(reports):
+def domain_report_path(report_name):
+    return f"reports/{report_name}/index.html"
+
+
+def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_reports=True):
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     logo_src = logo_data_uri()
     counts = all_counts(reports)
     total_files = sum(len(report["files"]) for report in reports)
-    status_totals = {"critical": 0, "high": 0, "warning": 0, "ok": 0}
-    for report in reports:
-        status_totals[report_status(report)] += 1
+    status_totals = status_totals_for(reports)
     overall_title, overall_detail = overall_status(status_totals)
     actions = next_actions(reports)
     simple_rows = simple_summary_items(reports)
     attention_count = status_totals["critical"] + status_totals["high"] + status_totals["warning"]
     priority_reports = sorted_reports_by_priority(reports)[:4]
-    score = health_score(status_totals)
-    page_speed_score = max(0, min(100, score + 6 - (attention_count * 2)))
+    score = aggregate_score(reports, health_score_for_report)
+    page_speed_score = aggregate_score(reports, page_speed_score_for_report)
     total_reports = len(reports) or 1
     status_breakdown = [
         ("critical", "Fix now", status_totals["critical"]),
@@ -843,8 +907,10 @@ def write_html(reports):
     simple_rows_html = "\n".join(
         f"""
         <tr>
-          <td><a href="#{html_attr(row["target"])}">{html.escape(row["target"])}</a><small>{html.escape(row["scan"])}</small></td>
+          <td><a href="{html_attr(domain_report_path(row["target"]) if link_domain_reports and row["target"] != "proof-of-concern-summary" else "#" + row["target"])}">{html.escape(row["target"])}</a><small>{html.escape(row["scan"])}</small></td>
           <td><span class="simple-status">{html.escape(row["status"])}</span></td>
+          <td><strong>{row["health"]}</strong></td>
+          <td><strong>{row["speed"]}</strong></td>
           <td>{html.escape(row["issue"])}</td>
           <td>{html.escape(row["action"])}</td>
           <td>{html.escape(row["evidence"])}</td>
@@ -855,6 +921,8 @@ def write_html(reports):
         <tr>
           <td>No targets</td>
           <td>No data</td>
+          <td>0</td>
+          <td>0</td>
           <td>No scanner output was collected.</td>
           <td>Run the workflow again.</td>
           <td>N/A</td>
@@ -936,7 +1004,8 @@ def write_html(reports):
             """
         )
 
-    HTML_REPORT.write_text(
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
         f"""<!doctype html>
 <html lang="en">
 <head>
@@ -1803,7 +1872,7 @@ def write_html(reports):
         <a href="#actions">Solutions</a>
         <a href="#targets">Services</a>
         <a href="#targets">Resources</a>
-        <a class="nav-cta" href="security-audit-report.docx">Open report</a>
+        <a class="nav-cta" href="{html_attr(link_prefix)}security-audit-report.docx">Open report</a>
       </div>
     </div>
     <header class="hero">
@@ -1811,9 +1880,9 @@ def write_html(reports):
         <div>
           <div class="eyebrow">Website Vulnerability Scanner Report</div>
           <div class="hero__actions">
-            <a class="action action--primary" href="security-audit-report.docx">Word Report</a>
-            <a class="action" href="security-summary.md">Summary</a>
-            <a class="action" href="raw-reports/">Raw Logs</a>
+            <a class="action action--primary" href="{html_attr(link_prefix)}security-audit-report.docx">Word Report</a>
+            <a class="action" href="{html_attr(link_prefix)}security-summary.md">Summary</a>
+            <a class="action" href="{html_attr(link_prefix)}raw-reports/">Raw Logs</a>
           </div>
           <div class="hero-score-wrap">
             <div class="score-panels" aria-label="Score overview">
@@ -1906,6 +1975,8 @@ def write_html(reports):
               <tr>
                 <th>Target</th>
                 <th>Status</th>
+                <th>Health</th>
+                <th>Page speed</th>
                 <th>Main issue</th>
                 <th>First action</th>
                 <th>Evidence</th>
@@ -1978,6 +2049,18 @@ def write_html(reports):
 """,
         encoding="utf-8",
     )
+
+
+def write_domain_html_reports(reports):
+    for report in reports:
+        if report["name"] == "proof-of-concern-summary":
+            continue
+        write_html(
+            [report],
+            output_path=BUNDLE_DIR / domain_report_path(report["name"]),
+            link_prefix="../../",
+            link_domain_reports=False,
+        )
 
 
 def paragraph(text, style=None):
@@ -2106,6 +2189,7 @@ def main():
     reports = collect_reports()
     write_markdown(reports)
     write_html(reports)
+    write_domain_html_reports(reports)
     write_docx(reports)
     print(f"Generated {BUNDLE_DIR}/ with HTML, DOCX, Markdown, and raw reports.")
 
