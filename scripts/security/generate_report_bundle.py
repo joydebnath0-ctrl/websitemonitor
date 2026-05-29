@@ -1810,7 +1810,6 @@ def write_html(reports):
       <div class="hero__inner">
         <div>
           <div class="eyebrow">Website Vulnerability Scanner Report</div>
-          <p class="hero__meta">{html.escape(overall_detail)} This report keeps your scan data, proof of concern files, recommended actions, and verification steps in one place. Generated {html.escape(generated_at)}.</p>
           <div class="hero__actions">
             <a class="action action--primary" href="security-audit-report.docx">Word Report</a>
             <a class="action" href="security-summary.md">Summary</a>
