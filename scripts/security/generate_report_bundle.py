@@ -1033,11 +1033,13 @@ def write_html(reports):
     }}
     .hero {{
       margin-top: -72px;
-      padding: 150px 32px 92px;
+      padding: 150px 32px 82px;
       color: #ffffff;
       background:
-        radial-gradient(circle at 24% 28%, rgba(166, 62, 48, 0.28), transparent 27rem),
-        linear-gradient(90deg, #211918 0%, #181818 52%, #111314 100%);
+        radial-gradient(circle at 14% 22%, rgba(96, 43, 31, 0.68), transparent 24rem),
+        radial-gradient(circle at 78% 18%, rgba(11, 72, 92, 0.58), transparent 28rem),
+        radial-gradient(circle at 80% 84%, rgba(10, 83, 62, 0.54), transparent 25rem),
+        linear-gradient(120deg, #241614 0%, #102637 52%, #073a32 100%);
       border-bottom: 1px solid rgba(255, 255, 255, 0.16);
     }}
     .hero__inner {{
@@ -1061,28 +1063,24 @@ def write_html(reports):
       letter-spacing: 0;
     }}
     h1, h2, h3, p {{ margin: 0; }}
-    h1 {{
-      max-width: 780px;
-      margin-top: 14px;
-      font-size: 48px;
-      line-height: 1.08;
-      letter-spacing: 0;
-    }}
     .hero__meta {{
-      margin-top: 12px;
-      color: rgba(255, 255, 255, 0.78);
-      font-size: 14px;
+      max-width: 830px;
+      margin-top: 22px;
+      color: rgba(255, 255, 255, 0.86);
+      font-size: 21px;
+      line-height: 1.48;
+      font-weight: 650;
     }}
     .hero__actions {{
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
-      justify-content: flex-end;
+      justify-content: flex-start;
+      margin-top: 22px;
     }}
     .hero-score-wrap {{
       max-width: 600px;
-      margin-top: 22px;
-      margin-left: auto;
+      margin-top: 26px;
     }}
     .hero-visual {{
       position: relative;
@@ -1776,7 +1774,7 @@ def write_html(reports):
     }}
     @media (max-width: 560px) {{
       .hero {{ padding: 24px 18px; }}
-      h1 {{ font-size: 31px; }}
+      .hero__meta {{ font-size: 17px; }}
       .topbar {{ padding: 16px 18px 0; }}
       .topnav a:not(.nav-cta) {{ display: none; }}
       .hero {{ margin-top: -102px; padding-top: 164px; }}
@@ -1812,7 +1810,6 @@ def write_html(reports):
       <div class="hero__inner">
         <div>
           <div class="eyebrow">Website Vulnerability Scanner Report</div>
-          <h1>Find exploitable web app vulnerabilities with documented evidence</h1>
           <p class="hero__meta">{html.escape(overall_detail)} This report keeps your scan data, proof of concern files, recommended actions, and verification steps in one place. Generated {html.escape(generated_at)}.</p>
           <div class="hero__actions">
             <a class="action action--primary" href="security-audit-report.docx">Word Report</a>
