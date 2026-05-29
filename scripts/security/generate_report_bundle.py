@@ -192,6 +192,58 @@ def next_actions(reports, limit=6):
     return actions
 
 
+def simple_summary_items(reports, limit=12):
+    rows = []
+    for report in sorted_reports_by_priority(reports):
+        status = report_status(report)
+        remedies = remediation_items(report)
+        issue, evidence = simple_issue_and_evidence(report)
+        first_action = remedies[0]["title"] if remedies else "Review report"
+        rows.append(
+            {
+                "target": report["name"],
+                "scan": scan_label(report["name"]),
+                "status": status_label(status),
+                "issue": issue,
+                "action": first_action,
+                "evidence": evidence,
+            }
+        )
+        if len(rows) >= limit:
+            break
+    return rows
+
+
+def simple_issue_and_evidence(report, limit=120):
+    keywords = (
+        "critical",
+        "high",
+        "medium",
+        "missing",
+        "warning",
+        "error",
+        "fail",
+        "expired",
+        "open",
+        "vulnerab",
+    )
+    fallback = ("No report content was captured.", "No files captured")
+
+    for file_info in report["files"]:
+        for line in file_info["content"].splitlines():
+            clean = line.strip()
+            if clean and any(keyword in clean.lower() for keyword in keywords):
+                return clean[:limit], file_info["relative_path"]
+
+    for file_info in report["files"]:
+        for line in file_info["content"].splitlines():
+            clean = line.strip()
+            if clean:
+                return clean[:limit], file_info["relative_path"]
+
+    return fallback
+
+
 def report_preview(report, limit=260):
     for file_info in report["files"]:
         for line in file_info["content"].splitlines():
@@ -597,6 +649,7 @@ def write_markdown(reports):
         status_totals[report_status(report)] += 1
     overall_title, overall_detail = overall_status(status_totals)
     actions = next_actions(reports)
+    simple_rows = simple_summary_items(reports)
     lines = [
         "# Website Monitoring Report",
         "",
@@ -613,9 +666,27 @@ def write_markdown(reports):
         f"**Targets needing attention:** {status_totals['critical'] + status_totals['high'] + status_totals['warning']}",
         f"**Targets that look good:** {status_totals['ok']}",
         "",
-        "## What to do next",
+        "## Simple overview",
         "",
+        "| Target | Status | Main issue | First action | Evidence |",
+        "|--------|--------|------------|--------------|----------|",
     ]
+
+    if simple_rows:
+        for row in simple_rows:
+            lines.append(
+                f"| {row['target']} | {row['status']} | {row['issue']} | {row['action']} | {row['evidence']} |"
+            )
+    else:
+        lines.append("| No targets | No data | No scanner output was collected | Run the workflow again | N/A |")
+
+    lines.extend(
+        [
+            "",
+            "## What to do next",
+            "",
+        ]
+    )
 
     if actions:
         for action in actions:
@@ -702,6 +773,7 @@ def write_html(reports):
         status_totals[report_status(report)] += 1
     overall_title, overall_detail = overall_status(status_totals)
     actions = next_actions(reports)
+    simple_rows = simple_summary_items(reports)
     attention_count = status_totals["critical"] + status_totals["high"] + status_totals["warning"]
     priority_reports = sorted_reports_by_priority(reports)[:4]
     score = health_score(status_totals)
@@ -766,6 +838,27 @@ def write_html(reports):
           <span>No urgent findings were detected. Rerun scans after website, DNS, hosting, or dependency changes.</span>
           <em>All targets</em>
         </li>
+    """
+
+    simple_rows_html = "\n".join(
+        f"""
+        <tr>
+          <td><a href="#{html_attr(row["target"])}">{html.escape(row["target"])}</a><small>{html.escape(row["scan"])}</small></td>
+          <td><span class="simple-status">{html.escape(row["status"])}</span></td>
+          <td>{html.escape(row["issue"])}</td>
+          <td>{html.escape(row["action"])}</td>
+          <td>{html.escape(row["evidence"])}</td>
+        </tr>
+        """
+        for row in simple_rows
+    ) or """
+        <tr>
+          <td>No targets</td>
+          <td>No data</td>
+          <td>No scanner output was collected.</td>
+          <td>Run the workflow again.</td>
+          <td>N/A</td>
+        </tr>
     """
 
     nav_items = "\n".join(
@@ -1165,7 +1258,8 @@ def write_html(reports):
       margin-bottom: 16px;
     }}
     .quick-summary,
-    .next-actions {{
+    .next-actions,
+    .simple-overview {{
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -1178,6 +1272,46 @@ def write_html(reports):
       grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
       gap: 18px;
       align-items: start;
+    }}
+    .simple-overview__table {{
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 13px;
+    }}
+    .simple-overview__table th,
+    .simple-overview__table td {{
+      padding: 10px;
+      border-top: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }}
+    .simple-overview__table th {{
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }}
+    .simple-overview__table a {{
+      display: block;
+      color: var(--ink);
+      font-weight: 900;
+      text-decoration: none;
+      overflow-wrap: anywhere;
+    }}
+    .simple-overview__table small {{
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+    }}
+    .simple-status {{
+      display: inline-flex;
+      padding: 5px 8px;
+      border-radius: 999px;
+      background: #eef6f5;
+      color: var(--accent-strong);
+      font-weight: 900;
+      white-space: nowrap;
     }}
     .summary-copy {{
       display: grid;
@@ -1634,6 +1768,7 @@ def write_html(reports):
       nav {{ position: static; max-height: none; }}
       .overview {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
       .quick-summary {{ grid-template-columns: 1fr; }}
+      .simple-overview {{ overflow-x: auto; }}
       .score-panels {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
       .next-actions ul {{ grid-template-columns: 1fr; }}
       .toolbar {{ grid-template-columns: 1fr; }}
@@ -1767,6 +1902,24 @@ def write_html(reports):
             {priority_html or '<li><strong>No targets found</strong><small>The workflow did not collect scanner reports.</small></li>'}
           </ol>
         </section>
+        <section class="simple-overview">
+          <p class="section-label">Simple overview</p>
+          <h2>Findings at a glance</h2>
+          <table class="simple-overview__table">
+            <thead>
+              <tr>
+                <th>Target</th>
+                <th>Status</th>
+                <th>Main issue</th>
+                <th>First action</th>
+                <th>Evidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              {simple_rows_html}
+            </tbody>
+          </table>
+        </section>
         <section class="next-actions" id="actions">
           <p class="section-label">Next actions</p>
           <ul>{actions_html}</ul>
@@ -1843,6 +1996,7 @@ def write_docx(reports):
         status_totals[report_status(report)] += 1
     overall_title, overall_detail = overall_status(status_totals)
     actions = next_actions(reports)
+    simple_rows = simple_summary_items(reports)
     body = [
         paragraph("Website Monitoring Report", "Title"),
         paragraph(f"Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"),
@@ -1853,8 +2007,26 @@ def write_docx(reports):
             f"{status_totals['critical'] + status_totals['high'] + status_totals['warning']}. "
             f"Targets that look good: {status_totals['ok']}."
         ),
-        paragraph("What to do next", "Heading1"),
+        paragraph("Simple overview", "Heading1"),
     ]
+
+    if simple_rows:
+        for row in simple_rows:
+            body.append(
+                paragraph(
+                    f"{row['target']} | {row['status']} | {row['action']} | Evidence: {row['evidence']}",
+                    "Heading2",
+                )
+            )
+            body.append(paragraph(f"Issue: {row['issue']}"))
+    else:
+        body.append(paragraph("No scanner output was collected."))
+
+    body.extend(
+        [
+            paragraph("What to do next", "Heading1"),
+        ]
+    )
 
     if actions:
         for action in actions:
