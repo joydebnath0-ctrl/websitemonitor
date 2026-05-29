@@ -217,6 +217,60 @@ def page_speed_score_for_report(report, health=None):
     return max(0, min(100, fallback))
 
 
+def first_float(pattern, text):
+    match = re.search(pattern, text, flags=re.IGNORECASE)
+    return float(match.group(1)) if match else None
+
+
+def first_int(pattern, text):
+    match = re.search(pattern, text, flags=re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
+def page_speed_details(report):
+    text = "\n".join(file_info["content"] for file_info in report["files"])
+    health = health_score_for_report(report)
+    score = page_speed_score_for_report(report, health)
+    total = first_float(r"(?:total|time_total):\s*([0-9.]+)s", text)
+    dns = first_float(r"dns_lookup:\s*([0-9.]+)s", text)
+    connect = first_float(r"connect:\s*([0-9.]+)s", text)
+    tls = first_float(r"tls:\s*([0-9.]+)s", text)
+    start_transfer = first_float(r"start_transfer:\s*([0-9.]+)s", text)
+    redirects = first_int(r"redirects:\s*(\d+)", text)
+    size = first_int(r"size_download:\s*(\d+)\s*bytes", text)
+
+    notes = []
+    if total is None:
+        notes.append("No timing file was captured; score uses scanner signals as a fallback.")
+    else:
+        if total > 4:
+            notes.append("Total load time is slow for an initial response.")
+        elif total > 2:
+            notes.append("Total load time is moderate and can likely be improved.")
+        else:
+            notes.append("Total load time is in a healthy range.")
+    if redirects and redirects > 1:
+        notes.append(f"{redirects} redirects were observed before the final response.")
+    if start_transfer and start_transfer > 1:
+        notes.append("Server start-transfer time is high, which points to backend, CDN, or origin latency.")
+    if tls and tls > 0.7:
+        notes.append("TLS handshake time is high; CDN/TLS configuration may need review.")
+    if size and size > 1000000:
+        notes.append("Initial download size is large and may affect user-perceived speed.")
+
+    metrics = [
+        ("Score", str(score)),
+        ("DNS lookup", f"{dns:.3f}s" if dns is not None else "Not captured"),
+        ("Connect", f"{connect:.3f}s" if connect is not None else "Not captured"),
+        ("TLS", f"{tls:.3f}s" if tls is not None else "Not captured"),
+        ("Start transfer", f"{start_transfer:.3f}s" if start_transfer is not None else "Not captured"),
+        ("Total", f"{total:.3f}s" if total is not None else "Not captured"),
+        ("Redirects", str(redirects) if redirects is not None else "Not captured"),
+        ("Download size", f"{size} bytes" if size is not None else "Not captured"),
+    ]
+    return {"score": score, "metrics": metrics, "notes": notes}
+
+
 def aggregate_score(reports, score_func):
     domain_reports = [report for report in reports if report["name"] != "proof-of-concern-summary"]
     selected = domain_reports or reports
@@ -528,6 +582,17 @@ def process_for_action(title):
             ],
             "verify": "Rerun Gitleaks/TruffleHog and confirm the same secret is no longer detected.",
         },
+        "Improve page speed": {
+            "steps": [
+                "Open page-speed-report.txt and check total, start_transfer, redirects, and size_download for the affected domain.",
+                "Remove unnecessary redirects so HTTP goes directly to the final HTTPS canonical URL in one hop.",
+                "Put static assets behind a CDN and enable Brotli or gzip compression for HTML, CSS, JavaScript, SVG, and JSON.",
+                "Minify and split JavaScript/CSS, remove unused third-party scripts, and defer non-critical scripts.",
+                "Optimize images with WebP/AVIF, correct dimensions, lazy loading, and long-lived cache headers for fingerprinted assets.",
+                "If start_transfer is high, review origin CPU/database work, caching, CDN origin shielding, and server response generation time.",
+            ],
+            "verify": "Rerun the workflow and confirm page-speed-report.txt shows lower total time, fewer redirects, and an improved Page speed score.",
+        },
         "Review scanner output": {
             "steps": [
                 "Open the raw scanner output and identify the exact URL, header, port, package, or DNS record involved.",
@@ -677,6 +742,21 @@ def remediation_items(report):
         if "secret" in content or "verified" in content or "private key" in content:
             add("Rotate exposed secrets", "Revoke and rotate any exposed tokens, keys, or passwords immediately. Remove them from Git history if needed and move secrets into GitHub Actions secrets or a vault.")
 
+    speed = page_speed_details(report)
+    speed_notes = " ".join(speed["notes"]).lower()
+    if (
+        "page-speed-report" in content
+        or "total:" in content
+        or speed["score"] < 85
+        or "redirect" in speed_notes
+        or "slow" in speed_notes
+        or "high" in speed_notes
+    ):
+        add(
+            "Improve page speed",
+            "Improve performance by reducing redirects, compression gaps, heavy assets, render-blocking scripts, and slow origin response time. Use the Page speed details section to decide which bottleneck to fix first.",
+        )
+
     if not items and report_status(report) != "ok":
         add(
             "Review scanner output",
@@ -787,6 +867,7 @@ def write_markdown(reports):
     else:
         for report in sorted_reports_by_priority(reports):
             status = report_status(report)
+            speed = page_speed_details(report)
             lines.extend(
                 [
                     f"### {report['name']}",
@@ -794,6 +875,17 @@ def write_markdown(reports):
                     f"**Status:** {status_label(status)}",
                     "",
                     status_message(status),
+                    "",
+                    "**Page speed details**",
+                    "",
+                ]
+            )
+            for label, value in speed["metrics"]:
+                lines.append(f"- **{label}:** {value}")
+            for note in speed["notes"]:
+                lines.append(f"- {note}")
+            lines.extend(
+                [
                     "",
                     "**Recommended actions**",
                     "",
@@ -944,6 +1036,17 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
         status = report_status(report)
         scan = scan_label(report["name"])
         preview = report_preview(report)
+        speed = page_speed_details(report)
+        speed_metrics_html = "\n".join(
+            f"""
+            <div class="speed-detail__item">
+              <span>{html.escape(label)}</span>
+              <strong>{html.escape(value)}</strong>
+            </div>
+            """
+            for label, value in speed["metrics"]
+        )
+        speed_notes_html = "".join(f"<li>{html.escape(note)}</li>" for note in speed["notes"])
         remedies = remediation_items(report)
         remedies_html = "\n".join(
             f"""
@@ -992,6 +1095,11 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
               </div>
               <p class="meaning">{html.escape(status_message(status))}</p>
               <div class="report-card__preview">{html.escape(preview)}</div>
+              <div class="speed-detail">
+                <div class="remedies__title">Page speed details</div>
+                <div class="speed-detail__grid">{speed_metrics_html}</div>
+                <ul>{speed_notes_html}</ul>
+              </div>
               <div class="remedies">
                 <div class="remedies__title">Recommended actions</div>
                 <ul>{remedies_html}</ul>
@@ -1700,6 +1808,44 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
       color: var(--muted);
       overflow-wrap: anywhere;
     }}
+    .speed-detail {{
+      margin: 12px 0 14px;
+      padding: 14px;
+      border: 1px solid #b6ece5;
+      border-radius: 8px;
+      background: #f0fdfa;
+    }}
+    .speed-detail__grid {{
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }}
+    .speed-detail__item {{
+      padding: 10px;
+      border-radius: 7px;
+      background: #ffffff;
+      border: 1px solid var(--line);
+    }}
+    .speed-detail__item span {{
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }}
+    .speed-detail__item strong {{
+      display: block;
+      margin-top: 4px;
+      color: var(--ink);
+      font-size: 18px;
+    }}
+    .speed-detail ul {{
+      margin: 10px 0 0;
+      padding-left: 18px;
+      color: var(--muted);
+    }}
     .meaning {{
       margin-top: 10px;
       color: var(--ink);
@@ -1851,6 +1997,7 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
       .findings-preview {{ margin-top: 36px; }}
       .overview {{ grid-template-columns: 1fr; }}
       .score-panels {{ grid-template-columns: 1fr; }}
+      .speed-detail__grid {{ grid-template-columns: 1fr; }}
       .score-panel {{ min-height: auto; }}
       .next-actions li {{ grid-template-columns: 1fr; }}
       .next-actions b {{ grid-row: auto; }}
@@ -2093,7 +2240,7 @@ def write_docx(reports):
         for row in simple_rows:
             body.append(
                 paragraph(
-                    f"{row['target']} | {row['status']} | {row['action']} | Evidence: {row['evidence']}",
+                    f"{row['target']} | {row['status']} | Health: {row['health']} | Page speed: {row['speed']} | {row['action']} | Evidence: {row['evidence']}",
                     "Heading2",
                 )
             )
@@ -2125,9 +2272,15 @@ def write_docx(reports):
     else:
         for report in sorted_reports_by_priority(reports):
             status = report_status(report)
+            speed = page_speed_details(report)
             body.append(paragraph(report["name"], "Heading2"))
             body.append(paragraph(f"Status: {status_label(status)}"))
             body.append(paragraph(status_message(status)))
+            body.append(paragraph("Page speed details", "Heading3"))
+            for label, value in speed["metrics"]:
+                body.append(paragraph(f"{label}: {value}"))
+            for note in speed["notes"]:
+                body.append(paragraph(note))
             body.append(paragraph("Recommended actions", "Heading3"))
             for item in remediation_items(report):
                 body.append(paragraph(item["title"], "Heading3"))
