@@ -13,6 +13,7 @@ config/domains.txt                            Default target domain list
 scripts/security/common.sh                    Shared script helpers
 scripts/security/build_target_matrix.py       Builds the GitHub Actions domain matrix
 scripts/security/run_domain_scans.sh          Runs all domain scanners for every configured target
+scripts/security/run_zap_scans.sh             Runs time-limited OWASP ZAP scans
 scripts/security/collect_poc_evidence.sh      Captures proof-of-concern evidence files
 scripts/security/generate_report_bundle.py    Builds HTML, DOCX, Markdown, and raw report bundle
 scripts/security/ssl_tls_scan.sh              TLS and certificate checks

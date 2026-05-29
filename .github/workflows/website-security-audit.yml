@@ -13,6 +13,19 @@ on:
         description: "Optional comma/newline-separated URLs. Leave blank to use config/domains.txt."
         required: false
         default: ""
+      zap_scan_mode:
+        description: "OWASP ZAP scan mode. Baseline is much faster; full is slower and active."
+        required: false
+        default: "baseline"
+        type: choice
+        options:
+          - baseline
+          - full
+          - skip
+      zap_max_minutes:
+        description: "Maximum minutes allowed per ZAP scan command."
+        required: false
+        default: "12"
 
 jobs:
   website-security-audit:
@@ -71,37 +84,10 @@ jobs:
 
       - name: Run OWASP ZAP scans for all domains
         id: zap_scans
-        run: |
-          python3 - <<'PY' > zap-targets.tsv
-          import json
-          with open("audit-targets.json", encoding="utf-8") as handle:
-              matrix = json.load(handle)
-          for target in matrix.get("include", []):
-              print(f"{target['url']}\t{target['slug']}")
-          PY
-
-          while IFS=$'\t' read -r url slug; do
-            mkdir -p "all-reports/${slug}/zap"
-
-            docker run --rm \
-              -v "${PWD}/all-reports/${slug}/zap:/zap/wrk:rw" \
-              ghcr.io/zaproxy/zaproxy:stable \
-              zap-baseline.py \
-              -t "$url" \
-              -a \
-              -J "zap-baseline.json" \
-              -r "zap-baseline.html" \
-              -w "zap-baseline.md" || true
-
-            docker run --rm \
-              -v "${PWD}/all-reports/${slug}/zap:/zap/wrk:rw" \
-              ghcr.io/zaproxy/zaproxy:stable \
-              zap-full-scan.py \
-              -t "$url" \
-              -J "zap-full-scan.json" \
-              -r "zap-full-scan.html" \
-              -w "zap-full-scan.md" || true
-          done < zap-targets.tsv
+        env:
+          ZAP_SCAN_MODE: ${{ github.event.inputs.zap_scan_mode || 'baseline' }}
+          ZAP_MAX_MINUTES: ${{ github.event.inputs.zap_max_minutes || '12' }}
+        run: bash scripts/security/run_zap_scans.sh audit-targets.json
 
       - name: Collect proof of concern evidence
         id: poc_evidence
