@@ -108,6 +108,12 @@ jobs:
           DEEP_MAX_SECONDS: "45"
         run: bash scripts/security/run_deep_info_scan.sh audit-targets.json
 
+      - name: Capture page speed timings
+        id: page_speed
+        env:
+          PAGE_SPEED_MAX_SECONDS: "30"
+        run: bash scripts/security/capture_page_speed.sh audit-targets.json
+
       - name: Prepare repository report folder
         id: prep_report_folder
         run: mkdir -p all-reports/repository
@@ -185,12 +191,13 @@ jobs:
           | 5. OWASP ZAP Scans               | $(icon "${{ steps.zap_scans.outcome }}")        \`${{ steps.zap_scans.outcome }}\`       |
           | 6. Collect PoC Evidence          | $(icon "${{ steps.poc_evidence.outcome }}")    \`${{ steps.poc_evidence.outcome }}\`    |
           | 7. Deep Information Gathering    | $(icon "${{ steps.deep_info.outcome }}")       \`${{ steps.deep_info.outcome }}\`       |
-          | 8. Trivy Dependency Scan         | $(icon "${{ steps.trivy_fs.outcome }}")        \`${{ steps.trivy_fs.outcome }}\`        |
-          | 9. Trivy IaC Scan                | $(icon "${{ steps.trivy_config.outcome }}")    \`${{ steps.trivy_config.outcome }}\`    |
-          | 10. Gitleaks Secret Scan         | $(icon "${{ steps.gitleaks.outcome }}")        \`${{ steps.gitleaks.outcome }}\`        |
-          | 11. TruffleHog Credential Scan   | $(icon "${{ steps.trufflehog.outcome }}")      \`${{ steps.trufflehog.outcome }}\`      |
-          | 12. Generate Report              | $(icon "${{ steps.generate_report.outcome }}") \`${{ steps.generate_report.outcome }}\` |
-          | 13. Upload Artifact              | $(icon "${{ steps.upload_artifact.outcome }}") \`${{ steps.upload_artifact.outcome }}\` |
+          | 8. Page Speed Timings            | $(icon "${{ steps.page_speed.outcome }}")      \`${{ steps.page_speed.outcome }}\`      |
+          | 9. Trivy Dependency Scan         | $(icon "${{ steps.trivy_fs.outcome }}")        \`${{ steps.trivy_fs.outcome }}\`        |
+          | 10. Trivy IaC Scan               | $(icon "${{ steps.trivy_config.outcome }}")    \`${{ steps.trivy_config.outcome }}\`    |
+          | 11. Gitleaks Secret Scan         | $(icon "${{ steps.gitleaks.outcome }}")        \`${{ steps.gitleaks.outcome }}\`        |
+          | 12. TruffleHog Credential Scan   | $(icon "${{ steps.trufflehog.outcome }}")      \`${{ steps.trufflehog.outcome }}\`      |
+          | 13. Generate Report              | $(icon "${{ steps.generate_report.outcome }}") \`${{ steps.generate_report.outcome }}\` |
+          | 14. Upload Artifact              | $(icon "${{ steps.upload_artifact.outcome }}") \`${{ steps.upload_artifact.outcome }}\` |
 
           ## 🏁 Final Result
 

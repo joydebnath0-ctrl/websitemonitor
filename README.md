@@ -15,6 +15,7 @@ scripts/security/build_target_matrix.py       Builds the GitHub Actions domain m
 scripts/security/run_domain_scans.sh          Runs all domain scanners for every configured target
 scripts/security/run_zap_scans.sh             Runs time-limited OWASP ZAP scans
 scripts/security/run_deep_info_scan.sh        Optional deep DNS, HTTP, TLS, timing, and service evidence
+scripts/security/capture_page_speed.sh        Captures per-domain curl timing metrics for page speed details
 scripts/security/collect_poc_evidence.sh      Captures proof-of-concern evidence files
 scripts/security/generate_report_bundle.py    Builds HTML, DOCX, Markdown, and raw report bundle
 scripts/security/ssl_tls_scan.sh              TLS and certificate checks

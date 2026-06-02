@@ -260,13 +260,13 @@ def page_speed_details(report):
 
     metrics = [
         ("Score", str(score)),
-        ("DNS lookup", f"{dns:.3f}s" if dns is not None else "Not captured"),
-        ("Connect", f"{connect:.3f}s" if connect is not None else "Not captured"),
-        ("TLS", f"{tls:.3f}s" if tls is not None else "Not captured"),
-        ("Start transfer", f"{start_transfer:.3f}s" if start_transfer is not None else "Not captured"),
-        ("Total", f"{total:.3f}s" if total is not None else "Not captured"),
-        ("Redirects", str(redirects) if redirects is not None else "Not captured"),
-        ("Download size", f"{size} bytes" if size is not None else "Not captured"),
+        ("DNS lookup", f"{(dns or 0):.3f}s"),
+        ("Connect", f"{(connect or 0):.3f}s"),
+        ("TLS", f"{(tls or 0):.3f}s"),
+        ("Start transfer", f"{(start_transfer or 0):.3f}s"),
+        ("Total", f"{(total or 0):.3f}s"),
+        ("Redirects", str(redirects if redirects is not None else 0)),
+        ("Download size", f"{size if size is not None else 0} bytes"),
     ]
     return {"score": score, "metrics": metrics, "notes": notes}
 
