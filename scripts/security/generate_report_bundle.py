@@ -819,6 +819,69 @@ def remediation_items(report):
     return items
 
 
+def get_security_checks(report):
+    content = report_text(report).lower()
+    name = report["name"].lower()
+    
+    # 1. TLS 1.3
+    tls_1_3_status = "Pass"
+    if "tls1_3:" in content:
+        part = content.split("tls1_3:")[1].split("\n")[0]
+        if "error" in part or "failed" in part or "handshake failure" in part:
+            tls_1_3_status = "Fail"
+    elif "tls 1.3" in content or "tls_1_3" in content:
+        if "not supported" in content or "unsupported" in content:
+            tls_1_3_status = "Fail"
+            
+    # 2. TLS 1.2
+    tls_1_2_status = "Pass"
+    if "tls1_2:" in content:
+        part = content.split("tls1_2:")[1].split("\n")[0]
+        if "error" in part or "failed" in part:
+            tls_1_2_status = "Fail"
+            
+    # 3. TLS 1.0
+    tls_1_0_status = "Fail"
+    if "tls1:" in content:
+        part = content.split("tls1:")[1].split("\n")[0]
+        if "connected" in part or "cipher" in part:
+            tls_1_0_status = "Fail"
+        else:
+            tls_1_0_status = "Pass"
+            
+    # 4. Weak Ciphers
+    weak_ciphers_status = "Fail"
+    if "weak" in content or "medium" in content or "cbc" in content or "rc4" in content or "3des" in content:
+        weak_ciphers_status = "Fail"
+    elif "no weak ciphers" in content or "ciphers: pass" in content:
+        weak_ciphers_status = "Pass"
+        
+    # 5. HSTS
+    hsts_status = "Pass"
+    if "missing: strict-transport-security" in content or "strict-transport-security" not in content:
+        hsts_status = "Missing"
+        
+    # 6. Certificate Validity
+    cert_validity_status = "Pass"
+    if "expired" in content or "expires in less than 30 days" in content or "days until expiry: -" in content:
+        cert_validity_status = "Fail"
+        
+    if name == "proof-of-concern-summary" or name == "repository":
+        return []
+        
+    return [
+        {"check": "TLS 1.3", "status": tls_1_3_status},
+        {"check": "TLS 1.2", "status": tls_1_2_status},
+        {"check": "TLS 1.0", "status": tls_1_0_status},
+        {"check": "Weak Ciphers", "status": weak_ciphers_status},
+        {"check": "HSTS", "status": hsts_status},
+        {"check": "Certificate Validity", "status": cert_validity_status},
+    ]
+
+
+
+
+
 def html_attr(value):
     return html.escape(str(value), quote=True)
 
@@ -927,6 +990,20 @@ def write_markdown(reports):
                     "",
                 ]
             )
+            checks = get_security_checks(report)
+            if checks:
+                lines.extend(
+                    [
+                        "**Security Diagnostics**",
+                        "",
+                        "| Check | Status |",
+                        "| :--- | :--- |",
+                    ]
+                )
+                for c in checks:
+                    lines.append(f"| {c['check']} | **{c['status']}** |")
+                lines.extend(["", ""])
+
             lines.extend(
                 [
                     "**Recommended actions**",
@@ -1136,6 +1213,35 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
                 """
             )
 
+        checks = get_security_checks(report)
+        checks_box_html = ""
+        if checks:
+            checks_rows_html = "\n".join(
+                f"""
+                <tr>
+                  <td><strong>{html.escape(c["check"])}</strong></td>
+                  <td><span class="check-status-badge check-status-badge--{c["status"].lower()}">{html.escape(c["status"])}</span></td>
+                </tr>
+                """
+                for c in checks
+            )
+            checks_box_html = f"""
+            <div class="security-checks-box">
+              <div class="security-checks-title">Security Diagnostics</div>
+              <table class="security-checks-table">
+                <thead>
+                  <tr>
+                    <th>Check</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {checks_rows_html}
+                </tbody>
+              </table>
+            </div>
+            """
+
         sections.append(
             f"""
             <section class="report-card" id="{html_attr(report["name"])}" data-report data-search="{html_attr(report["name"] + " " + scan + " " + preview)}" data-status="{html_attr(status)}">
@@ -1149,6 +1255,7 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
               </div>
               <p class="meaning">{html.escape(status_message(status))}</p>
               <div class="report-card__preview">{html.escape(preview)}</div>
+              {checks_box_html}
               <div class="remedies">
                 <div class="remedies__title">Recommended actions</div>
                 <ul>{remedies_html}</ul>
@@ -2108,6 +2215,64 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
       text-align: center;
     }}
     .no-results.is-visible {{ display: block; }}
+    .security-checks-box {{
+      margin: 16px 0;
+      padding: 14px;
+      background: var(--panel-soft);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }}
+    .security-checks-title {{
+      margin-bottom: 10px;
+      color: var(--accent-strong);
+      font-size: 13px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }}
+    .security-checks-table {{
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }}
+    .security-checks-table th,
+    .security-checks-table td {{
+      padding: 8px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+    }}
+    .security-checks-table th {{
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 800;
+      padding-top: 0;
+    }}
+    .security-checks-table tr:last-child td {{
+      border-bottom: 0;
+      padding-bottom: 0;
+    }}
+    .check-status-badge {{
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 850;
+      text-transform: uppercase;
+    }}
+    .check-status-badge--pass {{
+      background: var(--ok-bg);
+      color: var(--ok);
+    }}
+    .check-status-badge--fail {{
+      background: var(--danger-bg);
+      color: var(--danger);
+    }}
+    .check-status-badge--missing {{
+      background: var(--warn-bg);
+      color: var(--warn);
+    }}
     @media (max-width: 980px) {{
       .hero__inner {{ grid-template-columns: 1fr; }}
       .hero__actions {{ justify-content: flex-start; }}
@@ -2461,6 +2626,14 @@ def write_docx(reports):
             body.append(paragraph(report["name"], "Heading2"))
             body.append(paragraph(f"Status: {status_label(status)}"))
             body.append(paragraph(status_message(status)))
+            
+            checks = get_security_checks(report)
+            if checks:
+                body.append(paragraph("Security Diagnostics", "Heading3"))
+                for c in checks:
+                    body.append(paragraph(f"- {c['check']}: {c['status']}"))
+                body.append(paragraph(""))
+
             body.append(paragraph("Recommended actions", "Heading3"))
             for item in remediation_items(report):
                 body.append(paragraph(item["title"], "Heading3"))
