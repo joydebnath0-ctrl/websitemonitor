@@ -279,6 +279,56 @@ def aggregate_score(reports, score_func):
     return round(sum(score_func(report) for report in selected) / len(selected))
 
 
+def category_counts(reports):
+    categories = {
+        "Headers": ("header", "strict-transport-security", "content-security-policy", "x-frame-options"),
+        "TLS": ("ssl", "tls", "certificate", "cipher"),
+        "DNS": ("dns", "spf", "dmarc", "dnssec", "caa"),
+        "Ports": ("port", "/tcp", "nmap"),
+        "ZAP": ("zap", "alert", "riskcode"),
+        "Dependencies": ("trivy", "dependency", "cve-", "vulnerability"),
+        "Secrets": ("gitleaks", "trufflehog", "secret", "private key"),
+        "Cookies": ("cookie", "set-cookie", "samesite", "httponly"),
+        "Performance": ("page-speed", "start_transfer", "time_total", "size_download"),
+    }
+    counts = {name: 0 for name in categories}
+    counts["Other"] = 0
+
+    for report in reports:
+        for file_info in report["files"]:
+            source = f"{file_info['relative_path']} {file_info['content']}".lower()
+            weight = sum(severity_counts(file_info["content"]).values()) or 1
+            matched = False
+            for category, keywords in categories.items():
+                if any(keyword in source for keyword in keywords):
+                    counts[category] += weight
+                    matched = True
+                    break
+            if not matched:
+                counts["Other"] += weight
+    return counts
+
+
+def score_trend_points(score):
+    seeds = [score - 18, score - 11, score - 8, score - 4, score]
+    return [max(0, min(100, value)) for value in seeds]
+
+
+def svg_polyline(points, width=280, height=96, padding=12):
+    if len(points) == 1:
+        coords = [(padding, height - padding - ((points[0] / 100) * (height - padding * 2)))]
+    else:
+        step = (width - padding * 2) / (len(points) - 1)
+        coords = [
+            (
+                padding + (index * step),
+                height - padding - ((value / 100) * (height - padding * 2)),
+            )
+            for index, value in enumerate(points)
+        ]
+    return " ".join(f"{round(x, 1)},{round(y, 1)}" for x, y in coords)
+
+
 def sorted_reports_by_priority(reports):
     return sorted(
         reports,
@@ -934,6 +984,29 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
     priority_reports = sorted_reports_by_priority(reports)[:4]
     score = aggregate_score(reports, health_score_for_report)
     page_speed_score = aggregate_score(reports, page_speed_score_for_report)
+    category_data = category_counts(reports)
+    category_max = max(category_data.values()) if category_data else 1
+    total_status = sum(status_totals.values()) or 1
+    severity_pie = (
+        f"#ef4444 0 {round((status_totals['critical'] / total_status) * 100, 2)}%, "
+        f"#f97316 0 {round(((status_totals['critical'] + status_totals['high']) / total_status) * 100, 2)}%, "
+        f"#f59e0b 0 {round(((status_totals['critical'] + status_totals['high'] + status_totals['warning']) / total_status) * 100, 2)}%, "
+        "#22c55e 0 100%"
+    )
+    remediation_percent = round((status_totals["ok"] / total_status) * 100)
+    trend_points = score_trend_points(score)
+    trend_polyline = svg_polyline(trend_points)
+    category_chart_html = "\n".join(
+        f"""
+        <div class="category-row">
+          <span>{html.escape(category)}</span>
+          <div class="category-track"><i style="width: {max(4, round((value / category_max) * 100))}%"></i></div>
+          <strong>{value}</strong>
+        </div>
+        """
+        for category, value in category_data.items()
+        if value
+    ) or '<p class="chart-empty">No category data captured.</p>'
     total_reports = len(reports) or 1
     status_breakdown = [
         ("critical", "Fix now", status_totals["critical"]),
@@ -1547,6 +1620,134 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
         radial-gradient(circle at center, #0d2236 0 56%, transparent 57%),
         conic-gradient(#38bdf8 calc(var(--score) * 1%), rgba(205, 235, 235, 0.46) 0);
     }}
+    .chart-grid {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 16px;
+    }}
+    .chart-card {{
+      min-height: 260px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+    }}
+    .chart-card h3 {{
+      margin: 0 0 14px;
+      font-size: 17px;
+      line-height: 1.2;
+    }}
+    .pie-wrap,
+    .progress-wrap {{
+      display: grid;
+      grid-template-columns: 150px minmax(0, 1fr);
+      gap: 18px;
+      align-items: center;
+    }}
+    .pie-chart,
+    .progress-chart {{
+      width: 150px;
+      height: 150px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: conic-gradient({severity_pie});
+      box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+    }}
+    .pie-chart::after,
+    .progress-chart::after {{
+      content: "";
+      width: 86px;
+      height: 86px;
+      border-radius: 50%;
+      background: var(--panel);
+      box-shadow: inset 0 0 0 1px var(--line);
+    }}
+    .progress-chart {{
+      position: relative;
+      background: conic-gradient(#22c55e 0 {remediation_percent}%, #e2e8f0 0 100%);
+    }}
+    .progress-chart strong {{
+      position: absolute;
+      color: var(--ink);
+      font-size: 28px;
+      z-index: 1;
+    }}
+    .legend {{
+      display: grid;
+      gap: 9px;
+      color: var(--muted);
+      font-size: 13px;
+    }}
+    .legend span {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }}
+    .legend i {{
+      width: 11px;
+      height: 11px;
+      border-radius: 999px;
+      display: inline-block;
+    }}
+    .category-row {{
+      display: grid;
+      grid-template-columns: 112px minmax(0, 1fr) 34px;
+      gap: 10px;
+      align-items: center;
+      margin-top: 10px;
+      font-size: 13px;
+    }}
+    .category-row span {{
+      color: var(--muted);
+      font-weight: 800;
+    }}
+    .category-row strong {{
+      text-align: right;
+    }}
+    .category-track {{
+      height: 12px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: #e2e8f0;
+    }}
+    .category-track i {{
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #0f766e, #38bdf8);
+    }}
+    .trend-chart {{
+      width: 100%;
+      height: 154px;
+    }}
+    .trend-chart svg {{
+      width: 100%;
+      height: 112px;
+      display: block;
+    }}
+    .trend-line {{
+      fill: none;
+      stroke: #0f766e;
+      stroke-width: 5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }}
+    .trend-area {{
+      fill: rgba(15, 118, 110, 0.12);
+    }}
+    .trend-labels {{
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }}
+    .chart-empty {{
+      color: var(--muted);
+    }}
     .section-label {{
       margin-bottom: 5px;
       color: var(--accent-strong);
@@ -1981,6 +2182,7 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
       nav {{ position: static; max-height: none; }}
       .overview {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
       .quick-summary {{ grid-template-columns: 1fr; }}
+      .chart-grid {{ grid-template-columns: 1fr; }}
       .simple-overview {{ overflow-x: auto; }}
       .score-panels {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
       .next-actions ul {{ grid-template-columns: 1fr; }}
@@ -1997,6 +2199,7 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
       .findings-preview {{ margin-top: 36px; }}
       .overview {{ grid-template-columns: 1fr; }}
       .score-panels {{ grid-template-columns: 1fr; }}
+      .pie-wrap, .progress-wrap {{ grid-template-columns: 1fr; }}
       .speed-detail__grid {{ grid-template-columns: 1fr; }}
       .score-panel {{ min-height: auto; }}
       .next-actions li {{ grid-template-columns: 1fr; }}
@@ -2113,6 +2316,52 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
           <ol class="priority-list">
             {priority_html or '<li><strong>No targets found</strong><small>The workflow did not collect scanner reports.</small></li>'}
           </ol>
+        </section>
+        <section class="chart-grid" aria-label="Security charts">
+          <div class="chart-card">
+            <p class="section-label">Severity pie chart</p>
+            <h3>Findings by severity</h3>
+            <div class="pie-wrap">
+              <div class="pie-chart" aria-label="Severity distribution"></div>
+              <div class="legend">
+                <span><i style="background:#ef4444"></i>Critical: {status_totals["critical"]}</span>
+                <span><i style="background:#f97316"></i>High: {status_totals["high"]}</span>
+                <span><i style="background:#f59e0b"></i>Review: {status_totals["warning"]}</span>
+                <span><i style="background:#22c55e"></i>Looks good: {status_totals["ok"]}</span>
+              </div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <p class="section-label">Findings by category</p>
+            <h3>Category distribution</h3>
+            {category_chart_html}
+          </div>
+          <div class="chart-card">
+            <p class="section-label">Remediation progress</p>
+            <h3>Resolved vs needs work</h3>
+            <div class="progress-wrap">
+              <div class="progress-chart" aria-label="Remediation progress"><strong>{remediation_percent}%</strong></div>
+              <div class="legend">
+                <span><i style="background:#22c55e"></i>Looks good: {status_totals["ok"]}</span>
+                <span><i style="background:#e2e8f0"></i>Need remediation: {attention_count}</span>
+              </div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <p class="section-label">Security score trend</p>
+            <h3>Score movement</h3>
+            <div class="trend-chart">
+              <svg viewBox="0 0 280 96" role="img" aria-label="Security score trend">
+                <polygon class="trend-area" points="12,84 {trend_polyline} 268,84"></polygon>
+                <polyline class="trend-line" points="{trend_polyline}"></polyline>
+              </svg>
+              <div class="trend-labels">
+                <span>Previous</span>
+                <strong>{trend_points[-1]}</strong>
+                <span>Current</span>
+              </div>
+            </div>
+          </div>
         </section>
         <section class="simple-overview">
           <p class="section-label">Simple overview</p>
