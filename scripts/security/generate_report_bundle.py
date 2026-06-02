@@ -819,6 +819,22 @@ def remediation_items(report):
     return items
 
 
+def get_readable_domain(report):
+    content = report_text(report)
+    match = re.search(r"target:\s*https?://([^\/\s]+)", content, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    
+    match2 = re.search(r"target:\s*([^\/\s]+)", content, re.IGNORECASE)
+    if match2:
+        return match2.group(1).strip()
+        
+    slug = report["name"]
+    if "-" in slug:
+        return slug.replace("-", ".")
+    return slug
+
+
 def get_security_checks(report):
     content = report_text(report).lower()
     name = report["name"].lower()
@@ -1062,14 +1078,15 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
     simple_rows = simple_summary_items(reports)
 
     single_domain = None
-    domain_reports = [r for r in reports if r["name"] != "proof-of-concern-summary"]
+    domain_reports = [r for r in reports if r["name"] not in ("proof-of-concern-summary", "repository")]
     if len(domain_reports) == 1:
-        single_domain = domain_reports[0]["name"]
+        single_domain = get_readable_domain(domain_reports[0])
 
     if single_domain:
         header_title_html = f"""<h1 class="hero-main-title">Security Audit for <span class="hero-domain-highlight">{html.escape(single_domain)}</span></h1>"""
     else:
-        domain_list = ", ".join(r["name"] for r in domain_reports[:3])
+        domain_names = [get_readable_domain(r) for r in domain_reports]
+        domain_list = ", ".join(domain_names[:3])
         if len(domain_reports) > 3:
             domain_list += f" and {len(domain_reports) - 3} more"
         header_title_html = f"""<h1 class="hero-main-title">Security Audit: <span class="hero-domain-highlight">{html.escape(domain_list or "All Targets")}</span></h1>"""
