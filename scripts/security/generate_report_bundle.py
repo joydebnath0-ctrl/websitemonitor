@@ -1060,6 +1060,19 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
     overall_title, overall_detail = overall_status(status_totals)
     actions = next_actions(reports)
     simple_rows = simple_summary_items(reports)
+
+    single_domain = None
+    domain_reports = [r for r in reports if r["name"] != "proof-of-concern-summary"]
+    if len(domain_reports) == 1:
+        single_domain = domain_reports[0]["name"]
+
+    if single_domain:
+        header_title_html = f"""<h1 class="hero-main-title">Security Audit for <span class="hero-domain-highlight">{html.escape(single_domain)}</span></h1>"""
+    else:
+        domain_list = ", ".join(r["name"] for r in domain_reports[:3])
+        if len(domain_reports) > 3:
+            domain_list += f" and {len(domain_reports) - 3} more"
+        header_title_html = f"""<h1 class="hero-main-title">Security Audit: <span class="hero-domain-highlight">{html.escape(domain_list or "All Targets")}</span></h1>"""
     attention_count = status_totals["critical"] + status_totals["high"] + status_totals["warning"]
     priority_reports = sorted_reports_by_priority(reports)[:4]
     score = aggregate_score(reports, health_score_for_report)
@@ -2286,6 +2299,35 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
       background: var(--warn-bg);
       color: var(--warn);
     }}
+    .hero-main-title {{
+      margin: 16px 0 24px;
+      font-size: 38px;
+      font-weight: 900;
+      line-height: 1.15;
+      color: #ffffff;
+      letter-spacing: -0.02em;
+    }}
+    .hero-domain-highlight {{
+      display: inline-block;
+      position: relative;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.08);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      padding: 4px 12px;
+      border-radius: 8px;
+      text-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
+      animation: pulse-glow 2s infinite alternate;
+    }}
+    @keyframes pulse-glow {{
+      0% {{
+        box-shadow: 0 0 10px rgba(56, 189, 248, 0.1);
+        border-color: rgba(56, 189, 248, 0.3);
+      }}
+      100% {{
+        box-shadow: 0 0 25px rgba(56, 189, 248, 0.35);
+        border-color: rgba(56, 189, 248, 0.65);
+      }}
+    }}
     @media (max-width: 980px) {{
       .hero__inner {{ grid-template-columns: 1fr; }}
       .hero__actions {{ justify-content: flex-start; }}
@@ -2344,6 +2386,7 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
       <div class="hero__inner">
         <div>
           <div class="eyebrow">Website Vulnerability Scanner Report</div>
+          {header_title_html}
           <div class="hero__actions">
             <a class="action action--primary" href="{html_attr(link_prefix)}security-audit-report.docx">Word Report</a>
             <a class="action" href="{html_attr(link_prefix)}security-summary.md">Summary</a>
