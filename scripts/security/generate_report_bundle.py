@@ -866,6 +866,16 @@ def get_security_checks(report):
     if "expired" in content or "expires in less than 30 days" in content or "days until expiry: -" in content:
         cert_validity_status = "Fail"
         
+    # 7. SSL Expiration Date
+    ssl_expiry_date = "N/A"
+    if "notafter=" in content:
+        try:
+            raw_date = content.split("notafter=")[1].split("\n")[0].strip()
+            clean_parts = [p.capitalize() for p in raw_date.split() if p.strip()]
+            ssl_expiry_date = " ".join(clean_parts)
+        except Exception:
+            pass
+
     if name == "proof-of-concern-summary" or name == "repository":
         return []
         
@@ -876,6 +886,7 @@ def get_security_checks(report):
         {"check": "Weak Ciphers", "status": weak_ciphers_status},
         {"check": "HSTS", "status": hsts_status},
         {"check": "Certificate Validity", "status": cert_validity_status},
+        {"check": "SSL Expiration Date", "status": ssl_expiry_date},
     ]
 
 
@@ -2260,6 +2271,8 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
       font-size: 11px;
       font-weight: 850;
       text-transform: uppercase;
+      background: #e2e8f0;
+      color: #334155;
     }}
     .check-status-badge--pass {{
       background: var(--ok-bg);
