@@ -835,6 +835,12 @@ def get_readable_domain(report):
     return slug
 
 
+def display_name(name):
+    if name in ("proof-of-concern-summary", "repository"):
+        return name
+    return name.replace("-", ".")
+
+
 def get_security_checks(report):
     content = report_text(report).lower()
     name = report["name"].lower()
@@ -957,7 +963,7 @@ def write_markdown(reports):
     if simple_rows:
         for row in simple_rows:
             lines.append(
-                f"| {row['target']} | {row['status']} | {row['health']} | {row['speed']} | {row['issue']} | {row['action']} | {row['evidence']} |"
+                f"| {display_name(row['target'])} | {row['status']} | {row['health']} | {row['speed']} | {row['issue']} | {row['action']} | {row['evidence']} |"
             )
     else:
         lines.append("| No targets | No data | 0 | 0 | No scanner output was collected | Run the workflow again | N/A |")
@@ -974,7 +980,7 @@ def write_markdown(reports):
         for action in actions:
             lines.extend(
                 [
-                    f"### {action['target']} - {action['title']}",
+                    f"### {display_name(action['target'])} - {action['title']}",
                     "",
                     action["detail"],
                     "",
@@ -1009,7 +1015,7 @@ def write_markdown(reports):
             status = report_status(report)
             lines.extend(
                 [
-                    f"### {report['name']}",
+                    f"### {display_name(report['name'])}",
                     "",
                     f"**Status:** {status_label(status)}",
                     "",
@@ -1148,7 +1154,7 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
         f"""
         <li>
           <span class="priority-list__status badge badge--{html_attr(report_status(report))}">{html.escape(status_label(report_status(report)))}</span>
-          <a href="#{html_attr(report["name"])}">{html.escape(report["name"])}</a>
+          <a href="#{html_attr(report["name"])}">{html.escape(display_name(report["name"]))}</a>
           <small>{html.escape(status_message(report_status(report)))}</small>
         </li>
         """
@@ -1166,7 +1172,7 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
             <ol>{''.join(f'<li>{html.escape(step)}</li>' for step in action["steps"])}</ol>
             <p class="verify"><strong>Verify:</strong> {html.escape(action["verify"])}</p>
           </div>
-          <em>{html.escape(action["target"])}</em>
+          <em>{html.escape(display_name(action["target"]))}</em>
         </li>
         """
         for index, action in enumerate(actions, start=1)
@@ -1182,7 +1188,7 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
     simple_rows_html = "\n".join(
         f"""
         <tr>
-          <td><a href="{html_attr(domain_report_path(row["target"]) if link_domain_reports and row["target"] != "proof-of-concern-summary" else "#" + row["target"])}">{html.escape(row["target"])}</a><small>{html.escape(row["scan"])}</small></td>
+          <td><a href="{html_attr(domain_report_path(row["target"]) if link_domain_reports and row["target"] != "proof-of-concern-summary" else "#" + row["target"])}">{html.escape(display_name(row["target"]))}</a><small>{html.escape(row["scan"])}</small></td>
           <td><span class="simple-status">{html.escape(row["status"])}</span></td>
           <td><strong>{row["health"]}</strong></td>
           <td><strong>{row["speed"]}</strong></td>
@@ -1208,7 +1214,7 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
         f"""
         <a href="#{html_attr(report["name"])}">
           <span>{html.escape(scan_label(report["name"]))}</span>
-          <small>{html.escape(report["name"])}</small>
+          <small>{html.escape(display_name(report["name"]))}</small>
         </a>
         """
         for report in reports
@@ -1290,7 +1296,7 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
               <div class="report-card__head">
                 <div>
                   <p>{html.escape(scan)}</p>
-                  <h2>{html.escape(report["name"])}</h2>
+                  <h2>{html.escape(display_name(report["name"]))}</h2>
                 </div>
                 <span class="badge badge--{html_attr(status)}">{html.escape(status_label(status))}</span>
               </div>
@@ -2664,7 +2670,7 @@ def write_docx(reports):
         for row in simple_rows:
             body.append(
                 paragraph(
-                    f"{row['target']} | {row['status']} | Health: {row['health']} | Page speed: {row['speed']} | {row['action']} | Evidence: {row['evidence']}",
+                    f"{display_name(row['target'])} | {row['status']} | Health: {row['health']} | Page speed: {row['speed']} | {row['action']} | Evidence: {row['evidence']}",
                     "Heading2",
                 )
             )
@@ -2680,7 +2686,7 @@ def write_docx(reports):
 
     if actions:
         for action in actions:
-            body.append(paragraph(f"{action['target']} - {action['title']}", "Heading2"))
+            body.append(paragraph(f"{display_name(action['target'])} - {action['title']}", "Heading2"))
             body.append(paragraph(action["detail"]))
             body.append(paragraph("Process", "Heading3"))
             for index, step in enumerate(action["steps"], start=1):
@@ -2696,7 +2702,7 @@ def write_docx(reports):
     else:
         for report in sorted_reports_by_priority(reports):
             status = report_status(report)
-            body.append(paragraph(report["name"], "Heading2"))
+            body.append(paragraph(display_name(report["name"]), "Heading2"))
             body.append(paragraph(f"Status: {status_label(status)}"))
             body.append(paragraph(status_message(status)))
             
