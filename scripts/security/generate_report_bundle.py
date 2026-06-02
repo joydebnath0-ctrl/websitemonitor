@@ -804,7 +804,7 @@ def remediation_items(report):
     ):
         add(
             "Improve page speed",
-            "Improve performance by reducing redirects, compression gaps, heavy assets, render-blocking scripts, and slow origin response time. Use the Page speed details section to decide which bottleneck to fix first.",
+            "Improve performance by reducing redirects, compression gaps, heavy assets, render-blocking scripts, and slow origin response time. Use page-speed-report.txt to decide which bottleneck to fix first.",
         )
 
     if not items and report_status(report) != "ok":
@@ -917,7 +917,6 @@ def write_markdown(reports):
     else:
         for report in sorted_reports_by_priority(reports):
             status = report_status(report)
-            speed = page_speed_details(report)
             lines.extend(
                 [
                     f"### {report['name']}",
@@ -926,17 +925,10 @@ def write_markdown(reports):
                     "",
                     status_message(status),
                     "",
-                    "**Page speed details**",
-                    "",
                 ]
             )
-            for label, value in speed["metrics"]:
-                lines.append(f"- **{label}:** {value}")
-            for note in speed["notes"]:
-                lines.append(f"- {note}")
             lines.extend(
                 [
-                    "",
                     "**Recommended actions**",
                     "",
                 ]
@@ -1109,17 +1101,6 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
         status = report_status(report)
         scan = scan_label(report["name"])
         preview = report_preview(report)
-        speed = page_speed_details(report)
-        speed_metrics_html = "\n".join(
-            f"""
-            <div class="speed-detail__item">
-              <span>{html.escape(label)}</span>
-              <strong>{html.escape(value)}</strong>
-            </div>
-            """
-            for label, value in speed["metrics"]
-        )
-        speed_notes_html = "".join(f"<li>{html.escape(note)}</li>" for note in speed["notes"])
         remedies = remediation_items(report)
         remedies_html = "\n".join(
             f"""
@@ -1168,11 +1149,6 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
               </div>
               <p class="meaning">{html.escape(status_message(status))}</p>
               <div class="report-card__preview">{html.escape(preview)}</div>
-              <div class="speed-detail">
-                <div class="remedies__title">Page speed details</div>
-                <div class="speed-detail__grid">{speed_metrics_html}</div>
-                <ul>{speed_notes_html}</ul>
-              </div>
               <div class="remedies">
                 <div class="remedies__title">Recommended actions</div>
                 <ul>{remedies_html}</ul>
@@ -2009,44 +1985,6 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
       color: var(--muted);
       overflow-wrap: anywhere;
     }}
-    .speed-detail {{
-      margin: 12px 0 14px;
-      padding: 14px;
-      border: 1px solid #b6ece5;
-      border-radius: 8px;
-      background: #f0fdfa;
-    }}
-    .speed-detail__grid {{
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 10px;
-      margin-top: 10px;
-    }}
-    .speed-detail__item {{
-      padding: 10px;
-      border-radius: 7px;
-      background: #ffffff;
-      border: 1px solid var(--line);
-    }}
-    .speed-detail__item span {{
-      display: block;
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 0;
-    }}
-    .speed-detail__item strong {{
-      display: block;
-      margin-top: 4px;
-      color: var(--ink);
-      font-size: 18px;
-    }}
-    .speed-detail ul {{
-      margin: 10px 0 0;
-      padding-left: 18px;
-      color: var(--muted);
-    }}
     .meaning {{
       margin-top: 10px;
       color: var(--ink);
@@ -2200,7 +2138,6 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
       .overview {{ grid-template-columns: 1fr; }}
       .score-panels {{ grid-template-columns: 1fr; }}
       .pie-wrap, .progress-wrap {{ grid-template-columns: 1fr; }}
-      .speed-detail__grid {{ grid-template-columns: 1fr; }}
       .score-panel {{ min-height: auto; }}
       .next-actions li {{ grid-template-columns: 1fr; }}
       .next-actions b {{ grid-row: auto; }}
@@ -2521,15 +2458,9 @@ def write_docx(reports):
     else:
         for report in sorted_reports_by_priority(reports):
             status = report_status(report)
-            speed = page_speed_details(report)
             body.append(paragraph(report["name"], "Heading2"))
             body.append(paragraph(f"Status: {status_label(status)}"))
             body.append(paragraph(status_message(status)))
-            body.append(paragraph("Page speed details", "Heading3"))
-            for label, value in speed["metrics"]:
-                body.append(paragraph(f"{label}: {value}"))
-            for note in speed["notes"]:
-                body.append(paragraph(note))
             body.append(paragraph("Recommended actions", "Heading3"))
             for item in remediation_items(report):
                 body.append(paragraph(item["title"], "Heading3"))
