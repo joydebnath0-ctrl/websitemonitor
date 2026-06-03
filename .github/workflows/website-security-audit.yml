@@ -176,6 +176,26 @@ jobs:
           path: audit-report/
           retention-days: 30
 
+      - name: Clean remote report directory
+        id: clean_remote
+        uses: appleboy/ssh-action@master
+        with:
+          host: 13.201.116.231
+          username: ubuntu
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          script: |
+            rm -rf /var/www/code/websitemonitoring/audit-report/*
+
+      - name: Deploy report to Lightsail server
+        id: deploy_remote
+        uses: appleboy/scp-action@master
+        with:
+          host: 13.201.116.231
+          username: ubuntu
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          source: "audit-report/**"
+          target: "/var/www/code/websitemonitoring"
+
       # ─── Final Summary ────────────────────────────────────────────────────
       - name: Summary - Final Status
         if: always()
@@ -198,6 +218,8 @@ jobs:
           | 12. TruffleHog Credential Scan   | $(icon "${{ steps.trufflehog.outcome }}")      \`${{ steps.trufflehog.outcome }}\`      |
           | 13. Generate Report              | $(icon "${{ steps.generate_report.outcome }}") \`${{ steps.generate_report.outcome }}\` |
           | 14. Upload Artifact              | $(icon "${{ steps.upload_artifact.outcome }}") \`${{ steps.upload_artifact.outcome }}\` |
+          | 15. Clean Remote Report Dir      | $(icon "${{ steps.clean_remote.outcome }}")    \`${{ steps.clean_remote.outcome }}\`    |
+          | 16. Deploy to Lightsail Server   | $(icon "${{ steps.deploy_remote.outcome }}")   \`${{ steps.deploy_remote.outcome }}\`   |
 
           ## 🏁 Final Result
 

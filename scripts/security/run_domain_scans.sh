@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Clean old report directories to prevent reports from previous runs from mixing
+rm -rf all-reports
+mkdir -p all-reports
+
 TARGETS_JSON="${1:-audit-targets.json}"
 
 while IFS=$'\t' read -r url slug; do

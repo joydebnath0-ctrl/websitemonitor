@@ -1,3 +1,7 @@
 # Define one target URL per line.
 # Blank lines and lines starting with # are ignored.
+<<<<<<< HEAD
 https://www.pacificpainfree.com
+=======
+https://admin.rentwizz.co.uk
+>>>>>>> b609e45928fda9ebe8d8c13c781eafbfd5ee52d0
