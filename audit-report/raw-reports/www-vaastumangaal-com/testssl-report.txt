@@ -1,0 +1,1 @@
+scripts/security/ssl_tls_scan.sh: line 40: docker: command not found

@@ -1,0 +1,3 @@
+=== Cookie Security Analysis ===
+Target: https://www.vaastumangaal.com
+No Set-Cookie headers found on initial response.

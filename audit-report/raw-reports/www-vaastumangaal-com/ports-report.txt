@@ -1,0 +1,45 @@
+=== Open Port Scan for www.vaastumangaal.com ===
+Starting Nmap 7.94SVN ( https://nmap.org ) at 2026-06-03 06:29 UTC
+Nmap scan report for www.vaastumangaal.com (104.21.7.52)
+Host is up (0.0010s latency).
+Other addresses for www.vaastumangaal.com (not scanned): 2606:4700:3035::ac43:87c5 2606:4700:3030::6815:734 172.67.135.197
+Not shown: 15 filtered tcp ports (no-response)
+Some closed ports may be reported as filtered due to --defeat-rst-ratelimit
+PORT     STATE SERVICE  VERSION
+80/tcp   open  http     Cloudflare http proxy
+|_http-title: Did not follow redirect to https://www.vaastumangaal.com/
+|_http-server-header: cloudflare
+443/tcp  open  ssl/http Cloudflare http proxy
+|_http-server-header: cloudflare
+|_http-title: Site doesn't have a title (text/html; charset=UTF-8).
+| ssl-cert: Subject: commonName=vaastumangaal.com
+| Subject Alternative Name: DNS:*.vaastumangaal.com, DNS:vaastumangaal.com
+| Issuer: commonName=E7/organizationName=Let's Encrypt/countryName=US
+| Public Key type: ec
+| Public Key bits: 256
+| Signature Algorithm: ecdsa-with-SHA384
+| Not valid before: 2026-05-06T12:26:57
+| Not valid after:  2026-08-04T12:26:56
+| MD5:   28de:dbfb:eac9:93b7:f03c:c855:e365:e5ba
+|_SHA-1: ad49:73e9:8a47:1fbf:815c:febd:f343:d3f4:8b2a:dad3
+8080/tcp open  http     Cloudflare http proxy
+|_http-server-header: cloudflare
+|_http-title: Site doesn't have a title (text/plain; charset=UTF-8).
+8443/tcp open  ssl/http Cloudflare http proxy
+|_http-server-header: cloudflare
+|_http-title: Site doesn't have a title (text/plain; charset=UTF-8).
+| ssl-cert: Subject: commonName=vaastumangaal.com
+| Subject Alternative Name: DNS:*.vaastumangaal.com, DNS:vaastumangaal.com
+| Issuer: commonName=E7/organizationName=Let's Encrypt/countryName=US
+| Public Key type: ec
+| Public Key bits: 256
+| Signature Algorithm: ecdsa-with-SHA384
+| Not valid before: 2026-05-06T12:26:57
+| Not valid after:  2026-08-04T12:26:56
+| MD5:   28de:dbfb:eac9:93b7:f03c:c855:e365:e5ba
+|_SHA-1: ad49:73e9:8a47:1fbf:815c:febd:f343:d3f4:8b2a:dad3
+
+Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 34.66 seconds
+
+--- Risk Assessment of Open Ports ---

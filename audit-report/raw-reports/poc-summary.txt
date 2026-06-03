@@ -1,0 +1,8 @@
+Slug                             | Check                    | File                                          | Finding Count
+---------------------------------+--------------------------+-----------------------------------------------+--------------
+www-vaastumangaal-com            | Header proof             | www-vaastumangaal-com/poc/headers.txt         | 0
+www-vaastumangaal-com            | TLS handshake            | www-vaastumangaal-com/poc/tls-handshake.txt   | 0
+www-vaastumangaal-com            | TLS ciphers              | www-vaastumangaal-com/poc/tls-ciphers.txt     | 3
+www-vaastumangaal-com            | Open ports               | www-vaastumangaal-com/poc/open-ports.txt      | 4
+www-vaastumangaal-com            | Redirect chain           | www-vaastumangaal-com/poc/redirect-chain.txt  | 3
+www-vaastumangaal-com            | ZAP evidence             | www-vaastumangaal-com/poc/zap-high-findings.txt | 0

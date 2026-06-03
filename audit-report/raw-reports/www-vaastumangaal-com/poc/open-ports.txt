@@ -1,0 +1,21 @@
+Starting Nmap 7.94SVN ( https://nmap.org ) at 2026-06-03 06:30 UTC
+Nmap scan report for www.vaastumangaal.com (104.21.7.52)
+Host is up (0.0012s latency).
+Other addresses for www.vaastumangaal.com (not scanned): 2606:4700:3030::6815:734 2606:4700:3035::ac43:87c5 172.67.135.197
+Not shown: 996 filtered tcp ports (no-response)
+Some closed ports may be reported as filtered due to --defeat-rst-ratelimit
+PORT     STATE SERVICE
+80/tcp   open  http
+443/tcp  open  https
+8080/tcp open  http-proxy
+8443/tcp open  https-alt
+
+Nmap done: 1 IP address (1 host up) scanned in 4.66 seconds
+
+BANNER GRAB RESULTS:
+
+Port 8080:
+Connection to www.vaastumangaal.com (2606:4700:3035::ac43:87c5) 8080 port [tcp/http-alt] succeeded!
+
+Port 8443:
+Connection to www.vaastumangaal.com (2606:4700:3030::6815:734) 8443 port [tcp/*] succeeded!

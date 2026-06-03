@@ -1,0 +1,28 @@
+=== SSL Certificate Report for www.vaastumangaal.com ===
+
+--- Certificate Expiry ---
+notBefore=May  6 12:26:57 2026 GMT
+notAfter=Aug  4 12:26:56 2026 GMT
+Days until expiry: 62
+
+--- Certificate Subject and SANs ---
+subject=CN = vaastumangaal.com
+issuer=C = US, O = Let's Encrypt, CN = E7
+X509v3 Subject Alternative Name: 
+    DNS:*.vaastumangaal.com, DNS:vaastumangaal.com
+
+--- Supported TLS Versions ---
+ssl3: 
+tls1: 4017020AB57A0000:error:0A0000BF:SSL routines:tls_setup_handshake:no protocols available:../ssl/statem/statem_lib.c:104:
+CONNECTED(00000003)
+New, (NONE), Cipher is (NONE)
+tls1_1: 40F7AA83CC760000:error:0A0000BF:SSL routines:tls_setup_handshake:no protocols available:../ssl/statem/statem_lib.c:104:
+CONNECTED(00000003)
+New, (NONE), Cipher is (NONE)
+tls1_2: CONNECTED(00000003)
+New, TLSv1.2, Cipher is ECDHE-ECDSA-CHACHA20-POLY1305
+    Cipher    : ECDHE-ECDSA-CHACHA20-POLY1305
+tls1_3: CONNECTED(00000003)
+New, TLSv1.3, Cipher is TLS_AES_256_GCM_SHA384
+
+--- testssl.sh ---
