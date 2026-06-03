@@ -2432,6 +2432,7 @@ def write_html(reports, output_path=None, link_prefix="", link_domain_reports=Tr
         <a href="#actions">Solutions</a>
         <a href="#targets">Services</a>
         <a href="#targets">Resources</a>
+        <a href="#compliance">Compliance</a>
         <a class="nav-cta" href="{html_attr(link_prefix)}security-audit-report.docx">Open report</a>
       </div>
     </div>
@@ -2618,6 +2619,78 @@ def write_html(reports, output_path=None, link_prefix="", link_domain_reports=Tr
         <div class="no-results" id="noResults">No matching reports found.</div>
         {''.join(sections) if sections else '<section class="report-card"><h2>No reports found</h2><p class="empty">No downloaded reports were found.</p></section>'}
       </div>
+
+      <!-- Compliance Standards Section -->
+      <section class="compliance-section" id="compliance" style="grid-column: 1 / -1; margin-top: 32px; border-top: 1px solid var(--line); padding-top: 24px;">
+        <p class="section-label">Compliance Standards</p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-top: 16px;">
+          
+          <!-- ISO 27001 Card -->
+          <div class="report-card" style="margin-bottom: 0;">
+            <div class="report-card__stripe report-card__stripe--warning"></div>
+            <div class="report-card head" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; border: none; background: transparent; padding: 0; box-shadow: none;">
+              <div>
+                <p style="margin: 0 0 4px; font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase;">ISO 27001</p>
+                <h3 style="margin: 0; font-size: 18px; font-weight: 800; color: var(--ink); line-height: 1.2;">Information Security Management</h3>
+              </div>
+              <span class="badge badge--warning">Warning</span>
+            </div>
+            <p class="meaning" style="margin-bottom: 16px; font-size: 13px; font-weight: 600; color: var(--ink);">Action Required</p>
+            <div class="remedies">
+              <div class="remedies__title" style="font-size: 12px; font-weight: 700; color: var(--ink); text-transform: uppercase; margin-bottom: 8px;">Scope of Coverage</div>
+              <ul style="margin: 0; padding-left: 18px; font-size: 13px; color: var(--ink); line-height: 1.5;">
+                <li>Annex A.12 (Operations Security)</li>
+                <li>Annex A.14 (System Acquisition & Development)</li>
+                <li>Annex A.18 (Compliance)</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- SOC 2 Card -->
+          <div class="report-card" style="margin-bottom: 0;">
+            <div class="report-card__stripe report-card__stripe--critical"></div>
+            <div class="report-card head" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; border: none; background: transparent; padding: 0; box-shadow: none;">
+              <div>
+                <p style="margin: 0 0 4px; font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase;">SOC 2</p>
+                <h3 style="margin: 0; font-size: 18px; font-weight: 800; color: var(--ink); line-height: 1.2;">Service Organization Control</h3>
+              </div>
+              <span class="badge badge--critical">Critical</span>
+            </div>
+            <p class="meaning" style="margin-bottom: 16px; font-size: 13px; font-weight: 600; color: var(--ink);">Exposed secrets violate SOC 2 CC6</p>
+            <div class="remedies">
+              <div class="remedies__title" style="font-size: 12px; font-weight: 700; color: var(--ink); text-transform: uppercase; margin-bottom: 8px;">Scope of Coverage</div>
+              <ul style="margin: 0; padding-left: 18px; font-size: 13px; color: var(--ink); line-height: 1.5;">
+                <li>CC6 (Logical Access — exposed credentials)</li>
+                <li>CC7 (System Operations — monitoring)</li>
+                <li>CC9 (Risk Mitigation — critical findings)</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Cyber Essentials Card -->
+          <div class="report-card" style="margin-bottom: 0;">
+            <div class="report-card__stripe report-card__stripe--warning"></div>
+            <div class="report-card head" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; border: none; background: transparent; padding: 0; box-shadow: none;">
+              <div>
+                <p style="margin: 0 0 4px; font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase;">Cyber Essentials / CAL2</p>
+                <h3 style="margin: 0; font-size: 18px; font-weight: 800; color: var(--ink); line-height: 1.2;">Cyber Assurance Level 2</h3>
+              </div>
+              <span class="badge badge--warning">Warning</span>
+            </div>
+            <p class="meaning" style="margin-bottom: 16px; font-size: 13px; font-weight: 600; color: var(--ink);">Action Required</p>
+            <div class="remedies">
+              <div class="remedies__title" style="font-size: 12px; font-weight: 700; color: var(--ink); text-transform: uppercase; margin-bottom: 8px;">Scope of Coverage</div>
+              <ul style="margin: 0; padding-left: 18px; font-size: 13px; color: var(--ink); line-height: 1.5;">
+                <li>Boundary Firewalls</li>
+                <li>Patch Management</li>
+                <li>Malware Protection</li>
+                <li>Access Control</li>
+              </ul>
+            </div>
+          </div>
+
+        </div>
+      </section>
     </main>
   </div>
   <script>
