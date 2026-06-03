@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Astrology Report Generator</title>
+  <meta name="description" content="Generate a premium astrology report including planetary placements, zodiac readings, and a dynamic North Indian Kundli birth chart.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="shell">
+    <div class="container">
+      <header>
+        <h1>Astrology Report Generator</h1>
+        <p>Discover your celestial blueprint</p>
+      </header>
+
+      <!-- Birth Details Input Form -->
+      <section class="form-panel" id="inputSection">
+        <form id="astrologyForm">
+          <div class="form-grid">
+            <div class="input-group">
+              <label for="birthName">Full Name</label>
+              <input type="text" id="birthName" required placeholder="Enter full name">
+            </div>
+            
+            <div class="input-group">
+              <label for="birthPlace">Place of Birth</label>
+              <input type="text" id="birthPlace" placeholder="City, State, Country (e.g., London, UK)">
+            </div>
+            
+            <div class="input-group">
+              <label for="dob">Date of Birth</label>
+              <input type="date" id="dob" required>
+            </div>
+            
+            <div class="input-group">
+              <label for="birthTime">Time of Birth</label>
+              <input type="time" id="birthTime" required>
+            </div>
+          </div>
+          
+          <button type="submit" class="btn-submit">Generate Astrology Report</button>
+        </form>
+      </section>
+
+      <!-- Generated Astrology Report Panel -->
+      <main class="report-panel" id="reportPanel" aria-label="Generated astrology report">
+        <div class="report-header">
+          <h2 id="respName">Jane Doe</h2>
+          <div class="birth-details-tagline">
+            Born on <span id="respDob">March 21, 1995 (Tuesday)</span> at <span id="respTime">08:30 AM</span> in <span id="respPlace">London, UK</span>
+          </div>
+        </div>
+
+        <!-- Astrological Sign Overview Cards -->
+        <section class="overview-grid" aria-label="Sign overview">
+          <div class="overview-card">
+            <h3>Sun Sign (Zodiac)</h3>
+            <div class="card-value" id="valSunSign">♈ Aries</div>
+            <div class="card-detail" id="detailSunSign">Element: Fire | Ruler: Mars</div>
+          </div>
+          
+          <div class="overview-card">
+            <h3>Moon Sign</h3>
+            <div class="card-value" id="valMoonSign">♌ Leo</div>
+            <div class="card-detail" id="detailMoonSign">Element: Fire | Ruler: Sun</div>
+          </div>
+          
+          <div class="overview-card">
+            <h3>Ascendant (Rising)</h3>
+            <div class="card-value" id="valAscendant">♉ Taurus</div>
+            <div class="card-detail" id="detailAscendant">Element: Earth | Ruler: Venus</div>
+          </div>
+        </section>
+
+        <!-- Dynamic Chart & Elemental Distribution -->
+        <div class="mid-section">
+          <!-- North Indian Birth Chart -->
+          <section class="chart-box">
+            <h3>Birth Chart (North Indian Kundli)</h3>
+            <svg class="astrology-chart-svg" id="chartSvg" viewBox="0 0 320 320" role="img" aria-label="North Indian Kundli birth chart showing planetary positions in houses">
+              <!-- Dynamically drawn via JS -->
+            </svg>
+          </section>
+
+          <!-- Elemental Balance -->
+          <section class="element-box">
+            <h3>Elemental Balance</h3>
+            
+            <div class="element-row">
+              <div class="element-label">
+                <span>🔥 Fire</span>
+                <span id="pctFire">0%</span>
+              </div>
+              <div class="element-bar-container">
+                <div class="element-bar element-bar--fire" id="barFire"></div>
+              </div>
+            </div>
+
+            <div class="element-row">
+              <div class="element-label">
+                <span>⛰️ Earth</span>
+                <span id="pctEarth">0%</span>
+              </div>
+              <div class="element-bar-container">
+                <div class="element-bar element-bar--earth" id="barEarth"></div>
+              </div>
+            </div>
+
+            <div class="element-row">
+              <div class="element-label">
+                <span>💨 Air</span>
+                <span id="pctAir">0%</span>
+              </div>
+              <div class="element-bar-container">
+                <div class="element-bar element-bar--air" id="barAir"></div>
+              </div>
+            </div>
+
+            <div class="element-row">
+              <div class="element-label">
+                <span>💧 Water</span>
+                <span id="pctWater">0%</span>
+              </div>
+              <div class="element-bar-container">
+                <div class="element-bar element-bar--water" id="barWater"></div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Planetary Placements Table -->
+        <section class="placements-table-box">
+          <h3>Planetary Placements</h3>
+          <table class="placements-table" id="placementsTable">
+            <thead>
+              <tr>
+                <th>Planet</th>
+                <th>Sign</th>
+                <th>House</th>
+                <th>Degree</th>
+                <th>Element</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Dynamically populated via JS -->
+            </tbody>
+          </table>
+        </section>
+
+        <!-- Personality Readings & Interpretations -->
+        <section class="readings-box" aria-label="Personalized astrological readings">
+          <div class="reading-section">
+            <h4 id="titleSunReading">Sun Sign Interpretation</h4>
+            <p id="sunSignReading">...</p>
+          </div>
+          
+          <div class="reading-section">
+            <h4 id="titleAscReading">Rising Sign (Ascendant) Interpretation</h4>
+            <p id="ascSignReading">...</p>
+          </div>
+          
+          <div class="reading-section">
+            <h4 id="titleMoonReading">Moon Sign (Emotional Core)</h4>
+            <p id="moonSignReading">...</p>
+          </div>
+        </section>
+
+        <!-- Print & Reset CTA Buttons -->
+        <div class="actions-footer">
+          <button class="btn-action btn-action--reset" id="btnReset" type="button">Reset Form</button>
+          <button class="btn-action btn-action--print" id="btnPrint" type="button">Print / Save PDF</button>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
