@@ -930,6 +930,13 @@ def reset_bundle_dir():
         RAW_REPORTS_DIR.mkdir(parents=True)
 
 
+def get_main_html_name(reports):
+    domain_reports = [r for r in reports if r["name"] not in ("proof-of-concern-summary", "repository")]
+    if len(domain_reports) == 1:
+        return f"{domain_reports[0]['name']}.html"
+    return "index.html"
+
+
 def write_markdown(reports):
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     status_totals = {"critical": 0, "high": 0, "warning": 0, "ok": 0}
@@ -994,12 +1001,13 @@ def write_markdown(reports):
     else:
         lines.append("- Keep the current monitoring schedule and rerun scans after website or infrastructure changes.")
 
+    main_html = get_main_html_name(reports)
     lines.extend(
         [
             "",
             "## Files in this bundle",
             "",
-            "- Open `index.html` for the simple dashboard.",
+            f"- Open `{main_html}` for the simple dashboard.",
             "- Open `security-audit-report.docx` for the Word-compatible report.",
             "- Open `raw-reports/` for original scanner artifacts.",
             "",
@@ -1073,7 +1081,9 @@ def domain_report_path(report_name):
     return f"reports/{report_name}/index.html"
 
 
-def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_reports=True):
+def write_html(reports, output_path=None, link_prefix="", link_domain_reports=True):
+    if output_path is None:
+        output_path = BUNDLE_DIR / get_main_html_name(reports)
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     logo_src = logo_data_uri()
     counts = all_counts(reports)
@@ -1089,13 +1099,23 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
         single_domain = get_readable_domain(domain_reports[0])
 
     if single_domain:
-        header_title_html = f"""<h1 class="hero-main-title">Security Audit for <span class="hero-domain-highlight">{html.escape(single_domain)}</span></h1>"""
+        header_title_html = f"""
+        <h1 class="hero-main-title">
+          <span class="hero-pre-title">Security Audit for</span>
+          <span class="hero-domain-highlight">{html.escape(single_domain)}</span>
+        </h1>
+        """
     else:
         domain_names = [get_readable_domain(r) for r in domain_reports]
         domain_list = ", ".join(domain_names[:3])
         if len(domain_reports) > 3:
             domain_list += f" and {len(domain_reports) - 3} more"
-        header_title_html = f"""<h1 class="hero-main-title">Security Audit: <span class="hero-domain-highlight">{html.escape(domain_list or "All Targets")}</span></h1>"""
+        header_title_html = f"""
+        <h1 class="hero-main-title">
+          <span class="hero-pre-title">Security Audit Report</span>
+          <span class="hero-domain-highlight">{html.escape(domain_list or "All Targets")}</span>
+        </h1>
+        """
     attention_count = status_totals["critical"] + status_totals["high"] + status_totals["warning"]
     priority_reports = sorted_reports_by_priority(reports)[:4]
     score = aggregate_score(reports, health_score_for_report)
@@ -2324,22 +2344,32 @@ def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_rep
     }}
     .hero-main-title {{
       margin: 16px 0 24px;
-      font-size: 38px;
-      font-weight: 900;
-      line-height: 1.15;
-      color: #ffffff;
-      letter-spacing: -0.02em;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: flex-start;
+    }}
+    .hero-pre-title {{
+      font-size: 14px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.6);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      line-height: 1;
     }}
     .hero-domain-highlight {{
       display: inline-block;
       position: relative;
+      font-size: 38px;
+      font-weight: 900;
       color: #38bdf8;
       background: rgba(56, 189, 248, 0.08);
       border: 1px solid rgba(56, 189, 248, 0.3);
-      padding: 4px 12px;
+      padding: 6px 14px;
       border-radius: 8px;
       text-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
       animation: pulse-glow 2s infinite alternate;
+      line-height: 1.2;
     }}
     @keyframes pulse-glow {{
       0% {{
@@ -2773,9 +2803,19 @@ def main():
     reset_bundle_dir()
     reports = collect_reports()
     write_markdown(reports)
-    write_html(reports)
+    
+    main_name = get_main_html_name(reports)
+    html_path = BUNDLE_DIR / main_name
+    write_html(reports, output_path=html_path)
     write_domain_html_reports(reports)
     write_docx(reports)
+    
+    if main_name != "index.html":
+        try:
+            shutil.copy2(html_path, BUNDLE_DIR / "index.html")
+        except Exception as e:
+            print(f"Warning: could not copy to index.html: {e}")
+            
     print(f"Generated {BUNDLE_DIR}/ with HTML, DOCX, Markdown, and raw reports.")
 
 
