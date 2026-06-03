@@ -2787,9 +2787,19 @@ def main():
     reset_bundle_dir()
     reports = collect_reports()
     write_markdown(reports)
-    write_html(reports)
+    
+    main_name = get_main_html_name(reports)
+    html_path = BUNDLE_DIR / main_name
+    write_html(reports, output_path=html_path)
     write_domain_html_reports(reports)
     write_docx(reports)
+    
+    if main_name != "index.html":
+        try:
+            shutil.copy2(html_path, BUNDLE_DIR / "index.html")
+        except Exception as e:
+            print(f"Warning: could not copy to index.html: {e}")
+            
     print(f"Generated {BUNDLE_DIR}/ with HTML, DOCX, Markdown, and raw reports.")
 
 
