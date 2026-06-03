@@ -86,7 +86,7 @@ while IFS=$'\t' read -r url slug; do
   {
     echo ""
     echo "BANNER GRAB RESULTS:"
-    grep -E '^[0-9]+/tcp[[:space:]]+open' "$open_ports_file" | awk -F/ '{print $1}' | while read -r port; do
+    (grep -E '^[0-9]+/tcp[[:space:]]+open' "$open_ports_file" || true) | awk -F/ '{print $1}' | while read -r port; do
       [ -n "$port" ] || continue
       if [ "$port" = "80" ] || [ "$port" = "443" ]; then
         continue
