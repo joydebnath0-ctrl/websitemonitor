@@ -104,6 +104,9 @@ while IFS=$'\t' read -r url slug; do
 
   zap_evidence_file="${poc_dir}/zap-high-findings.txt"
   zap_json="all-reports/${slug}/zap/zap-full-scan.json"
+  if [ ! -s "$zap_json" ]; then
+    zap_json="all-reports/${slug}/zap/zap-baseline.json"
+  fi
   if [ -s "$zap_json" ]; then
     python3 - "$zap_json" > "$zap_evidence_file" <<'PY'
 import json

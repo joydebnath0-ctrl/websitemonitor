@@ -13,6 +13,9 @@ config/domains.txt                            Default target domain list
 scripts/security/common.sh                    Shared script helpers
 scripts/security/build_target_matrix.py       Builds the GitHub Actions domain matrix
 scripts/security/run_domain_scans.sh          Runs all domain scanners for every configured target
+scripts/security/run_zap_scans.sh             Runs time-limited OWASP ZAP scans
+scripts/security/run_deep_info_scan.sh        Optional deep DNS, HTTP, TLS, timing, and service evidence
+scripts/security/capture_page_speed.sh        Captures per-domain curl timing metrics for page speed details
 scripts/security/collect_poc_evidence.sh      Captures proof-of-concern evidence files
 scripts/security/generate_report_bundle.py    Builds HTML, DOCX, Markdown, and raw report bundle
 scripts/security/ssl_tls_scan.sh              TLS and certificate checks
@@ -40,6 +43,10 @@ manually. If you leave the manual input blank, the workflow uses
 For a one-off run, you can provide comma-separated or newline-separated URLs in
 the workflow dispatch input. Those values override `config/domains.txt` for that
 run only.
+
+Manual runs also support `scan_depth`. Use `standard` for normal fast scans, or
+`deep` to gather extra HTTP fingerprinting, DNS records, TLS certificate chain,
+page timing, common discovery files, and service-enumeration evidence.
 
 The workflow also runs on pushes and pull requests to `main` or `master`, and on
 a weekly Monday schedule at 08:00 UTC.
@@ -72,7 +79,8 @@ It does not upload each scanner result as a separate GitHub artifact.
 
 Inside `full-security-audit` you will find:
 
-- `index.html` - a simplified visual dashboard with a health score, priority actions, filters, search, and organized scanner sections
+- `index.html` - a simplified visual dashboard with overall scores, priority actions, filters, search, and organized scanner sections
+- `reports/<slug>/index.html` - a separate per-domain HTML report with domain-specific health and page-speed scores
 - `security-audit-report.docx` - one Word-compatible document containing all reports
 - `security-summary.md` - a Markdown summary
 - `raw-reports/` - all original scanner artifacts in one place

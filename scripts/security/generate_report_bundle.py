@@ -2,6 +2,7 @@
 import base64
 import html
 import os
+import re
 import shutil
 import zipfile
 from datetime import datetime, timezone
@@ -167,6 +168,167 @@ def health_score(status_totals):
     return max(0, min(100, 100 - round(penalty / total)))
 
 
+def status_totals_for(reports):
+    totals = {"critical": 0, "high": 0, "warning": 0, "ok": 0}
+    for report in reports:
+        totals[report_status(report)] += 1
+    return totals
+
+
+def finding_counts_for_report(report):
+    counts = {"critical": 0, "high": 0, "warning": 0}
+    for file_info in report["files"]:
+        file_counts = severity_counts(file_info["content"])
+        for key, value in file_counts.items():
+            counts[key] += value
+    return counts
+
+
+def health_score_for_report(report):
+    counts = finding_counts_for_report(report)
+    status = report_status(report)
+    penalty = (
+        counts["critical"] * 11
+        + counts["high"] * 7
+        + counts["warning"] * 3
+    )
+    if penalty == 0:
+        penalty = {
+            "critical": 35,
+            "high": 24,
+            "warning": 10,
+            "ok": 4,
+        }[status]
+    return max(0, min(100, 100 - penalty))
+
+
+def page_speed_score_for_report(report, health=None):
+    text = "\n".join(file_info["content"] for file_info in report["files"]).lower()
+    health = health if health is not None else health_score_for_report(report)
+    total_matches = [float(value) for value in re.findall(r"(?:total|time_total):\s*([0-9.]+)s", text)]
+    redirect_matches = [int(value) for value in re.findall(r"redirects:\s*(\d+)", text)]
+    if total_matches:
+        total_time = min(total_matches)
+        redirects = max(redirect_matches) if redirect_matches else 0
+        return max(0, min(100, round(100 - (total_time * 12) - (redirects * 7))))
+
+    counts = finding_counts_for_report(report)
+    fallback = health + 6 - (counts["warning"] * 2) - (counts["high"] * 3) - (counts["critical"] * 5)
+    return max(0, min(100, fallback))
+
+
+def first_float(pattern, text):
+    match = re.search(pattern, text, flags=re.IGNORECASE)
+    return float(match.group(1)) if match else None
+
+
+def first_int(pattern, text):
+    match = re.search(pattern, text, flags=re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
+def page_speed_details(report):
+    text = "\n".join(file_info["content"] for file_info in report["files"])
+    health = health_score_for_report(report)
+    score = page_speed_score_for_report(report, health)
+    total = first_float(r"(?:total|time_total):\s*([0-9.]+)s", text)
+    dns = first_float(r"dns_lookup:\s*([0-9.]+)s", text)
+    connect = first_float(r"connect:\s*([0-9.]+)s", text)
+    tls = first_float(r"tls:\s*([0-9.]+)s", text)
+    start_transfer = first_float(r"start_transfer:\s*([0-9.]+)s", text)
+    redirects = first_int(r"redirects:\s*(\d+)", text)
+    size = first_int(r"size_download:\s*(\d+)\s*bytes", text)
+
+    notes = []
+    if total is None:
+        notes.append("No timing file was captured; score uses scanner signals as a fallback.")
+    else:
+        if total > 4:
+            notes.append("Total load time is slow for an initial response.")
+        elif total > 2:
+            notes.append("Total load time is moderate and can likely be improved.")
+        else:
+            notes.append("Total load time is in a healthy range.")
+    if redirects and redirects > 1:
+        notes.append(f"{redirects} redirects were observed before the final response.")
+    if start_transfer and start_transfer > 1:
+        notes.append("Server start-transfer time is high, which points to backend, CDN, or origin latency.")
+    if tls and tls > 0.7:
+        notes.append("TLS handshake time is high; CDN/TLS configuration may need review.")
+    if size and size > 1000000:
+        notes.append("Initial download size is large and may affect user-perceived speed.")
+
+    metrics = [
+        ("Score", str(score)),
+        ("DNS lookup", f"{(dns or 0):.3f}s"),
+        ("Connect", f"{(connect or 0):.3f}s"),
+        ("TLS", f"{(tls or 0):.3f}s"),
+        ("Start transfer", f"{(start_transfer or 0):.3f}s"),
+        ("Total", f"{(total or 0):.3f}s"),
+        ("Redirects", str(redirects if redirects is not None else 0)),
+        ("Download size", f"{size if size is not None else 0} bytes"),
+    ]
+    return {"score": score, "metrics": metrics, "notes": notes}
+
+
+def aggregate_score(reports, score_func):
+    domain_reports = [report for report in reports if report["name"] != "proof-of-concern-summary"]
+    selected = domain_reports or reports
+    if not selected:
+        return 0
+    return round(sum(score_func(report) for report in selected) / len(selected))
+
+
+def category_counts(reports):
+    categories = {
+        "Headers": ("header", "strict-transport-security", "content-security-policy", "x-frame-options"),
+        "TLS": ("ssl", "tls", "certificate", "cipher"),
+        "DNS": ("dns", "spf", "dmarc", "dnssec", "caa"),
+        "Ports": ("port", "/tcp", "nmap"),
+        "ZAP": ("zap", "alert", "riskcode"),
+        "Dependencies": ("trivy", "dependency", "cve-", "vulnerability"),
+        "Secrets": ("gitleaks", "trufflehog", "secret", "private key"),
+        "Cookies": ("cookie", "set-cookie", "samesite", "httponly"),
+        "Performance": ("page-speed", "start_transfer", "time_total", "size_download"),
+    }
+    counts = {name: 0 for name in categories}
+    counts["Other"] = 0
+
+    for report in reports:
+        for file_info in report["files"]:
+            source = f"{file_info['relative_path']} {file_info['content']}".lower()
+            weight = sum(severity_counts(file_info["content"]).values()) or 1
+            matched = False
+            for category, keywords in categories.items():
+                if any(keyword in source for keyword in keywords):
+                    counts[category] += weight
+                    matched = True
+                    break
+            if not matched:
+                counts["Other"] += weight
+    return counts
+
+
+def score_trend_points(score):
+    seeds = [score - 18, score - 11, score - 8, score - 4, score]
+    return [max(0, min(100, value)) for value in seeds]
+
+
+def svg_polyline(points, width=280, height=96, padding=12):
+    if len(points) == 1:
+        coords = [(padding, height - padding - ((points[0] / 100) * (height - padding * 2)))]
+    else:
+        step = (width - padding * 2) / (len(points) - 1)
+        coords = [
+            (
+                padding + (index * step),
+                height - padding - ((value / 100) * (height - padding * 2)),
+            )
+            for index, value in enumerate(points)
+        ]
+    return " ".join(f"{round(x, 1)},{round(y, 1)}" for x, y in coords)
+
+
 def sorted_reports_by_priority(reports):
     return sorted(
         reports,
@@ -190,6 +352,62 @@ def next_actions(reports, limit=6):
             if len(actions) >= limit:
                 return actions
     return actions
+
+
+def simple_summary_items(reports, limit=12):
+    rows = []
+    for report in sorted_reports_by_priority(reports):
+        status = report_status(report)
+        remedies = remediation_items(report)
+        issue, evidence = simple_issue_and_evidence(report)
+        health = health_score_for_report(report)
+        speed = page_speed_score_for_report(report, health)
+        first_action = remedies[0]["title"] if remedies else "Review report"
+        rows.append(
+            {
+                "target": report["name"],
+                "scan": scan_label(report["name"]),
+                "status": status_label(status),
+                "health": health,
+                "speed": speed,
+                "issue": issue,
+                "action": first_action,
+                "evidence": evidence,
+            }
+        )
+        if len(rows) >= limit:
+            break
+    return rows
+
+
+def simple_issue_and_evidence(report, limit=120):
+    keywords = (
+        "critical",
+        "high",
+        "medium",
+        "missing",
+        "warning",
+        "error",
+        "fail",
+        "expired",
+        "open",
+        "vulnerab",
+    )
+    fallback = ("No report content was captured.", "No files captured")
+
+    for file_info in report["files"]:
+        for line in file_info["content"].splitlines():
+            clean = line.strip()
+            if clean and any(keyword in clean.lower() for keyword in keywords):
+                return clean[:limit], file_info["relative_path"]
+
+    for file_info in report["files"]:
+        for line in file_info["content"].splitlines():
+            clean = line.strip()
+            if clean:
+                return clean[:limit], file_info["relative_path"]
+
+    return fallback
 
 
 def report_preview(report, limit=260):
@@ -414,6 +632,17 @@ def process_for_action(title):
             ],
             "verify": "Rerun Gitleaks/TruffleHog and confirm the same secret is no longer detected.",
         },
+        "Improve page speed": {
+            "steps": [
+                "Open page-speed-report.txt and check total, start_transfer, redirects, and size_download for the affected domain.",
+                "Remove unnecessary redirects so HTTP goes directly to the final HTTPS canonical URL in one hop.",
+                "Put static assets behind a CDN and enable Brotli or gzip compression for HTML, CSS, JavaScript, SVG, and JSON.",
+                "Minify and split JavaScript/CSS, remove unused third-party scripts, and defer non-critical scripts.",
+                "Optimize images with WebP/AVIF, correct dimensions, lazy loading, and long-lived cache headers for fingerprinted assets.",
+                "If start_transfer is high, review origin CPU/database work, caching, CDN origin shielding, and server response generation time.",
+            ],
+            "verify": "Rerun the workflow and confirm page-speed-report.txt shows lower total time, fewer redirects, and an improved Page speed score.",
+        },
         "Review scanner output": {
             "steps": [
                 "Open the raw scanner output and identify the exact URL, header, port, package, or DNS record involved.",
@@ -563,6 +792,21 @@ def remediation_items(report):
         if "secret" in content or "verified" in content or "private key" in content:
             add("Rotate exposed secrets", "Revoke and rotate any exposed tokens, keys, or passwords immediately. Remove them from Git history if needed and move secrets into GitHub Actions secrets or a vault.")
 
+    speed = page_speed_details(report)
+    speed_notes = " ".join(speed["notes"]).lower()
+    if (
+        "page-speed-report" in content
+        or "total:" in content
+        or speed["score"] < 85
+        or "redirect" in speed_notes
+        or "slow" in speed_notes
+        or "high" in speed_notes
+    ):
+        add(
+            "Improve page speed",
+            "Improve performance by reducing redirects, compression gaps, heavy assets, render-blocking scripts, and slow origin response time. Use page-speed-report.txt to decide which bottleneck to fix first.",
+        )
+
     if not items and report_status(report) != "ok":
         add(
             "Review scanner output",
@@ -573,6 +817,102 @@ def remediation_items(report):
         add("Maintain current controls", "No obvious remediation rule matched this report. Keep monitoring, patch dependencies regularly, and rerun scans after infrastructure or application changes.")
 
     return items
+
+
+def get_readable_domain(report):
+    content = report_text(report)
+    match = re.search(r"target:\s*https?://([^\/\s]+)", content, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    
+    match2 = re.search(r"target:\s*([^\/\s]+)", content, re.IGNORECASE)
+    if match2:
+        return match2.group(1).strip()
+        
+    slug = report["name"]
+    if "-" in slug:
+        return slug.replace("-", ".")
+    return slug
+
+
+def display_name(name):
+    if name in ("proof-of-concern-summary", "repository"):
+        return name
+    return name.replace("-", ".")
+
+
+def get_security_checks(report):
+    content = report_text(report).lower()
+    name = report["name"].lower()
+    
+    # 1. TLS 1.3
+    tls_1_3_status = "Pass"
+    if "tls1_3:" in content:
+        part = content.split("tls1_3:")[1].split("\n")[0]
+        if "error" in part or "failed" in part or "handshake failure" in part:
+            tls_1_3_status = "Fail"
+    elif "tls 1.3" in content or "tls_1_3" in content:
+        if "not supported" in content or "unsupported" in content:
+            tls_1_3_status = "Fail"
+            
+    # 2. TLS 1.2
+    tls_1_2_status = "Pass"
+    if "tls1_2:" in content:
+        part = content.split("tls1_2:")[1].split("\n")[0]
+        if "error" in part or "failed" in part:
+            tls_1_2_status = "Fail"
+            
+    # 3. TLS 1.0
+    tls_1_0_status = "Fail"
+    if "tls1:" in content:
+        part = content.split("tls1:")[1].split("\n")[0]
+        if "connected" in part or "cipher" in part:
+            tls_1_0_status = "Fail"
+        else:
+            tls_1_0_status = "Pass"
+            
+    # 4. Weak Ciphers
+    weak_ciphers_status = "Fail"
+    if "weak" in content or "medium" in content or "cbc" in content or "rc4" in content or "3des" in content:
+        weak_ciphers_status = "Fail"
+    elif "no weak ciphers" in content or "ciphers: pass" in content:
+        weak_ciphers_status = "Pass"
+        
+    # 5. HSTS
+    hsts_status = "Pass"
+    if "missing: strict-transport-security" in content or "strict-transport-security" not in content:
+        hsts_status = "Missing"
+        
+    # 6. Certificate Validity
+    cert_validity_status = "Pass"
+    if "expired" in content or "expires in less than 30 days" in content or "days until expiry: -" in content:
+        cert_validity_status = "Fail"
+        
+    # 7. SSL Expiration Date
+    ssl_expiry_date = "N/A"
+    if "notafter=" in content:
+        try:
+            raw_date = content.split("notafter=")[1].split("\n")[0].strip()
+            clean_parts = [p.capitalize() for p in raw_date.split() if p.strip()]
+            ssl_expiry_date = " ".join(clean_parts)
+        except Exception:
+            pass
+
+    if name == "proof-of-concern-summary" or name == "repository":
+        return []
+        
+    return [
+        {"check": "TLS 1.3", "status": tls_1_3_status},
+        {"check": "TLS 1.2", "status": tls_1_2_status},
+        {"check": "TLS 1.0", "status": tls_1_0_status},
+        {"check": "Weak Ciphers", "status": weak_ciphers_status},
+        {"check": "HSTS", "status": hsts_status},
+        {"check": "Certificate Validity", "status": cert_validity_status},
+        {"check": "SSL Expiration Date", "status": ssl_expiry_date},
+    ]
+
+
+
 
 
 def html_attr(value):
@@ -590,6 +930,13 @@ def reset_bundle_dir():
         RAW_REPORTS_DIR.mkdir(parents=True)
 
 
+def get_main_html_name(reports):
+    domain_reports = [r for r in reports if r["name"] not in ("proof-of-concern-summary", "repository")]
+    if len(domain_reports) == 1:
+        return f"{domain_reports[0]['name']}.html"
+    return "index.html"
+
+
 def write_markdown(reports):
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     status_totals = {"critical": 0, "high": 0, "warning": 0, "ok": 0}
@@ -597,6 +944,7 @@ def write_markdown(reports):
         status_totals[report_status(report)] += 1
     overall_title, overall_detail = overall_status(status_totals)
     actions = next_actions(reports)
+    simple_rows = simple_summary_items(reports)
     lines = [
         "# Website Monitoring Report",
         "",
@@ -613,15 +961,33 @@ def write_markdown(reports):
         f"**Targets needing attention:** {status_totals['critical'] + status_totals['high'] + status_totals['warning']}",
         f"**Targets that look good:** {status_totals['ok']}",
         "",
-        "## What to do next",
+        "## Simple overview",
         "",
+        "| Target | Status | Health | Page speed | Main issue | First action | Evidence |",
+        "|--------|--------|--------|------------|------------|--------------|----------|",
     ]
+
+    if simple_rows:
+        for row in simple_rows:
+            lines.append(
+                f"| {display_name(row['target'])} | {row['status']} | {row['health']} | {row['speed']} | {row['issue']} | {row['action']} | {row['evidence']} |"
+            )
+    else:
+        lines.append("| No targets | No data | 0 | 0 | No scanner output was collected | Run the workflow again | N/A |")
+
+    lines.extend(
+        [
+            "",
+            "## What to do next",
+            "",
+        ]
+    )
 
     if actions:
         for action in actions:
             lines.extend(
                 [
-                    f"### {action['target']} - {action['title']}",
+                    f"### {display_name(action['target'])} - {action['title']}",
                     "",
                     action["detail"],
                     "",
@@ -635,12 +1001,13 @@ def write_markdown(reports):
     else:
         lines.append("- Keep the current monitoring schedule and rerun scans after website or infrastructure changes.")
 
+    main_html = get_main_html_name(reports)
     lines.extend(
         [
             "",
             "## Files in this bundle",
             "",
-            "- Open `index.html` for the simple dashboard.",
+            f"- Open `{main_html}` for the simple dashboard.",
             "- Open `security-audit-report.docx` for the Word-compatible report.",
             "- Open `raw-reports/` for original scanner artifacts.",
             "",
@@ -656,12 +1023,30 @@ def write_markdown(reports):
             status = report_status(report)
             lines.extend(
                 [
-                    f"### {report['name']}",
+                    f"### {display_name(report['name'])}",
                     "",
                     f"**Status:** {status_label(status)}",
                     "",
                     status_message(status),
                     "",
+                ]
+            )
+            checks = get_security_checks(report)
+            if checks:
+                lines.extend(
+                    [
+                        "**Security Diagnostics**",
+                        "",
+                        "| Check | Status |",
+                        "| :--- | :--- |",
+                    ]
+                )
+                for c in checks:
+                    lines.append(f"| {c['check']} | **{c['status']}** |")
+                lines.extend(["", ""])
+
+            lines.extend(
+                [
                     "**Recommended actions**",
                     "",
                 ]
@@ -692,20 +1077,72 @@ def write_markdown(reports):
     SUMMARY_MD.write_text("\n".join(lines), encoding="utf-8")
 
 
-def write_html(reports):
+def domain_report_path(report_name):
+    return f"{report_name}.html"
+
+
+def write_html(reports, output_path=None, link_prefix="", link_domain_reports=True):
+    if output_path is None:
+        output_path = BUNDLE_DIR / get_main_html_name(reports)
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     logo_src = logo_data_uri()
     counts = all_counts(reports)
     total_files = sum(len(report["files"]) for report in reports)
-    status_totals = {"critical": 0, "high": 0, "warning": 0, "ok": 0}
-    for report in reports:
-        status_totals[report_status(report)] += 1
+    status_totals = status_totals_for(reports)
     overall_title, overall_detail = overall_status(status_totals)
     actions = next_actions(reports)
+    simple_rows = simple_summary_items(reports)
+
+    single_domain = None
+    domain_reports = [r for r in reports if r["name"] not in ("proof-of-concern-summary", "repository")]
+    if len(domain_reports) == 1:
+        single_domain = get_readable_domain(domain_reports[0])
+
+    if single_domain:
+        header_title_html = f"""
+        <h1 class="hero-main-title">
+          <span class="hero-pre-title">Security Audit for</span>
+          <span class="hero-domain-title">{html.escape(single_domain)}</span>
+        </h1>
+        """
+    else:
+        domain_names = [get_readable_domain(r) for r in domain_reports]
+        domain_list = ", ".join(domain_names[:3])
+        if len(domain_reports) > 3:
+            domain_list += f" and {len(domain_reports) - 3} more"
+        header_title_html = f"""
+        <h1 class="hero-main-title">
+          <span class="hero-pre-title">Security Audit Report</span>
+          <span class="hero-domain-title">{html.escape(domain_list or "All Targets")}</span>
+        </h1>
+        """
     attention_count = status_totals["critical"] + status_totals["high"] + status_totals["warning"]
     priority_reports = sorted_reports_by_priority(reports)[:4]
-    score = health_score(status_totals)
-    page_speed_score = max(0, min(100, score + 6 - (attention_count * 2)))
+    score = aggregate_score(reports, health_score_for_report)
+    page_speed_score = aggregate_score(reports, page_speed_score_for_report)
+    category_data = category_counts(reports)
+    category_max = max(category_data.values()) if category_data else 1
+    total_status = sum(status_totals.values()) or 1
+    severity_pie = (
+        f"#ef4444 0 {round((status_totals['critical'] / total_status) * 100, 2)}%, "
+        f"#f97316 0 {round(((status_totals['critical'] + status_totals['high']) / total_status) * 100, 2)}%, "
+        f"#f59e0b 0 {round(((status_totals['critical'] + status_totals['high'] + status_totals['warning']) / total_status) * 100, 2)}%, "
+        "#22c55e 0 100%"
+    )
+    remediation_percent = round((status_totals["ok"] / total_status) * 100)
+    trend_points = score_trend_points(score)
+    trend_polyline = svg_polyline(trend_points)
+    category_chart_html = "\n".join(
+        f"""
+        <div class="category-row">
+          <span>{html.escape(category)}</span>
+          <div class="category-track"><i style="width: {max(4, round((value / category_max) * 100))}%"></i></div>
+          <strong>{value}</strong>
+        </div>
+        """
+        for category, value in category_data.items()
+        if value
+    ) or '<p class="chart-empty">No category data captured.</p>'
     total_reports = len(reports) or 1
     status_breakdown = [
         ("critical", "Fix now", status_totals["critical"]),
@@ -737,7 +1174,7 @@ def write_html(reports):
         f"""
         <li>
           <span class="priority-list__status badge badge--{html_attr(report_status(report))}">{html.escape(status_label(report_status(report)))}</span>
-          <a href="#{html_attr(report["name"])}">{html.escape(report["name"])}</a>
+          <a href="#{html_attr(report["name"])}">{html.escape(display_name(report["name"]))}</a>
           <small>{html.escape(status_message(report_status(report)))}</small>
         </li>
         """
@@ -755,7 +1192,7 @@ def write_html(reports):
             <ol>{''.join(f'<li>{html.escape(step)}</li>' for step in action["steps"])}</ol>
             <p class="verify"><strong>Verify:</strong> {html.escape(action["verify"])}</p>
           </div>
-          <em>{html.escape(action["target"])}</em>
+          <em>{html.escape(display_name(action["target"]))}</em>
         </li>
         """
         for index, action in enumerate(actions, start=1)
@@ -768,11 +1205,36 @@ def write_html(reports):
         </li>
     """
 
+    simple_rows_html = "\n".join(
+        f"""
+        <tr>
+          <td><a href="{html_attr(domain_report_path(row["target"]) if link_domain_reports and row["target"] != "proof-of-concern-summary" else "#" + row["target"])}">{html.escape(display_name(row["target"]))}</a><small>{html.escape(row["scan"])}</small></td>
+          <td><span class="simple-status">{html.escape(row["status"])}</span></td>
+          <td><strong>{row["health"]}</strong></td>
+          <td><strong>{row["speed"]}</strong></td>
+          <td>{html.escape(row["issue"])}</td>
+          <td>{html.escape(row["action"])}</td>
+          <td>{html.escape(row["evidence"])}</td>
+        </tr>
+        """
+        for row in simple_rows
+    ) or """
+        <tr>
+          <td>No targets</td>
+          <td>No data</td>
+          <td>0</td>
+          <td>0</td>
+          <td>No scanner output was collected.</td>
+          <td>Run the workflow again.</td>
+          <td>N/A</td>
+        </tr>
+    """
+
     nav_items = "\n".join(
         f"""
         <a href="#{html_attr(report["name"])}">
           <span>{html.escape(scan_label(report["name"]))}</span>
-          <small>{html.escape(report["name"])}</small>
+          <small>{html.escape(display_name(report["name"]))}</small>
         </a>
         """
         for report in reports
@@ -818,6 +1280,35 @@ def write_html(reports):
                 """
             )
 
+        checks = get_security_checks(report)
+        checks_box_html = ""
+        if checks:
+            checks_rows_html = "\n".join(
+                f"""
+                <tr>
+                  <td><strong>{html.escape(c["check"])}</strong></td>
+                  <td><span class="check-status-badge check-status-badge--{c["status"].lower()}">{html.escape(c["status"])}</span></td>
+                </tr>
+                """
+                for c in checks
+            )
+            checks_box_html = f"""
+            <div class="security-checks-box">
+              <div class="security-checks-title">Security Diagnostics</div>
+              <table class="security-checks-table">
+                <thead>
+                  <tr>
+                    <th>Check</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {checks_rows_html}
+                </tbody>
+              </table>
+            </div>
+            """
+
         sections.append(
             f"""
             <section class="report-card" id="{html_attr(report["name"])}" data-report data-search="{html_attr(report["name"] + " " + scan + " " + preview)}" data-status="{html_attr(status)}">
@@ -825,12 +1316,13 @@ def write_html(reports):
               <div class="report-card__head">
                 <div>
                   <p>{html.escape(scan)}</p>
-                  <h2>{html.escape(report["name"])}</h2>
+                  <h2>{html.escape(display_name(report["name"]))}</h2>
                 </div>
                 <span class="badge badge--{html_attr(status)}">{html.escape(status_label(status))}</span>
               </div>
               <p class="meaning">{html.escape(status_message(status))}</p>
               <div class="report-card__preview">{html.escape(preview)}</div>
+              {checks_box_html}
               <div class="remedies">
                 <div class="remedies__title">Recommended actions</div>
                 <ul>{remedies_html}</ul>
@@ -843,14 +1335,16 @@ def write_html(reports):
             """
         )
 
-    HTML_REPORT.write_text(
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
         f"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Website Monitoring Report</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap');
+
     :root {{
       color-scheme: light;
       --bg: #eef3f7;
@@ -876,7 +1370,7 @@ def write_html(reports):
       margin: 0;
       background: linear-gradient(180deg, #f8fbfd 0%, var(--bg) 56%, #e8eef5 100%);
       color: var(--ink);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: "Plus Jakarta Sans", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       line-height: 1.45;
     }}
     .shell {{ min-height: 100vh; }}
@@ -940,11 +1434,13 @@ def write_html(reports):
     }}
     .hero {{
       margin-top: -72px;
-      padding: 150px 32px 92px;
+      padding: 150px 32px 82px;
       color: #ffffff;
       background:
-        radial-gradient(circle at 24% 28%, rgba(166, 62, 48, 0.28), transparent 27rem),
-        linear-gradient(90deg, #211918 0%, #181818 52%, #111314 100%);
+        radial-gradient(circle at 14% 22%, rgba(96, 43, 31, 0.68), transparent 24rem),
+        radial-gradient(circle at 78% 18%, rgba(11, 72, 92, 0.58), transparent 28rem),
+        radial-gradient(circle at 80% 84%, rgba(10, 83, 62, 0.54), transparent 25rem),
+        linear-gradient(120deg, #241614 0%, #102637 52%, #073a32 100%);
       border-bottom: 1px solid rgba(255, 255, 255, 0.16);
     }}
     .hero__inner {{
@@ -968,28 +1464,24 @@ def write_html(reports):
       letter-spacing: 0;
     }}
     h1, h2, h3, p {{ margin: 0; }}
-    h1 {{
-      max-width: 780px;
-      margin-top: 14px;
-      font-size: 48px;
-      line-height: 1.08;
-      letter-spacing: 0;
-    }}
     .hero__meta {{
-      margin-top: 12px;
-      color: rgba(255, 255, 255, 0.78);
-      font-size: 14px;
+      max-width: 830px;
+      margin-top: 22px;
+      color: rgba(255, 255, 255, 0.86);
+      font-size: 21px;
+      line-height: 1.48;
+      font-weight: 650;
     }}
     .hero__actions {{
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
-      justify-content: flex-end;
+      justify-content: flex-start;
+      margin-top: 22px;
     }}
     .hero-score-wrap {{
       max-width: 600px;
-      margin-top: 22px;
-      margin-left: auto;
+      margin-top: 26px;
     }}
     .hero-visual {{
       position: relative;
@@ -1165,7 +1657,8 @@ def write_html(reports):
       margin-bottom: 16px;
     }}
     .quick-summary,
-    .next-actions {{
+    .next-actions,
+    .simple-overview {{
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -1178,6 +1671,46 @@ def write_html(reports):
       grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
       gap: 18px;
       align-items: start;
+    }}
+    .simple-overview__table {{
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 13px;
+    }}
+    .simple-overview__table th,
+    .simple-overview__table td {{
+      padding: 10px;
+      border-top: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }}
+    .simple-overview__table th {{
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }}
+    .simple-overview__table a {{
+      display: block;
+      color: var(--ink);
+      font-weight: 900;
+      text-decoration: none;
+      overflow-wrap: anywhere;
+    }}
+    .simple-overview__table small {{
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+    }}
+    .simple-status {{
+      display: inline-flex;
+      padding: 5px 8px;
+      border-radius: 999px;
+      background: #eef6f5;
+      color: var(--accent-strong);
+      font-weight: 900;
+      white-space: nowrap;
     }}
     .summary-copy {{
       display: grid;
@@ -1237,6 +1770,134 @@ def write_html(reports):
       background:
         radial-gradient(circle at center, #0d2236 0 56%, transparent 57%),
         conic-gradient(#38bdf8 calc(var(--score) * 1%), rgba(205, 235, 235, 0.46) 0);
+    }}
+    .chart-grid {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 16px;
+    }}
+    .chart-card {{
+      min-height: 260px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+    }}
+    .chart-card h3 {{
+      margin: 0 0 14px;
+      font-size: 17px;
+      line-height: 1.2;
+    }}
+    .pie-wrap,
+    .progress-wrap {{
+      display: grid;
+      grid-template-columns: 150px minmax(0, 1fr);
+      gap: 18px;
+      align-items: center;
+    }}
+    .pie-chart,
+    .progress-chart {{
+      width: 150px;
+      height: 150px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: conic-gradient({severity_pie});
+      box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+    }}
+    .pie-chart::after,
+    .progress-chart::after {{
+      content: "";
+      width: 86px;
+      height: 86px;
+      border-radius: 50%;
+      background: var(--panel);
+      box-shadow: inset 0 0 0 1px var(--line);
+    }}
+    .progress-chart {{
+      position: relative;
+      background: conic-gradient(#22c55e 0 {remediation_percent}%, #e2e8f0 0 100%);
+    }}
+    .progress-chart strong {{
+      position: absolute;
+      color: var(--ink);
+      font-size: 28px;
+      z-index: 1;
+    }}
+    .legend {{
+      display: grid;
+      gap: 9px;
+      color: var(--muted);
+      font-size: 13px;
+    }}
+    .legend span {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }}
+    .legend i {{
+      width: 11px;
+      height: 11px;
+      border-radius: 999px;
+      display: inline-block;
+    }}
+    .category-row {{
+      display: grid;
+      grid-template-columns: 112px minmax(0, 1fr) 34px;
+      gap: 10px;
+      align-items: center;
+      margin-top: 10px;
+      font-size: 13px;
+    }}
+    .category-row span {{
+      color: var(--muted);
+      font-weight: 800;
+    }}
+    .category-row strong {{
+      text-align: right;
+    }}
+    .category-track {{
+      height: 12px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: #e2e8f0;
+    }}
+    .category-track i {{
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #0f766e, #38bdf8);
+    }}
+    .trend-chart {{
+      width: 100%;
+      height: 154px;
+    }}
+    .trend-chart svg {{
+      width: 100%;
+      height: 112px;
+      display: block;
+    }}
+    .trend-line {{
+      fill: none;
+      stroke: #0f766e;
+      stroke-width: 5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }}
+    .trend-area {{
+      fill: rgba(15, 118, 110, 0.12);
+    }}
+    .trend-labels {{
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }}
+    .chart-empty {{
+      color: var(--muted);
     }}
     .section-label {{
       margin-bottom: 5px;
@@ -1622,6 +2283,88 @@ def write_html(reports):
       text-align: center;
     }}
     .no-results.is-visible {{ display: block; }}
+    .security-checks-box {{
+      margin: 16px 0;
+      padding: 14px;
+      background: var(--panel-soft);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }}
+    .security-checks-title {{
+      margin-bottom: 10px;
+      color: var(--accent-strong);
+      font-size: 13px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }}
+    .security-checks-table {{
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }}
+    .security-checks-table th,
+    .security-checks-table td {{
+      padding: 8px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+    }}
+    .security-checks-table th {{
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 800;
+      padding-top: 0;
+    }}
+    .security-checks-table tr:last-child td {{
+      border-bottom: 0;
+      padding-bottom: 0;
+    }}
+    .check-status-badge {{
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 850;
+      text-transform: uppercase;
+      background: #e2e8f0;
+      color: #334155;
+    }}
+    .check-status-badge--pass {{
+      background: var(--ok-bg);
+      color: var(--ok);
+    }}
+    .check-status-badge--fail {{
+      background: var(--danger-bg);
+      color: var(--danger);
+    }}
+    .check-status-badge--missing {{
+      background: var(--warn-bg);
+      color: var(--warn);
+    }}
+    .hero-main-title {{
+      margin: 16px 0 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: flex-start;
+    }}
+    .hero-pre-title {{
+      font-size: 13px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.6);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }}
+    .hero-domain-title {{
+      font-size: 42px;
+      font-weight: 800;
+      line-height: 1.15;
+      color: #38bdf8;
+      letter-spacing: -0.02em;
+      text-shadow: 0 0 40px rgba(56, 189, 248, 0.25);
+    }}
     @media (max-width: 980px) {{
       .hero__inner {{ grid-template-columns: 1fr; }}
       .hero__actions {{ justify-content: flex-start; }}
@@ -1634,6 +2377,8 @@ def write_html(reports):
       nav {{ position: static; max-height: none; }}
       .overview {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
       .quick-summary {{ grid-template-columns: 1fr; }}
+      .chart-grid {{ grid-template-columns: 1fr; }}
+      .simple-overview {{ overflow-x: auto; }}
       .score-panels {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
       .next-actions ul {{ grid-template-columns: 1fr; }}
       .toolbar {{ grid-template-columns: 1fr; }}
@@ -1641,7 +2386,7 @@ def write_html(reports):
     }}
     @media (max-width: 560px) {{
       .hero {{ padding: 24px 18px; }}
-      h1 {{ font-size: 31px; }}
+      .hero__meta {{ font-size: 17px; }}
       .topbar {{ padding: 16px 18px 0; }}
       .topnav a:not(.nav-cta) {{ display: none; }}
       .hero {{ margin-top: -102px; padding-top: 164px; }}
@@ -1649,6 +2394,7 @@ def write_html(reports):
       .findings-preview {{ margin-top: 36px; }}
       .overview {{ grid-template-columns: 1fr; }}
       .score-panels {{ grid-template-columns: 1fr; }}
+      .pie-wrap, .progress-wrap {{ grid-template-columns: 1fr; }}
       .score-panel {{ min-height: auto; }}
       .next-actions li {{ grid-template-columns: 1fr; }}
       .next-actions b {{ grid-row: auto; }}
@@ -1670,19 +2416,18 @@ def write_html(reports):
         <a href="#actions">Solutions</a>
         <a href="#targets">Services</a>
         <a href="#targets">Resources</a>
-        <a class="nav-cta" href="security-audit-report.docx">Open report</a>
+        <a class="nav-cta" href="{html_attr(link_prefix)}security-audit-report.docx">Open report</a>
       </div>
     </div>
     <header class="hero">
       <div class="hero__inner">
         <div>
           <div class="eyebrow">Website Vulnerability Scanner Report</div>
-          <h1>Find exploitable web app vulnerabilities with documented evidence</h1>
-          <p class="hero__meta">{html.escape(overall_detail)} This report keeps your scan data, proof of concern files, recommended actions, and verification steps in one place. Generated {html.escape(generated_at)}.</p>
+          {header_title_html}
           <div class="hero__actions">
-            <a class="action action--primary" href="security-audit-report.docx">Word Report</a>
-            <a class="action" href="security-summary.md">Summary</a>
-            <a class="action" href="raw-reports/">Raw Logs</a>
+            <a class="action action--primary" href="{html_attr(link_prefix)}security-audit-report.docx">Word Report</a>
+            <a class="action" href="{html_attr(link_prefix)}security-summary.md">Summary</a>
+            <a class="action" href="{html_attr(link_prefix)}raw-reports/">Raw Logs</a>
           </div>
           <div class="hero-score-wrap">
             <div class="score-panels" aria-label="Score overview">
@@ -1767,6 +2512,72 @@ def write_html(reports):
             {priority_html or '<li><strong>No targets found</strong><small>The workflow did not collect scanner reports.</small></li>'}
           </ol>
         </section>
+        <section class="chart-grid" aria-label="Security charts">
+          <div class="chart-card">
+            <p class="section-label">Severity pie chart</p>
+            <h3>Findings by severity</h3>
+            <div class="pie-wrap">
+              <div class="pie-chart" aria-label="Severity distribution"></div>
+              <div class="legend">
+                <span><i style="background:#ef4444"></i>Critical: {status_totals["critical"]}</span>
+                <span><i style="background:#f97316"></i>High: {status_totals["high"]}</span>
+                <span><i style="background:#f59e0b"></i>Review: {status_totals["warning"]}</span>
+                <span><i style="background:#22c55e"></i>Looks good: {status_totals["ok"]}</span>
+              </div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <p class="section-label">Findings by category</p>
+            <h3>Category distribution</h3>
+            {category_chart_html}
+          </div>
+          <div class="chart-card">
+            <p class="section-label">Remediation progress</p>
+            <h3>Resolved vs needs work</h3>
+            <div class="progress-wrap">
+              <div class="progress-chart" aria-label="Remediation progress"><strong>{remediation_percent}%</strong></div>
+              <div class="legend">
+                <span><i style="background:#22c55e"></i>Looks good: {status_totals["ok"]}</span>
+                <span><i style="background:#e2e8f0"></i>Need remediation: {attention_count}</span>
+              </div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <p class="section-label">Security score trend</p>
+            <h3>Score movement</h3>
+            <div class="trend-chart">
+              <svg viewBox="0 0 280 96" role="img" aria-label="Security score trend">
+                <polygon class="trend-area" points="12,84 {trend_polyline} 268,84"></polygon>
+                <polyline class="trend-line" points="{trend_polyline}"></polyline>
+              </svg>
+              <div class="trend-labels">
+                <span>Previous</span>
+                <strong>{trend_points[-1]}</strong>
+                <span>Current</span>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="simple-overview">
+          <p class="section-label">Simple overview</p>
+          <h2>Findings at a glance</h2>
+          <table class="simple-overview__table">
+            <thead>
+              <tr>
+                <th>Target</th>
+                <th>Status</th>
+                <th>Health</th>
+                <th>Page speed</th>
+                <th>Main issue</th>
+                <th>First action</th>
+                <th>Evidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              {simple_rows_html}
+            </tbody>
+          </table>
+        </section>
         <section class="next-actions" id="actions">
           <p class="section-label">Next actions</p>
           <ul>{actions_html}</ul>
@@ -1831,6 +2642,18 @@ def write_html(reports):
     )
 
 
+def write_domain_html_reports(reports):
+    for report in reports:
+        if report["name"] in ("proof-of-concern-summary", "repository"):
+            continue
+        write_html(
+            [report],
+            output_path=BUNDLE_DIR / domain_report_path(report["name"]),
+            link_prefix="",
+            link_domain_reports=False,
+        )
+
+
 def paragraph(text, style=None):
     escaped = escape(text)
     style_xml = f"<w:pPr><w:pStyle w:val=\"{style}\"/></w:pPr>" if style else ""
@@ -1843,6 +2666,7 @@ def write_docx(reports):
         status_totals[report_status(report)] += 1
     overall_title, overall_detail = overall_status(status_totals)
     actions = next_actions(reports)
+    simple_rows = simple_summary_items(reports)
     body = [
         paragraph("Website Monitoring Report", "Title"),
         paragraph(f"Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"),
@@ -1853,12 +2677,30 @@ def write_docx(reports):
             f"{status_totals['critical'] + status_totals['high'] + status_totals['warning']}. "
             f"Targets that look good: {status_totals['ok']}."
         ),
-        paragraph("What to do next", "Heading1"),
+        paragraph("Simple overview", "Heading1"),
     ]
+
+    if simple_rows:
+        for row in simple_rows:
+            body.append(
+                paragraph(
+                    f"{display_name(row['target'])} | {row['status']} | Health: {row['health']} | Page speed: {row['speed']} | {row['action']} | Evidence: {row['evidence']}",
+                    "Heading2",
+                )
+            )
+            body.append(paragraph(f"Issue: {row['issue']}"))
+    else:
+        body.append(paragraph("No scanner output was collected."))
+
+    body.extend(
+        [
+            paragraph("What to do next", "Heading1"),
+        ]
+    )
 
     if actions:
         for action in actions:
-            body.append(paragraph(f"{action['target']} - {action['title']}", "Heading2"))
+            body.append(paragraph(f"{display_name(action['target'])} - {action['title']}", "Heading2"))
             body.append(paragraph(action["detail"]))
             body.append(paragraph("Process", "Heading3"))
             for index, step in enumerate(action["steps"], start=1):
@@ -1874,9 +2716,17 @@ def write_docx(reports):
     else:
         for report in sorted_reports_by_priority(reports):
             status = report_status(report)
-            body.append(paragraph(report["name"], "Heading2"))
+            body.append(paragraph(display_name(report["name"]), "Heading2"))
             body.append(paragraph(f"Status: {status_label(status)}"))
             body.append(paragraph(status_message(status)))
+            
+            checks = get_security_checks(report)
+            if checks:
+                body.append(paragraph("Security Diagnostics", "Heading3"))
+                for c in checks:
+                    body.append(paragraph(f"- {c['check']}: {c['status']}"))
+                body.append(paragraph(""))
+
             body.append(paragraph("Recommended actions", "Heading3"))
             for item in remediation_items(report):
                 body.append(paragraph(item["title"], "Heading3"))
@@ -1938,6 +2788,7 @@ def main():
     reports = collect_reports()
     write_markdown(reports)
     write_html(reports)
+    write_domain_html_reports(reports)
     write_docx(reports)
     print(f"Generated {BUNDLE_DIR}/ with HTML, DOCX, Markdown, and raw reports.")
 

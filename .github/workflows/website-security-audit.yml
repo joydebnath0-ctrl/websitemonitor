@@ -13,6 +13,27 @@ on:
         description: "Optional comma/newline-separated URLs. Leave blank to use config/domains.txt."
         required: false
         default: ""
+      zap_scan_mode:
+        description: "OWASP ZAP scan mode. Baseline is much faster; full is slower and active."
+        required: false
+        default: "baseline"
+        type: choice
+        options:
+          - baseline
+          - full
+          - skip
+      zap_max_minutes:
+        description: "Maximum minutes allowed per ZAP scan command."
+        required: false
+        default: "12"
+      scan_depth:
+        description: "standard keeps the workflow fast; deep gathers extra DNS, HTTP, TLS, timing, and service evidence."
+        required: false
+        default: "standard"
+        type: choice
+        options:
+          - standard
+          - deep
 
 jobs:
   website-security-audit:
@@ -71,41 +92,27 @@ jobs:
 
       - name: Run OWASP ZAP scans for all domains
         id: zap_scans
-        run: |
-          python3 - <<'PY' > zap-targets.tsv
-          import json
-          with open("audit-targets.json", encoding="utf-8") as handle:
-              matrix = json.load(handle)
-          for target in matrix.get("include", []):
-              print(f"{target['url']}\t{target['slug']}")
-          PY
-
-          while IFS=$'\t' read -r url slug; do
-            mkdir -p "all-reports/${slug}/zap"
-
-            docker run --rm \
-              -v "${PWD}/all-reports/${slug}/zap:/zap/wrk:rw" \
-              ghcr.io/zaproxy/zaproxy:stable \
-              zap-baseline.py \
-              -t "$url" \
-              -a \
-              -J "zap-baseline.json" \
-              -r "zap-baseline.html" \
-              -w "zap-baseline.md" || true
-
-            docker run --rm \
-              -v "${PWD}/all-reports/${slug}/zap:/zap/wrk:rw" \
-              ghcr.io/zaproxy/zaproxy:stable \
-              zap-full-scan.py \
-              -t "$url" \
-              -J "zap-full-scan.json" \
-              -r "zap-full-scan.html" \
-              -w "zap-full-scan.md" || true
-          done < zap-targets.tsv
+        env:
+          ZAP_SCAN_MODE: ${{ github.event.inputs.zap_scan_mode || 'baseline' }}
+          ZAP_MAX_MINUTES: ${{ github.event.inputs.zap_max_minutes || '12' }}
+        run: bash scripts/security/run_zap_scans.sh audit-targets.json
 
       - name: Collect proof of concern evidence
         id: poc_evidence
         run: bash scripts/security/collect_poc_evidence.sh audit-targets.json
+
+      - name: Deep information gathering
+        id: deep_info
+        env:
+          SCAN_DEPTH: ${{ github.event.inputs.scan_depth || 'standard' }}
+          DEEP_MAX_SECONDS: "45"
+        run: bash scripts/security/run_deep_info_scan.sh audit-targets.json
+
+      - name: Capture page speed timings
+        id: page_speed
+        env:
+          PAGE_SPEED_MAX_SECONDS: "30"
+        run: bash scripts/security/capture_page_speed.sh audit-targets.json
 
       - name: Prepare repository report folder
         id: prep_report_folder
@@ -183,12 +190,14 @@ jobs:
           | 4. Website Scans                 | $(icon "${{ steps.website_scans.outcome }}")   \`${{ steps.website_scans.outcome }}\`   |
           | 5. OWASP ZAP Scans               | $(icon "${{ steps.zap_scans.outcome }}")        \`${{ steps.zap_scans.outcome }}\`       |
           | 6. Collect PoC Evidence          | $(icon "${{ steps.poc_evidence.outcome }}")    \`${{ steps.poc_evidence.outcome }}\`    |
-          | 7. Trivy Dependency Scan         | $(icon "${{ steps.trivy_fs.outcome }}")        \`${{ steps.trivy_fs.outcome }}\`        |
-          | 8. Trivy IaC Scan                | $(icon "${{ steps.trivy_config.outcome }}")    \`${{ steps.trivy_config.outcome }}\`    |
-          | 9. Gitleaks Secret Scan          | $(icon "${{ steps.gitleaks.outcome }}")        \`${{ steps.gitleaks.outcome }}\`        |
-          | 10. TruffleHog Credential Scan   | $(icon "${{ steps.trufflehog.outcome }}")      \`${{ steps.trufflehog.outcome }}\`      |
-          | 11. Generate Report              | $(icon "${{ steps.generate_report.outcome }}") \`${{ steps.generate_report.outcome }}\` |
-          | 12. Upload Artifact              | $(icon "${{ steps.upload_artifact.outcome }}") \`${{ steps.upload_artifact.outcome }}\` |
+          | 7. Deep Information Gathering    | $(icon "${{ steps.deep_info.outcome }}")       \`${{ steps.deep_info.outcome }}\`       |
+          | 8. Page Speed Timings            | $(icon "${{ steps.page_speed.outcome }}")      \`${{ steps.page_speed.outcome }}\`      |
+          | 9. Trivy Dependency Scan         | $(icon "${{ steps.trivy_fs.outcome }}")        \`${{ steps.trivy_fs.outcome }}\`        |
+          | 10. Trivy IaC Scan               | $(icon "${{ steps.trivy_config.outcome }}")    \`${{ steps.trivy_config.outcome }}\`    |
+          | 11. Gitleaks Secret Scan         | $(icon "${{ steps.gitleaks.outcome }}")        \`${{ steps.gitleaks.outcome }}\`        |
+          | 12. TruffleHog Credential Scan   | $(icon "${{ steps.trufflehog.outcome }}")      \`${{ steps.trufflehog.outcome }}\`      |
+          | 13. Generate Report              | $(icon "${{ steps.generate_report.outcome }}") \`${{ steps.generate_report.outcome }}\` |
+          | 14. Upload Artifact              | $(icon "${{ steps.upload_artifact.outcome }}") \`${{ steps.upload_artifact.outcome }}\` |
 
           ## 🏁 Final Result
 

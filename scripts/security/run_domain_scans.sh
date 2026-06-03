@@ -29,3 +29,5 @@ for target in matrix.get("include", []):
     print(f"{target['url']}\t{target['slug']}")
 PY
 )
+
+bash scripts/security/capture_page_speed.sh "$TARGETS_JSON"
