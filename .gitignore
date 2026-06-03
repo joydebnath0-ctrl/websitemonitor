@@ -8,5 +8,3 @@ trivy-config-report.txt
 *.zip
 __pycache__/
 *.pyc
-*.pem
-config/lightsail.pem

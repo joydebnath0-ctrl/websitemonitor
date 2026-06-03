@@ -930,13 +930,6 @@ def reset_bundle_dir():
         RAW_REPORTS_DIR.mkdir(parents=True)
 
 
-def get_main_html_name(reports):
-    domain_reports = [r for r in reports if r["name"] not in ("proof-of-concern-summary", "repository")]
-    if len(domain_reports) == 1:
-        return f"{domain_reports[0]['name']}.html"
-    return "index.html"
-
-
 def write_markdown(reports):
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     status_totals = {"critical": 0, "high": 0, "warning": 0, "ok": 0}
@@ -1001,13 +994,12 @@ def write_markdown(reports):
     else:
         lines.append("- Keep the current monitoring schedule and rerun scans after website or infrastructure changes.")
 
-    main_html = get_main_html_name(reports)
     lines.extend(
         [
             "",
             "## Files in this bundle",
             "",
-            f"- Open `{main_html}` for the simple dashboard.",
+            "- Open `index.html` for the simple dashboard.",
             "- Open `security-audit-report.docx` for the Word-compatible report.",
             "- Open `raw-reports/` for original scanner artifacts.",
             "",
@@ -1078,12 +1070,10 @@ def write_markdown(reports):
 
 
 def domain_report_path(report_name):
-    return f"{report_name}.html"
+    return f"reports/{report_name}/index.html"
 
 
-def write_html(reports, output_path=None, link_prefix="", link_domain_reports=True):
-    if output_path is None:
-        output_path = BUNDLE_DIR / get_main_html_name(reports)
+def write_html(reports, output_path=HTML_REPORT, link_prefix="", link_domain_reports=True):
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     logo_src = logo_data_uri()
     counts = all_counts(reports)
@@ -1099,23 +1089,13 @@ def write_html(reports, output_path=None, link_prefix="", link_domain_reports=Tr
         single_domain = get_readable_domain(domain_reports[0])
 
     if single_domain:
-        header_title_html = f"""
-        <h1 class="hero-main-title">
-          <span class="hero-pre-title">Security Audit for</span>
-          <span class="hero-domain-title">{html.escape(single_domain)}</span>
-        </h1>
-        """
+        header_title_html = f"""<h1 class="hero-main-title">Security Audit for <span class="hero-domain-highlight">{html.escape(single_domain)}</span></h1>"""
     else:
         domain_names = [get_readable_domain(r) for r in domain_reports]
         domain_list = ", ".join(domain_names[:3])
         if len(domain_reports) > 3:
             domain_list += f" and {len(domain_reports) - 3} more"
-        header_title_html = f"""
-        <h1 class="hero-main-title">
-          <span class="hero-pre-title">Security Audit Report</span>
-          <span class="hero-domain-title">{html.escape(domain_list or "All Targets")}</span>
-        </h1>
-        """
+        header_title_html = f"""<h1 class="hero-main-title">Security Audit: <span class="hero-domain-highlight">{html.escape(domain_list or "All Targets")}</span></h1>"""
     attention_count = status_totals["critical"] + status_totals["high"] + status_totals["warning"]
     priority_reports = sorted_reports_by_priority(reports)[:4]
     score = aggregate_score(reports, health_score_for_report)
@@ -1342,9 +1322,8 @@ def write_html(reports, output_path=None, link_prefix="", link_domain_reports=Tr
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Website Monitoring Report</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap');
-
     :root {{
       color-scheme: light;
       --bg: #eef3f7;
@@ -1370,7 +1349,7 @@ def write_html(reports, output_path=None, link_prefix="", link_domain_reports=Tr
       margin: 0;
       background: linear-gradient(180deg, #f8fbfd 0%, var(--bg) 56%, #e8eef5 100%);
       color: var(--ink);
-      font-family: "Plus Jakarta Sans", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       line-height: 1.45;
     }}
     .shell {{ min-height: 100vh; }}
@@ -2345,25 +2324,32 @@ def write_html(reports, output_path=None, link_prefix="", link_domain_reports=Tr
     }}
     .hero-main-title {{
       margin: 16px 0 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      align-items: flex-start;
-    }}
-    .hero-pre-title {{
-      font-size: 13px;
-      font-weight: 700;
-      color: rgba(255, 255, 255, 0.6);
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-    }}
-    .hero-domain-title {{
-      font-size: 42px;
-      font-weight: 800;
+      font-size: 38px;
+      font-weight: 900;
       line-height: 1.15;
-      color: #38bdf8;
+      color: #ffffff;
       letter-spacing: -0.02em;
-      text-shadow: 0 0 40px rgba(56, 189, 248, 0.25);
+    }}
+    .hero-domain-highlight {{
+      display: inline-block;
+      position: relative;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.08);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      padding: 4px 12px;
+      border-radius: 8px;
+      text-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
+      animation: pulse-glow 2s infinite alternate;
+    }}
+    @keyframes pulse-glow {{
+      0% {{
+        box-shadow: 0 0 10px rgba(56, 189, 248, 0.1);
+        border-color: rgba(56, 189, 248, 0.3);
+      }}
+      100% {{
+        box-shadow: 0 0 25px rgba(56, 189, 248, 0.35);
+        border-color: rgba(56, 189, 248, 0.65);
+      }}
     }}
     @media (max-width: 980px) {{
       .hero__inner {{ grid-template-columns: 1fr; }}
@@ -2644,12 +2630,12 @@ def write_html(reports, output_path=None, link_prefix="", link_domain_reports=Tr
 
 def write_domain_html_reports(reports):
     for report in reports:
-        if report["name"] in ("proof-of-concern-summary", "repository"):
+        if report["name"] == "proof-of-concern-summary":
             continue
         write_html(
             [report],
             output_path=BUNDLE_DIR / domain_report_path(report["name"]),
-            link_prefix="",
+            link_prefix="../../",
             link_domain_reports=False,
         )
 
