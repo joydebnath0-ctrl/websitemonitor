@@ -373,71 +373,11 @@ def simple_summary_items(reports, limit=12):
                 "issue": issue,
                 "action": first_action,
                 "evidence": evidence,
-                "raw_status": status,
             }
         )
         if len(rows) >= limit:
             break
     return rows
-
-
-def get_card_details(target, scan, raw_status):
-    target_lower = target.lower()
-    scan_lower = scan.lower()
-    
-    # Default mappings
-    emoji = "🚨" if raw_status in ("critical", "high") else ("⚠️" if raw_status == "warning" else "✅")
-    title = f"{scan} Security"
-    risk = "High" if raw_status == "high" else ("Critical" if raw_status == "critical" else ("Warning" if raw_status == "warning" else "Looks Good"))
-    impact = "Security Vulnerability"
-
-    # Category specific overrides
-    if "gitleaks" in target_lower or "trufflehog" in target_lower or "secret" in scan_lower or "credential" in scan_lower:
-        title = "Exposed API Key" if raw_status != "ok" else "Secure Credentials"
-        impact = "Credential Exposure"
-        emoji = "🚨" if raw_status != "ok" else "✅"
-    elif "ssl" in target_lower or "tls" in target_lower or "ssl" in scan_lower:
-        title = "Weak TLS Configuration" if raw_status != "ok" else "Secure TLS Configuration"
-        impact = "Traffic Interception & Eavesdropping"
-        emoji = "🚨" if raw_status in ("critical", "high") else ("⚠️" if raw_status == "warning" else "✅")
-    elif "headers" in target_lower or "header" in scan_lower:
-        title = "Missing Security Headers" if raw_status != "ok" else "Hardened Security Headers"
-        impact = "Cross-Site Scripting (XSS) & Clickjacking"
-        emoji = "⚠️" if raw_status != "ok" else "✅"
-    elif "dns" in target_lower or "dns" in scan_lower:
-        title = "Unsecured DNS Records" if raw_status != "ok" else "Secure DNS Records"
-        impact = "Domain Spoofing & Phishing"
-        emoji = "⚠️" if raw_status != "ok" else "✅"
-    elif "cookie" in target_lower or "cookie" in scan_lower:
-        title = "Vulnerable Cookie Policies" if raw_status != "ok" else "Secure Cookie Policies"
-        impact = "Session Hijacking & XSS"
-        emoji = "⚠️" if raw_status != "ok" else "✅"
-    elif "port" in target_lower or "port" in scan_lower:
-        title = "Exposed Network Services" if raw_status != "ok" else "Hardened Network Ports"
-        impact = "Unauthorized Service Access"
-        emoji = "🚨" if raw_status in ("critical", "high") else ("⚠️" if raw_status == "warning" else "✅")
-    elif "zap" in target_lower or "zap" in scan_lower:
-        title = "Web Application Vulnerabilities" if raw_status != "ok" else "Secure Web Application"
-        impact = "Site Exploitation & Data Theft"
-        emoji = "🚨" if raw_status in ("critical", "high") else ("⚠️" if raw_status == "warning" else "✅")
-    elif "nikto" in target_lower or "nikto" in scan_lower:
-        title = "Server Configuration Flaws" if raw_status != "ok" else "Hardened Server Config"
-        impact = "Information Disclosure & Attack Surface"
-        emoji = "🚨" if raw_status in ("critical", "high") else ("⚠️" if raw_status == "warning" else "✅")
-    elif "trivy" in target_lower or "trivy" in scan_lower or "dependency" in scan_lower:
-        title = "Vulnerable Dependencies" if raw_status != "ok" else "Secure Dependencies"
-        impact = "Application Compromise & Supply Chain Risk"
-        emoji = "🚨" if raw_status in ("critical", "high") else ("⚠️" if raw_status == "warning" else "✅")
-    elif "proof-of-concern" in target_lower or "poc" in target_lower or "proof" in scan_lower:
-        title = "Critical Security Concerns" if raw_status != "ok" else "No Security Concerns"
-        impact = "System Compromise"
-        emoji = "🚨" if raw_status in ("critical", "high") else ("⚠️" if raw_status == "warning" else "✅")
-
-    if raw_status == "ok":
-        risk = "Looks Good"
-        impact = "No exposure detected"
-
-    return f"{emoji} {title}", risk, impact
 
 
 def simple_issue_and_evidence(report, limit=120):
@@ -1265,33 +1205,30 @@ def write_html(reports, output_path=None, link_prefix="", link_domain_reports=Tr
         </li>
     """
 
-    cards = []
-    for row in simple_rows:
-        card_title, card_risk, card_impact = get_card_details(row["target"], row["scan"], row["raw_status"])
-        
-        evidence_href = domain_report_path(row["target"]) if link_domain_reports and row["target"] != "proof-of-concern-summary" else f"#{row['target']}"
-        remediation_href = f"{domain_report_path(row['target'])}#remediation-{row['target']}" if link_domain_reports and row["target"] != "proof-of-concern-summary" else f"#remediation-{row['target']}"
-        
-        cards.append(f"""
-        <div class="simple-card simple-card--{html_attr(row['raw_status'])}">
-          <div class="simple-card__title">{html.escape(card_title)}</div>
-          <div class="simple-card__meta">
-            <div class="simple-card__meta-item">
-              <span class="simple-card__meta-label">Risk:</span>
-              <span class="simple-card__meta-value simple-card__meta-value--{html_attr(row['raw_status'])}">{html.escape(card_risk)}</span>
-            </div>
-            <div class="simple-card__meta-item">
-              <span class="simple-card__meta-label">Impact:</span>
-              <span class="simple-card__meta-value">{html.escape(card_impact)}</span>
-            </div>
-          </div>
-          <div class="simple-card__actions">
-            <a href="{html_attr(evidence_href)}" class="simple-card__btn simple-card__btn--secondary">View Evidence</a>
-            <a href="{html_attr(remediation_href)}" class="simple-card__btn simple-card__btn--primary">Remediation</a>
-          </div>
-        </div>
-        """)
-    simple_cards_html = "\n".join(cards) or '<div class="empty">No target data available.</div>'
+    simple_rows_html = "\n".join(
+        f"""
+        <tr>
+          <td><a href="{html_attr(domain_report_path(row["target"]) if link_domain_reports and row["target"] != "proof-of-concern-summary" else "#" + row["target"])}">{html.escape(display_name(row["target"]))}</a><small>{html.escape(row["scan"])}</small></td>
+          <td><span class="simple-status">{html.escape(row["status"])}</span></td>
+          <td><strong>{row["health"]}</strong></td>
+          <td><strong>{row["speed"]}</strong></td>
+          <td>{html.escape(row["issue"])}</td>
+          <td>{html.escape(row["action"])}</td>
+          <td>{html.escape(row["evidence"])}</td>
+        </tr>
+        """
+        for row in simple_rows
+    ) or """
+        <tr>
+          <td>No targets</td>
+          <td>No data</td>
+          <td>0</td>
+          <td>0</td>
+          <td>No scanner output was collected.</td>
+          <td>Run the workflow again.</td>
+          <td>N/A</td>
+        </tr>
+    """
 
     nav_items = "\n".join(
         f"""
@@ -1386,7 +1323,7 @@ def write_html(reports, output_path=None, link_prefix="", link_domain_reports=Tr
               <p class="meaning">{html.escape(status_message(status))}</p>
               <div class="report-card__preview">{html.escape(preview)}</div>
               {checks_box_html}
-              <div class="remedies" id="remediation-{html_attr(report["name"])}">
+              <div class="remedies">
                 <div class="remedies__title">Recommended actions</div>
                 <ul>{remedies_html}</ul>
               </div>
@@ -1734,150 +1671,45 @@ def write_html(reports, output_path=None, link_prefix="", link_domain_reports=Tr
       gap: 18px;
       align-items: start;
     }}
-    .simple-card-grid {{
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 18px;
-      margin-top: 16px;
-    }}
-    .simple-card {{
-      display: flex;
-      flex-direction: column;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 20px;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-      transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
-      position: relative;
-      overflow: hidden;
-    }}
-    .simple-card:hover {{
-      transform: translateY(-4px);
-      box-shadow: 0 12px 20px -8px rgba(15, 23, 42, 0.15);
-      border-color: var(--accent);
-    }}
-    .simple-card::before {{
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      bottom: 0;
-      width: 5px;
-      background: var(--muted);
-    }}
-    .simple-card--critical::before,
-    .simple-card--high::before {{
-      background: var(--danger);
-    }}
-    .simple-card--warning::before {{
-      background: var(--warn);
-    }}
-    .simple-card--ok::before {{
-      background: var(--ok);
-    }}
-    .simple-card__title {{
-      font-size: 17px;
-      font-weight: 800;
-      color: var(--ink);
-      margin-bottom: 14px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding-left: 6px;
-    }}
-    .simple-card__meta {{
-      display: grid;
-      gap: 10px;
-      margin-bottom: 20px;
+    .simple-overview__table {{
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
       font-size: 13px;
-      padding-left: 6px;
     }}
-    .simple-card__meta-item {{
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+    .simple-overview__table th,
+    .simple-overview__table td {{
+      padding: 10px;
+      border-top: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
     }}
-    .simple-card__meta-label {{
+    .simple-overview__table th {{
       color: var(--muted);
-      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0;
     }}
-    .simple-card__meta-value {{
-      font-weight: 750;
+    .simple-overview__table a {{
+      display: block;
       color: var(--ink);
-    }}
-    .simple-card__meta-value--critical,
-    .simple-card__meta-value--high {{
-      color: var(--danger);
-      background: var(--danger-bg);
-      padding: 3px 8px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 800;
-    }}
-    .simple-card__meta-value--warning {{
-      color: var(--warn);
-      background: var(--warn-bg);
-      padding: 3px 8px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 800;
-    }}
-    .simple-card__meta-value--ok {{
-      color: var(--ok);
-      background: var(--ok-bg);
-      padding: 3px 8px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 800;
-    }}
-    .simple-card__actions {{
-      margin-top: auto;
-      display: flex;
-      gap: 10px;
-      padding-left: 6px;
-    }}
-    .simple-card__btn {{
-      flex: 1;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 38px;
-      padding: 8px 12px;
-      border-radius: 8px;
-      font-size: 12px;
-      font-weight: 800;
+      font-weight: 900;
       text-decoration: none;
-      transition: background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s;
-      text-align: center;
+      overflow-wrap: anywhere;
     }}
-    .simple-card__btn--secondary {{
-      background: var(--panel-soft);
+    .simple-overview__table small {{
+      display: block;
+      margin-top: 3px;
       color: var(--muted);
-      border: 1px solid var(--line);
     }}
-    .simple-card__btn--secondary:hover {{
-      background: #eef2f6;
-      color: var(--ink);
-      border-color: #cbd5e1;
-    }}
-    .simple-card__btn--primary {{
-      background: var(--accent);
-      color: #ffffff;
-      border: 1px solid var(--accent);
-    }}
-    .simple-card__btn--primary:hover {{
-      background: var(--accent-strong);
-      border-color: var(--accent-strong);
-      box-shadow: 0 4px 12px rgba(15, 118, 110, 0.25);
-    }}
-    .simple-overview .empty {{
-      padding: 20px;
-      text-align: center;
-      color: var(--muted);
-      background: var(--panel-soft);
-      border: 1px dashed var(--line);
-      border-radius: 8px;
+    .simple-status {{
+      display: inline-flex;
+      padding: 5px 8px;
+      border-radius: 999px;
+      background: #eef6f5;
+      color: var(--accent-strong);
+      font-weight: 900;
+      white-space: nowrap;
     }}
     .summary-copy {{
       display: grid;
@@ -2746,9 +2578,22 @@ def write_html(reports, output_path=None, link_prefix="", link_domain_reports=Tr
         <section class="simple-overview">
           <p class="section-label">Simple overview</p>
           <h2>Findings at a glance</h2>
-          <div class="simple-card-grid">
-            {simple_cards_html}
-          </div>
+          <table class="simple-overview__table">
+            <thead>
+              <tr>
+                <th>Target</th>
+                <th>Status</th>
+                <th>Health</th>
+                <th>Page speed</th>
+                <th>Main issue</th>
+                <th>First action</th>
+                <th>Evidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              {simple_rows_html}
+            </tbody>
+          </table>
         </section>
         <section class="next-actions" id="actions">
           <p class="section-label">Next actions</p>
