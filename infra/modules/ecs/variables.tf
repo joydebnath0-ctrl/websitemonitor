@@ -1,0 +1,12 @@
+variable "project_name"       { type = string }
+variable "environment"         { type = string }
+variable "vpc_id"              { type = string }
+variable "public_subnet_ids"   { type = list(string) }
+variable "private_subnet_ids"  { type = list(string) }
+variable "ecr_repo_url"        { type = string }
+variable "image_tag"           { type = string }
+variable "app_port"            { type = number }
+variable "desired_count"       { type = number }
+variable "task_cpu"            { type = number }
+variable "task_memory"         { type = number }
+variable "s3_bucket_name"      { type = string }

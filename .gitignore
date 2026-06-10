@@ -8,3 +8,19 @@ trivy-config-report.txt
 *.zip
 __pycache__/
 *.pyc
+
+# Node
+node_modules/
+dist/
+build/
+.env
+
+# Keys
+*.pem
+
+# Terraform
+.terraform/
+*.tfvars
+*.tfvars.json
+*.tfstate
+*.tfstate.*

@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AWS Cloud Deployment Control Panel</title>
+  <meta name="description" content="Deploy and manage AWS EC2 instances, VPC networks, S3 buckets, and CloudFront distributions via Terraform — all from one dashboard.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Auth Screens -->
+  <div id="auth-container" class="auth-wrapper" style="display: flex;">
+    <button type="button" id="btn-theme-toggle" class="theme-toggle-btn" title="Toggle Light/Dark Theme">🌙</button>
+    <div class="auth-box">
+      <div class="auth-header-brand">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f78166" stroke-width="2" aria-hidden="true">
+          <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+        </svg>
+        <span class="auth-brand-title">AWS Cloud Control Panel</span>
+      </div>
+
+      <!-- Login Card -->
+      <div id="login-card" class="auth-card">
+        <h2 class="auth-title">Log In to Portal</h2>
+        <p class="auth-subtitle">Enter your email and password to access the panel</p>
+        
+        <div class="auth-alert error" id="login-error" style="display: none;"></div>
+        <div class="auth-alert success" id="login-success" style="display: none;"></div>
+
+        <form id="login-form">
+          <div class="ec2-form-group">
+            <label class="ec2-label">Email Address</label>
+            <input type="email" id="login-email" class="ec2-input" placeholder="name@domain.com" required>
+          </div>
+          <div class="ec2-form-group" style="margin-bottom: 6px;">
+            <label class="ec2-label">Password</label>
+            <input type="password" id="login-password" class="ec2-input" placeholder="••••••••" required>
+          </div>
+          <div class="auth-forgot-link-container">
+            <a href="#" id="link-forgot-password" class="auth-link">Forgot Password?</a>
+          </div>
+          <button type="submit" class="ec2-btn-primary auth-submit-btn">Login</button>
+        </form>
+
+        <p class="auth-switch-text">
+          Don't have an account? <a href="#" id="link-to-signup" class="auth-link">Create Account</a>
+        </p>
+      </div>
+
+      <!-- Sign Up Card -->
+      <div id="signup-card" class="auth-card" style="display: none;">
+        <h2 class="auth-title">Create Account</h2>
+        <p class="auth-subtitle">Register to manage your cloud infrastructure</p>
+
+        <div class="auth-alert error" id="signup-error" style="display: none;"></div>
+        <div class="auth-alert success" id="signup-success" style="display: none;"></div>
+
+        <form id="signup-form">
+          <div class="ec2-form-group">
+            <label class="ec2-label">Full Name</label>
+            <input type="text" id="signup-name" class="ec2-input" placeholder="John Doe" required>
+          </div>
+          <div class="ec2-form-group">
+            <label class="ec2-label">Email Address</label>
+            <input type="email" id="signup-email" class="ec2-input" placeholder="name@domain.com" required>
+          </div>
+          <div class="ec2-form-group" style="margin-bottom: 6px;">
+            <label class="ec2-label">Password</label>
+            <input type="password" id="signup-password" class="ec2-input" placeholder="••••••••" required>
+            <!-- Strength Indicator -->
+            <div class="pwd-strength-container">
+              <div class="pwd-strength-bar" id="pwd-strength-bar"></div>
+            </div>
+            <span class="pwd-strength-text" id="pwd-strength-text">Password strength: Weak</span>
+          </div>
+          <div class="ec2-form-group">
+            <label class="ec2-label">Confirm Password</label>
+            <input type="password" id="signup-confirm-password" class="ec2-input" placeholder="••••••••" required>
+          </div>
+          <button type="submit" class="ec2-btn-primary auth-submit-btn">Create Account</button>
+        </form>
+
+        <p class="auth-switch-text">
+          Already have an account? <a href="#" id="link-to-login" class="auth-link">Log In</a>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Portal Container -->
+  <div id="portal-container" style="display: none;">
+    <div class="ec2-panel-container">
+      <!-- Header -->
+      <header class="ec2-header">
+        <div class="ec2-header-brand">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f78166" stroke-width="2" aria-hidden="true">
+            <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+          </svg>
+          <span class="ec2-brand-title">AWS Cloud Control Panel</span>
+          <span class="ec2-version-badge">v2.0</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <button type="button" id="btn-theme-toggle-portal" class="portal-theme-toggle-btn" title="Toggle Light/Dark Theme">🌙</button>
+          <div class="ec2-header-status">
+            <span class="status-dot" id="system-status-dot"></span>
+            <span id="system-status-text">Ready</span>
+          </div>
+          
+          <!-- User Profile Dropdown -->
+          <div class="profile-container" id="profile-container">
+            <button type="button" class="profile-avatar-btn" id="btn-profile-avatar" title="View Profile">
+              <span id="profile-initials">—</span>
+            </button>
+            <div class="profile-dropdown-menu" id="profile-dropdown-menu" style="display: none;">
+              <div class="profile-dropdown-header">
+                <strong id="profile-menu-name">—</strong>
+                <span id="profile-menu-email">—</span>
+              </div>
+              <div class="profile-dropdown-divider"></div>
+              <button type="button" class="profile-dropdown-item" id="btn-change-password">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                Change Password
+              </button>
+              <div class="profile-dropdown-divider"></div>
+              <button type="button" class="profile-dropdown-item" id="btn-logout">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+                Log Out
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Password Change Modal -->
+      <div id="pwd-modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+        <div style="background:#161b22; border:1px solid #30363d; border-radius:12px; padding:32px 28px; width:100%; max-width:420px; box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a371f7" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <h3 style="margin:0; font-size:16px; color:#f0f6fc; font-family:'Inter',sans-serif; font-weight:600;" id="pwd-modal-title">Change Password</h3>
+            </div>
+            <button type="button" id="btn-pwd-modal-close" style="background:none; border:none; color:#8b949e; cursor:pointer; font-size:20px; line-height:1; padding:2px 6px;">&times;</button>
+          </div>
+          <p id="pwd-modal-target-info" style="font-size:12px; color:#8b949e; margin:0 0 18px; font-family:'Inter',sans-serif; background:#0d1117; border:1px solid #21262d; border-radius:6px; padding:8px 12px;"></p>
+          <div id="pwd-modal-error" class="auth-alert error" style="display:none; margin-bottom:14px;"></div>
+          <div id="pwd-modal-success" class="auth-alert success" style="display:none; margin-bottom:14px;"></div>
+          <div class="ec2-form-group">
+            <label class="ec2-label">New Password</label>
+            <input type="password" id="pwd-modal-new" class="ec2-input" placeholder="Min 6 characters" autocomplete="new-password">
+          </div>
+          <div class="ec2-form-group" style="margin-bottom:20px;">
+            <label class="ec2-label">Confirm Password</label>
+            <input type="password" id="pwd-modal-confirm" class="ec2-input" placeholder="Repeat new password" autocomplete="new-password">
+          </div>
+          <input type="hidden" id="pwd-modal-email">
+          <button type="button" id="btn-pwd-modal-submit" class="ec2-btn-primary" style="width:100%; background:linear-gradient(135deg,#a371f7,#7c3aed);">
+            🔑 &nbsp;Update Password
+          </button>
+        </div>
+      </div>
+ 
+      <!-- Permissions Edit Modal -->
+      <div id="perms-modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+        <div style="background:#161b22; border:1px solid #30363d; border-radius:12px; padding:32px 28px; width:100%; max-width:460px; box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a371f7" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <h3 style="margin:0; font-size:16px; color:#f0f6fc; font-family:'Inter',sans-serif; font-weight:600;" id="perms-modal-title">Edit User Permissions</h3>
+            </div>
+            <button type="button" id="btn-perms-modal-close" style="background:none; border:none; color:#8b949e; cursor:pointer; font-size:20px; line-height:1; padding:2px 6px;">&times;</button>
+          </div>
+          <p id="perms-modal-target-info" style="font-size:12px; color:#8b949e; margin:0 0 18px; font-family:'Inter',sans-serif; background:#0d1117; border:1px solid #21262d; border-radius:6px; padding:8px 12px;"></p>
+          <div id="perms-modal-error" class="auth-alert error" style="display:none; margin-bottom:14px;"></div>
+          <div id="perms-modal-success" class="auth-alert success" style="display:none; margin-bottom:14px;"></div>
+          
+          <!-- Permissions Matrix in Modal -->
+          <div style="background:#0d1117; border:1px solid #21262d; border-radius:8px; padding:16px; margin-bottom:20px;">
+            <table style="width:100%; border-collapse:collapse; font-family:'Inter',sans-serif; font-size:13px; color:#c9d1d9;">
+              <thead>
+                <tr style="border-bottom:1px solid #30363d;">
+                  <th style="text-align:left; padding:8px 4px; color:#8b949e; font-weight:500;">Service</th>
+                  <th style="text-align:center; padding:8px 4px; color:#8b949e; font-weight:500;">Read</th>
+                  <th style="text-align:center; padding:8px 4px; color:#8b949e; font-weight:500;">Write</th>
+                  <th style="text-align:center; padding:8px 4px; color:#8b949e; font-weight:500;">Execute</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style="border-bottom:1px solid #21262d;">
+                  <td style="padding:10px 4px; font-weight:500;">EC2</td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-ec2-read"></td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-ec2-write"></td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-ec2-execute"></td>
+                </tr>
+                <tr style="border-bottom:1px solid #21262d;">
+                  <td style="padding:10px 4px; font-weight:500;">VPC</td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-vpc-read"></td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-vpc-write"></td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-vpc-execute"></td>
+                </tr>
+                <tr style="border-bottom:1px solid #21262d;">
+                  <td style="padding:10px 4px; font-weight:500;">S3</td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-s3-read"></td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-s3-write"></td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-s3-execute"></td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 4px; font-weight:500;">CloudFront</td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-cf-read"></td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-cf-write"></td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-cf-execute"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          
+          <input type="hidden" id="perms-modal-email">
+          <button type="button" id="btn-perms-modal-submit" class="ec2-btn-primary" style="width:100%; background:linear-gradient(135deg,#a371f7,#7c3aed);">
+            🛡️ &nbsp;Save Permissions
+          </button>
+        </div>
+      </div>
+
+    <!-- Service Switcher Nav -->
+    <nav class="service-nav" aria-label="AWS Service Selector">
+      <button type="button" class="svc-btn active" data-service="ec2" id="svc-btn-ec2">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        EC2 Instances
+      </button>
+      <button type="button" class="svc-btn" data-service="vpc" id="svc-btn-vpc">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        VPC Networks
+      </button>
+      <button type="button" class="svc-btn" data-service="s3" id="svc-btn-s3">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>
+        S3 Buckets
+      </button>
+      <button type="button" class="svc-btn" data-service="cf" id="svc-btn-cf">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+        CloudFront CDN
+      </button>
+      <button type="button" class="svc-btn" data-service="users" id="svc-btn-users" style="display: none;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Users Management
+      </button>
+    </nav>
+
+    <!-- Main Grid -->
+    <div class="ec2-main-grid">
+      <!-- LEFT PANEL -->
+      <div class="ec2-left-col">
+
+        <!-- ===== EC2 SERVICE PANEL ===== -->
+        <div class="service-panel active" id="svc-panel-ec2">
+          <div class="ec2-tabs-bar">
+            <button type="button" class="ec2-tab active" data-tab="ec2-basic">Basic</button>
+            <button type="button" class="ec2-tab" data-tab="ec2-network">Network</button>
+            <button type="button" class="ec2-tab" data-tab="ec2-advanced">Advanced</button>
+            <button type="button" class="ec2-tab" data-tab="ec2-preview">Code Preview</button>
+            <button type="button" class="ec2-tab" data-tab="ec2-deployments">Deployments</button>
+          </div>
+
+          <div class="ec2-tab-contents-container">
+            <!-- BASIC TAB -->
+            <div class="ec2-tab-content active" id="tab-content-ec2-basic">
+              <div class="ec2-form-group">
+                <label class="ec2-label">Instance Name</label>
+                <input type="text" id="instance-name" class="ec2-input" placeholder="my-web-server" pattern="[a-zA-Z0-9-]+" title="Alphanumeric and dashes only">
+                <p class="field-err" id="err-instance-name" style="display:none;"></p>
+              </div>
+
+              <div class="ec2-form-group">
+                <label class="ec2-label">AWS Account/Profile</label>
+                <div style="display:flex;gap:8px;">
+                  <select id="aws-profile" class="ec2-select" style="flex:1;">
+                    <option value="default">default</option>
+                  </select>
+                  <button type="button" class="ec2-btn-primary" id="btn-toggle-add-profile" style="width:auto;padding:0 14px;font-size:16px;line-height:1;">+</button>
+                </div>
+              </div>
+
+              <div id="add-profile-container" style="display:none;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:14px;margin-bottom:18px;">
+                <h4 style="margin:0 0 12px;font-size:12px;text-transform:uppercase;color:#8b949e;letter-spacing:0.05em;font-family:'Inter',sans-serif;">Add AWS Profile</h4>
+                <div style="display:flex;flex-direction:column;gap:12px;">
+                  <div>
+                    <label class="ec2-label" style="font-size:10px;">Profile Name</label>
+                    <input type="text" id="new-profile-name" class="ec2-input" placeholder="e.g. staging-admin">
+                    <p class="field-err" id="err-new-profile-name" style="display:none;"></p>
+                  </div>
+                  <div>
+                    <label class="ec2-label" style="font-size:10px;">AWS Access Key ID</label>
+                    <input type="text" id="new-profile-key" class="ec2-input" placeholder="AKIA...">
+                  </div>
+                  <div>
+                    <label class="ec2-label" style="font-size:10px;">AWS Secret Access Key</label>
+                    <input type="password" id="new-profile-secret" class="ec2-input" placeholder="Secret Access Key...">
+                  </div>
+                  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px;">
+                    <button type="button" class="ec2-btn-primary" id="btn-save-profile" style="font-size:11px;padding:6px 12px;">Save Profile</button>
+                  </div>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">
+                <div>
+                  <label class="ec2-label">AWS Region</label>
+                  <select id="aws-region" class="ec2-select">
+                    <option value="us-east-1">us-east-1 (N. Virginia)</option>
+                    <option value="us-east-2">us-east-2 (Ohio)</option>
+                    <option value="us-west-1">us-west-1 (N. California)</option>
+                    <option value="us-west-2">us-west-2 (Oregon)</option>
+                    <option value="eu-west-1">eu-west-1 (Ireland)</option>
+                    <option value="eu-central-1">eu-central-1 (Frankfurt)</option>
+                    <option value="ap-south-1">ap-south-1 (Mumbai)</option>
+                    <option value="ap-southeast-1">ap-southeast-1 (Singapore)</option>
+                    <option value="ap-northeast-1">ap-northeast-1 (Tokyo)</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="ec2-label">Instance Type</label>
+                  <select id="instance-type" class="ec2-select"></select>
+                  <p id="instance-price-info" style="font-size:11px;color:#3fb950;margin-top:4px;"></p>
+                </div>
+              </div>
+
+              <div class="ec2-form-group">
+                <label class="ec2-label">OS Image (AMI)</label>
+                <select id="os-image" class="ec2-select"></select>
+                <p id="os-ami-id-info" style="font-size:11px;color:#8b949e;margin-top:4px;font-family:'JetBrains Mono',monospace;"></p>
+              </div>
+
+              <div class="ec2-form-group" id="custom-ami-container" style="display:none;">
+                <label class="ec2-label">Custom AMI ID</label>
+                <input type="text" id="custom-ami-id" class="ec2-input" placeholder="ami-0123456789abcdef0">
+              </div>
+
+              <div class="ec2-form-group">
+                <label class="ec2-label">Root Disk Size (GB)</label>
+                <div style="display:flex;align-items:center;gap:14px;">
+                  <input type="range" id="disk-slider" min="8" max="500" step="1" style="flex:1;accent-color:#58a6ff;">
+                  <input type="number" id="disk-number" class="ec2-input" style="width:70px;" min="8" max="16384">
+                </div>
+                <p class="field-err" id="err-disk-size" style="display:none;"></p>
+              </div>
+            </div>
+
+            <!-- NETWORK TAB -->
+            <div class="ec2-tab-content" id="tab-content-ec2-network">
+              <div class="ec2-form-group">
+                <label class="ec2-label">Allowed Inbound Rules</label>
+                <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: flex-start;">
+                  <div style="flex: 2;">
+                    <input type="text" id="rule-port" class="ec2-input" placeholder="Port (e.g. 80, 5000-6000)" style="margin:0;">
+                    <p class="field-err" id="err-rule-port" style="display:none; font-size:11px; margin-top:2px;"></p>
+                  </div>
+                  <div style="flex: 1;">
+                    <select id="rule-protocol" class="ec2-select" style="margin:0;">
+                      <option value="tcp">TCP</option>
+                      <option value="udp">UDP</option>
+                      <option value="icmp">ICMP</option>
+                    </select>
+                  </div>
+                  <button type="button" class="ec2-btn-primary" id="btn-add-rule" style="padding:10px 14px; font-size:13px; line-height:1; height:38px; margin:0;">+ Add</button>
+                </div>
+                
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; overflow: hidden; margin-bottom: 12px;">
+                  <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;">
+                    <thead>
+                      <tr style="border-bottom: 1px solid #30363d; background: #0d1117;">
+                        <th style="padding: 8px 12px; color: #8b949e; font-weight: 500;">Port / Range</th>
+                        <th style="padding: 8px 12px; color: #8b949e; font-weight: 500;">Protocol</th>
+                        <th style="padding: 8px 12px; color: #8b949e; font-weight: 500; text-align: right;">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody id="rules-list-body">
+                      <!-- Dynamic rules -->
+                    </tbody>
+                  </table>
+                </div>
+                <p class="field-err" id="err-allowed-ports" style="display:none; margin-top:4px;"></p>
+              </div>
+              <div class="ec2-form-group">
+                <label class="ec2-label">Key Pair / PEM Name</label>
+                <input type="text" id="ec2-key-name" class="ec2-input" placeholder="e.g. my-key-pair">
+                <p class="field-err" id="err-ec2-key-name" style="display:none;"></p>
+                <p style="font-size:11px;color:#8b949e;margin-top:4px;">Define a custom name for the created key pair and .pem file. Alphanumeric, hyphens, and underscores only.</p>
+              </div>
+              <div class="ec2-form-group">
+                <label class="ec2-label">VPC Network</label>
+                <select id="ec2-vpc" class="ec2-select">
+                  <option value="">Default VPC</option>
+                </select>
+              </div>
+              <div class="ec2-form-group" id="ec2-subnet-container" style="display:none; margin-bottom:14px;">
+                <label class="ec2-label">Subnet</label>
+                <select id="ec2-subnet" class="ec2-select">
+                  <option value="">Default Subnet</option>
+                </select>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:12px 14px;margin-bottom:14px;" id="eip-container">
+                <div style="flex:1;padding-right:12px;">
+                  <p style="margin:0; font-size:13px; color:#e2e8f0; font-family:'Inter',sans-serif; font-weight:500;">Elastic IP (EIP)</p>
+                  <p style="margin:2px 0 0; font-size:11px; color:#8b949e; font-family:'Inter',sans-serif;">Allocate and associate a static Elastic IP address to this instance</p>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="ec2-associate-eip">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:14px;">
+                <p style="font-size:12px;color:#8b949e;margin:0;line-height:1.7;font-family:'Inter',sans-serif;">
+                  <span style="color:#e3b341;">⚠</span> All inbound traffic is denied by default except listed ports. Outbound is unrestricted.
+                </p>
+              </div>
+            </div>
+
+            <!-- ADVANCED TAB -->
+            <div class="ec2-tab-content" id="tab-content-ec2-advanced">
+              <div class="ec2-form-group">
+                <label class="ec2-label" style="display:flex;align-items:center;justify-content:space-between;">
+                  User Data (Startup Script)
+                  <button type="button" id="btn-toggle-userdata" style="background:none;border:none;color:#58a6ff;font-size:11px;cursor:pointer;padding:0;font-family:inherit;">Show</button>
+                </label>
+                <textarea id="user-data" class="ec2-input" placeholder="#!/bin/bash&#10;apt-get update" style="display:none;min-height:100px;font-family:'JetBrains Mono',monospace;"></textarea>
+                <div id="userdata-summary" style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 14px;font-size:12px;color:#8b949e;">No user data configured</div>
+              </div>
+              <div style="background:#161b22;border:1px solid #21262d;border-radius:8px;padding:16px;">
+                <p style="font-size:12px;color:#8b949e;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.05em;font-family:'Inter',sans-serif;font-weight:600;">Config Summary</p>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Name</span><span style="color:#e2e8f0;font-weight:500;" id="summary-name">—</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">AWS Profile</span><span style="color:#e2e8f0;font-weight:500;" id="summary-profile">default</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Region</span><span style="color:#e2e8f0;font-weight:500;" id="summary-region">—</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Type</span><span style="color:#e2e8f0;font-weight:500;" id="summary-type">—</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">OS</span><span style="color:#e2e8f0;font-weight:500;" id="summary-os">—</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Disk</span><span style="color:#e2e8f0;font-weight:500;" id="summary-disk">—</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Ports</span><span style="color:#e2e8f0;font-weight:500;" id="summary-ports">—</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">VPC Network</span><span style="color:#e2e8f0;font-weight:500;" id="summary-vpc">Default VPC</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;" id="summary-subnet-row"><span style="color:#8b949e;">Subnet</span><span style="color:#e2e8f0;font-weight:500;" id="summary-subnet">Default Subnet</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Elastic IP</span><span style="color:#e2e8f0;font-weight:500;" id="summary-eip">No</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Key Pair Name</span><span style="color:#e2e8f0;font-weight:500;" id="summary-key-name">—</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- CODE PREVIEW TAB -->
+            <div class="ec2-tab-content" id="tab-content-ec2-preview">
+              <h3 class="section-heading">Generated Terraform Configuration</h3>
+              <p style="font-size:12px;color:#8b949e;margin:0 0 14px;line-height:1.5;">Review the Terraform manifest before deploying.</p>
+              <div class="ec2-form-group" style="margin-bottom:18px;">
+                <label class="ec2-label">main.tf</label>
+                <pre id="preview-main-tf" class="code-preview-block"></pre>
+              </div>
+              <div class="ec2-form-group">
+                <label class="ec2-label">terraform.tfvars.json</label>
+                <pre id="preview-tfvars" class="code-preview-block" style="max-height:180px;"></pre>
+              </div>
+            </div>
+
+            <!-- DEPLOYMENTS TAB -->
+            <div class="ec2-tab-content" id="tab-content-ec2-deployments">
+              <h3 class="section-heading">Active Server Instances</h3>
+              <div id="deployments-list" style="display:flex;flex-direction:column;gap:14px;">
+                <div class="empty-state-msg">No active EC2 deployments found.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ec2-deploy-btn-container" id="deploy-btn-wrapper">
+            <button type="button" class="ec2-btn-primary" id="btn-provision-instance" style="width:100%;">
+              <span id="btn-provision-text">🚀&nbsp; Preview Configuration</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ===== VPC SERVICE PANEL ===== -->
+        <div class="service-panel" id="svc-panel-vpc">
+          <div class="ec2-tabs-bar">
+            <button type="button" class="ec2-tab active" data-tab="vpc-config">Config</button>
+            <button type="button" class="ec2-tab" data-tab="vpc-preview">Code Preview</button>
+            <button type="button" class="ec2-tab" data-tab="vpc-list">VPC Networks</button>
+          </div>
+
+          <div class="ec2-tab-contents-container">
+            <!-- VPC CONFIG TAB -->
+            <div class="ec2-tab-content active" id="tab-content-vpc-config">
+              <div class="ec2-form-group">
+                <label class="ec2-label">VPC Name</label>
+                <input type="text" id="vpc-name" class="ec2-input" placeholder="my-production-vpc" pattern="[a-zA-Z0-9-]+" title="Alphanumeric and dashes only">
+                <p class="field-err" id="err-vpc-name" style="display:none;"></p>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                <div>
+                  <label class="ec2-label">AWS Profile</label>
+                  <select id="vpc-profile" class="ec2-select">
+                    <option value="default">default</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="ec2-label">AWS Region</label>
+                  <select id="vpc-region" class="ec2-select">
+                    <option value="us-east-1">us-east-1 (N. Virginia)</option>
+                    <option value="us-east-2">us-east-2 (Ohio)</option>
+                    <option value="us-west-1">us-west-1 (N. California)</option>
+                    <option value="us-west-2">us-west-2 (Oregon)</option>
+                    <option value="eu-west-1">eu-west-1 (Ireland)</option>
+                    <option value="eu-central-1">eu-central-1 (Frankfurt)</option>
+                    <option value="ap-south-1">ap-south-1 (Mumbai)</option>
+                    <option value="ap-southeast-1">ap-southeast-1 (Singapore)</option>
+                    <option value="ap-northeast-1">ap-northeast-1 (Tokyo)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="ec2-form-group">
+                <label class="ec2-label">VPC CIDR Block</label>
+                <select id="vpc-cidr" class="ec2-select">
+                  <option value="10.0.0.0/16">10.0.0.0/16 — 65,536 IPs</option>
+                  <option value="172.16.0.0/16">172.16.0.0/16 — 65,536 IPs</option>
+                  <option value="192.168.0.0/16">192.168.0.0/16 — 65,536 IPs</option>
+                  <option value="10.0.0.0/20">10.0.0.0/20 — 4,096 IPs</option>
+                  <option value="10.0.0.0/24">10.0.0.0/24 — 256 IPs</option>
+                </select>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                <div>
+                  <label class="ec2-label">Public Subnets</label>
+                  <select id="vpc-public-subnets" class="ec2-select">
+                    <option value="0">0 — none</option>
+                    <option value="1">1 subnet</option>
+                    <option value="2" selected>2 subnets</option>
+                    <option value="3">3 subnets</option>
+                    <option value="4">4 subnets</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="ec2-label">Private Subnets</label>
+                  <select id="vpc-private-subnets" class="ec2-select">
+                    <option value="0">0 — none</option>
+                    <option value="1">1 subnet</option>
+                    <option value="2" selected>2 subnets</option>
+                    <option value="3">3 subnets</option>
+                    <option value="4">4 subnets</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="options-card">
+                <p class="options-card-title">Gateway Options</p>
+                <label class="toggle-row">
+                  <span class="toggle-info">
+                    <span class="toggle-title">Internet Gateway</span>
+                    <span class="toggle-desc">Enable internet access for public subnets</span>
+                  </span>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="vpc-enable-igw" checked>
+                    <span class="toggle-slider"></span>
+                  </div>
+                </label>
+                <label class="toggle-row">
+                  <span class="toggle-info">
+                    <span class="toggle-title">NAT Gateway</span>
+                    <span class="toggle-desc">Allow private subnets to reach internet</span>
+                  </span>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="vpc-enable-nat">
+                    <span class="toggle-slider"></span>
+                  </div>
+                </label>
+                <label class="toggle-row">
+                  <span class="toggle-info">
+                    <span class="toggle-title">DNS Hostnames</span>
+                    <span class="toggle-desc">Assign public DNS names to EC2 instances</span>
+                  </span>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="vpc-dns-hostnames" checked>
+                    <span class="toggle-slider"></span>
+                  </div>
+                </label>
+              </div>
+
+              <div class="summary-card summary-card-vpc">
+                <p class="summary-card-title" style="color:#58a6ff;">VPC Summary</p>
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Name</span><span style="color:#e2e8f0;font-weight:500;" id="vpc-summary-name">—</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">CIDR</span><span style="color:#e2e8f0;font-weight:500;font-family:'JetBrains Mono',monospace;" id="vpc-summary-cidr">10.0.0.0/16</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Subnets</span><span style="color:#e2e8f0;font-weight:500;" id="vpc-summary-subnets">2 public, 2 private</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Gateways</span><span style="color:#e2e8f0;font-weight:500;" id="vpc-summary-gateways">IGW</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- VPC CODE PREVIEW TAB -->
+            <div class="ec2-tab-content" id="tab-content-vpc-preview">
+              <h3 class="section-heading">Generated VPC Terraform Config</h3>
+              <p style="font-size:12px;color:#8b949e;margin:0 0 14px;line-height:1.5;">Review the Terraform code before creating your VPC.</p>
+              <div class="ec2-form-group" style="margin-bottom:18px;">
+                <label class="ec2-label">main.tf</label>
+                <pre id="vpc-preview-main-tf" class="code-preview-block"></pre>
+              </div>
+              <div class="ec2-form-group">
+                <label class="ec2-label">terraform.tfvars.json</label>
+                <pre id="vpc-preview-tfvars" class="code-preview-block" style="max-height:180px;"></pre>
+              </div>
+            </div>
+
+            <!-- VPC LIST TAB -->
+            <div class="ec2-tab-content" id="tab-content-vpc-list">
+              <h3 class="section-heading">Managed VPC Networks</h3>
+              <div id="vpc-resources-list" style="display:flex;flex-direction:column;gap:14px;">
+                <div class="empty-state-msg">No VPC networks found.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ec2-deploy-btn-container" id="vpc-deploy-btn-wrapper">
+            <button type="button" class="ec2-btn-vpc" id="btn-vpc-action" style="width:100%;">
+              <span id="btn-vpc-text">🌐&nbsp; Preview VPC Configuration</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ===== S3 SERVICE PANEL ===== -->
+        <div class="service-panel" id="svc-panel-s3">
+          <div class="ec2-tabs-bar">
+            <button type="button" class="ec2-tab active" data-tab="s3-config">Config</button>
+            <button type="button" class="ec2-tab" data-tab="s3-preview">Code Preview</button>
+            <button type="button" class="ec2-tab" data-tab="s3-list">S3 Buckets</button>
+          </div>
+
+          <div class="ec2-tab-contents-container">
+            <!-- S3 CONFIG TAB -->
+            <div class="ec2-tab-content active" id="tab-content-s3-config">
+              <div class="ec2-form-group">
+                <label class="ec2-label">Bucket Name</label>
+                <input type="text" id="s3-name" class="ec2-input" placeholder="my-app-data-bucket" pattern="[a-z0-9-]+" title="Lowercase alphanumeric and dashes only">
+                <p style="font-size:11px;color:#8b949e;margin-top:4px;">Must be globally unique. Lowercase letters, numbers, and dashes only.</p>
+                <p class="field-err" id="err-s3-name" style="display:none;"></p>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                <div>
+                  <label class="ec2-label">AWS Profile</label>
+                  <select id="s3-profile" class="ec2-select">
+                    <option value="default">default</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="ec2-label">AWS Region</label>
+                  <select id="s3-region" class="ec2-select">
+                    <option value="us-east-1">us-east-1 (N. Virginia)</option>
+                    <option value="us-east-2">us-east-2 (Ohio)</option>
+                    <option value="us-west-1">us-west-1 (N. California)</option>
+                    <option value="us-west-2">us-west-2 (Oregon)</option>
+                    <option value="eu-west-1">eu-west-1 (Ireland)</option>
+                    <option value="eu-central-1">eu-central-1 (Frankfurt)</option>
+                    <option value="ap-south-1">ap-south-1 (Mumbai)</option>
+                    <option value="ap-southeast-1">ap-southeast-1 (Singapore)</option>
+                    <option value="ap-northeast-1">ap-northeast-1 (Tokyo)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="ec2-form-group">
+                <label class="ec2-label">Server-Side Encryption</label>
+                <select id="s3-encryption" class="ec2-select">
+                  <option value="AES256">AES-256 (S3 Managed Keys)</option>
+                  <option value="aws:kms">AWS KMS (Customer Managed Keys)</option>
+                </select>
+              </div>
+
+              <div class="options-card">
+                <p class="options-card-title">Bucket Options</p>
+                <label class="toggle-row">
+                  <span class="toggle-info">
+                    <span class="toggle-title">Block All Public Access</span>
+                    <span class="toggle-desc">Recommended for private data storage</span>
+                  </span>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="s3-block-public" checked>
+                    <span class="toggle-slider"></span>
+                  </div>
+                </label>
+                <label class="toggle-row">
+                  <span class="toggle-info">
+                    <span class="toggle-title">Versioning</span>
+                    <span class="toggle-desc">Keep multiple versions of each object</span>
+                  </span>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="s3-versioning">
+                    <span class="toggle-slider"></span>
+                  </div>
+                </label>
+                <label class="toggle-row">
+                  <span class="toggle-info">
+                    <span class="toggle-title">Force Destroy</span>
+                    <span class="toggle-desc">Allow deletion of non-empty buckets</span>
+                  </span>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="s3-force-destroy">
+                    <span class="toggle-slider"></span>
+                  </div>
+                </label>
+              </div>
+
+              <div class="summary-card summary-card-s3">
+                <p class="summary-card-title" style="color:#e3b341;">Bucket Summary</p>
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Name</span><span style="color:#e2e8f0;font-weight:500;" id="s3-summary-name">—</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Encryption</span><span style="color:#e2e8f0;font-weight:500;" id="s3-summary-encryption">AES-256</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Public Access</span><span style="color:#e2e8f0;font-weight:500;" id="s3-summary-public">Blocked</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Versioning</span><span style="color:#e2e8f0;font-weight:500;" id="s3-summary-versioning">Disabled</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- S3 CODE PREVIEW TAB -->
+            <div class="ec2-tab-content" id="tab-content-s3-preview">
+              <h3 class="section-heading">Generated S3 Terraform Config</h3>
+              <p style="font-size:12px;color:#8b949e;margin:0 0 14px;line-height:1.5;">Review the Terraform code before creating your S3 bucket.</p>
+              <div class="ec2-form-group" style="margin-bottom:18px;">
+                <label class="ec2-label">main.tf</label>
+                <pre id="s3-preview-main-tf" class="code-preview-block"></pre>
+              </div>
+              <div class="ec2-form-group">
+                <label class="ec2-label">terraform.tfvars.json</label>
+                <pre id="s3-preview-tfvars" class="code-preview-block" style="max-height:180px;"></pre>
+              </div>
+            </div>
+
+            <!-- S3 LIST TAB -->
+            <div class="ec2-tab-content" id="tab-content-s3-list">
+              <h3 class="section-heading">Managed S3 Buckets</h3>
+              <div id="s3-resources-list" style="display:flex;flex-direction:column;gap:14px;">
+                <div class="empty-state-msg">No S3 buckets found.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ec2-deploy-btn-container" id="s3-deploy-btn-wrapper">
+            <button type="button" class="ec2-btn-s3" id="btn-s3-action" style="width:100%;">
+              <span id="btn-s3-text">🪣&nbsp; Preview Bucket Configuration</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ===== CLOUDFRONT SERVICE PANEL ===== -->
+        <div class="service-panel" id="svc-panel-cf">
+          <div class="ec2-tabs-bar">
+            <button type="button" class="ec2-tab active" data-tab="cf-config">Config</button>
+            <button type="button" class="ec2-tab" data-tab="cf-preview">Code Preview</button>
+            <button type="button" class="ec2-tab" data-tab="cf-list">Distributions</button>
+          </div>
+
+          <div class="ec2-tab-contents-container">
+            <!-- CF CONFIG TAB -->
+            <div class="ec2-tab-content active" id="tab-content-cf-config">
+
+              <div class="cf-s3-origin-card">
+                <div class="cf-origin-badge">S3 ORIGIN</div>
+                <p class="cf-origin-label">Source S3 Bucket</p>
+                <select id="cf-s3-bucket" class="ec2-select cf-bucket-select"></select>
+                <p id="cf-bucket-status-hint" style="font-size:11px;color:#8b949e;margin-top:5px;">Select or type the S3 bucket to serve via CloudFront</p>
+                <p class="field-err" id="err-cf-s3-bucket" style="display:none;"></p>
+              </div>
+
+              <div class="ec2-form-group">
+                <label class="ec2-label">Distribution Name</label>
+                <input type="text" id="cf-name" class="ec2-input" placeholder="my-cdn-distribution" pattern="[a-zA-Z0-9-]+" title="Alphanumeric and dashes only">
+                <p class="field-err" id="err-cf-name" style="display:none;"></p>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                <div>
+                  <label class="ec2-label">AWS Profile</label>
+                  <select id="cf-profile" class="ec2-select">
+                    <option value="default">default</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="ec2-label">Default Root Object</label>
+                  <input type="text" id="cf-root-object" class="ec2-input" value="index.html" placeholder="index.html">
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                <div>
+                  <label class="ec2-label">Price Class</label>
+                  <select id="cf-price-class" class="ec2-select">
+                    <option value="PriceClass_100">PriceClass_100 — US, CA, EU (Cheapest)</option>
+                    <option value="PriceClass_200">PriceClass_200 — + Asia, Middle East</option>
+                    <option value="PriceClass_All">PriceClass_All — All Edge Locations</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="ec2-label">HTTPS Policy</label>
+                  <select id="cf-protocol-policy" class="ec2-select">
+                    <option value="redirect-to-https">Redirect HTTP → HTTPS</option>
+                    <option value="https-only">HTTPS Only</option>
+                    <option value="allow-all">HTTP &amp; HTTPS</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">
+                <div>
+                  <label class="ec2-label">Min TTL (sec)</label>
+                  <input type="number" id="cf-min-ttl" class="ec2-input" value="0" min="0">
+                </div>
+                <div>
+                  <label class="ec2-label">Default TTL (sec)</label>
+                  <input type="number" id="cf-default-ttl" class="ec2-input" value="86400" min="0">
+                </div>
+                <div>
+                  <label class="ec2-label">Max TTL (sec)</label>
+                  <input type="number" id="cf-max-ttl" class="ec2-input" value="31536000" min="0">
+                </div>
+              </div>
+
+              <div class="ec2-form-group">
+                <label class="ec2-label">Origin Path <span style="color:#484f58;font-weight:400;">(optional)</span></label>
+                <input type="text" id="cf-origin-path" class="ec2-input" placeholder="/subfolder (leave blank for root)">
+              </div>
+
+              <div class="options-card" style="margin-bottom:14px;">
+                <p class="options-card-title">Performance Options</p>
+                <label class="toggle-row">
+                  <span class="toggle-info">
+                    <span class="toggle-title">Gzip / Brotli Compression</span>
+                    <span class="toggle-desc">Reduce bandwidth — compress responses at the edge</span>
+                  </span>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="cf-compress" checked>
+                    <span class="toggle-slider"></span>
+                  </div>
+                </label>
+              </div>
+
+              <div class="summary-card summary-card-cf">
+                <p class="summary-card-title" style="color:#a371f7;">Distribution Summary</p>
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Name</span><span style="color:#e2e8f0;font-weight:500;" id="cf-summary-name">—</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">S3 Origin</span><span style="color:#e2e8f0;font-weight:500;font-family:'JetBrains Mono',monospace;" id="cf-summary-bucket">—</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Price Class</span><span style="color:#e2e8f0;font-weight:500;" id="cf-summary-price">PriceClass_100</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Protocol</span><span style="color:#e2e8f0;font-weight:500;" id="cf-summary-protocol">Redirect to HTTPS</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Default TTL</span><span style="color:#e2e8f0;font-weight:500;" id="cf-summary-ttl">86400s (1 day)</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Compress</span><span style="color:#e2e8f0;font-weight:500;" id="cf-summary-compress">Enabled</span></div>
+                </div>
+              </div>
+
+              <div style="background:#1a1130;border:1px solid #5a2e91;border-radius:8px;padding:12px 14px;">
+                <p style="font-size:12px;color:#a371f7;margin:0 0 4px;font-weight:600;">⚡ What CloudFront Does</p>
+                <p style="font-size:11px;color:#8b949e;margin:0;line-height:1.7;">Serves your S3 bucket through 400+ global edge locations. An Origin Access Control (OAC) policy is automatically created so the bucket stays private — only CloudFront can read it. TLS 1.2+ enforced. Certificate included free.</p>
+              </div>
+            </div>
+
+            <!-- CF CODE PREVIEW TAB -->
+            <div class="ec2-tab-content" id="tab-content-cf-preview">
+              <h3 class="section-heading">Generated CloudFront Terraform Config</h3>
+              <p style="font-size:12px;color:#8b949e;margin:0 0 14px;line-height:1.5;">Review the Terraform code before creating your distribution. CloudFront can take 5–15 minutes to provision.</p>
+              <div class="ec2-form-group" style="margin-bottom:18px;">
+                <label class="ec2-label">main.tf</label>
+                <pre id="cf-preview-main-tf" class="code-preview-block" style="max-height:260px;"></pre>
+              </div>
+              <div class="ec2-form-group">
+                <label class="ec2-label">terraform.tfvars.json</label>
+                <pre id="cf-preview-tfvars" class="code-preview-block"></pre>
+              </div>
+            </div>
+
+            <!-- CF DISTRIBUTIONS LIST TAB -->
+            <div class="ec2-tab-content" id="tab-content-cf-list">
+              <h3 class="section-heading">Active CloudFront Distributions</h3>
+              <div id="cf-resources-list" style="display:flex;flex-direction:column;gap:14px;">
+                <div class="empty-state-msg">No CloudFront distributions found.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ec2-deploy-btn-container" id="cf-deploy-btn-wrapper">
+            <button type="button" class="ec2-btn-cf" id="btn-cf-action" style="width:100%;">
+              <span id="btn-cf-text">☁️&nbsp; Preview Distribution Configuration</span>
+            </button>
+          </div>
+        </div><!-- end svc-panel-cf -->
+
+        <!-- ===== USER MANAGEMENT SERVICE PANEL (ADMIN ONLY) ===== -->
+        <div class="service-panel" id="svc-panel-users">
+          <div class="ec2-tabs-bar">
+            <button type="button" class="ec2-tab active" data-tab="users-list">Registered Users</button>
+            <button type="button" class="ec2-tab" data-tab="users-create">Create User</button>
+          </div>
+
+          <div class="ec2-tab-contents-container">
+            <!-- USERS LIST TAB -->
+            <div class="ec2-tab-content active" id="tab-content-users-list">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+                <h3 class="section-heading" style="margin:0;">Registered Control Panel Users</h3>
+                <button type="button" class="ec2-btn-secondary" id="btn-refresh-users" style="width:auto; padding:6px 12px; font-size:11px; margin:0;">🔄 Refresh</button>
+              </div>
+              
+              <div id="users-error" class="auth-alert error" style="display: none; margin-bottom: 12px;"></div>
+              <div id="users-success" class="auth-alert success" style="display: none; margin-bottom: 12px;"></div>
+              
+              <div class="users-table-container">
+                <table class="users-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Role</th>
+                      <th>Status</th>
+                      <th style="text-align:right;">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="users-table-body">
+                    <tr>
+                      <td colspan="5" style="padding:20px; text-align:center; color:#8b949e;">Loading users list...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- CREATE USER TAB -->
+            <div class="ec2-tab-content" id="tab-content-users-create">
+              <h3 class="section-heading">Create New User Account</h3>
+              <p style="font-size:12px; color:#8b949e; margin:0 0 18px; line-height:1.6;">Create a portal account directly. The new user's role and verification status are set immediately — no email verification required.</p>
+
+              <div id="create-user-error" class="auth-alert error" style="display: none; margin-bottom: 12px;"></div>
+              <div id="create-user-success" class="auth-alert success" style="display: none; margin-bottom: 12px;"></div>
+
+              <form id="create-user-form">
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Full Name</label>
+                  <input type="text" id="new-user-name" class="ec2-input" placeholder="John Doe" required>
+                </div>
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Email Address</label>
+                  <input type="email" id="new-user-email" class="ec2-input" placeholder="name@domain.com" required>
+                </div>
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Password</label>
+                  <input type="password" id="new-user-password" class="ec2-input" placeholder="Min 6 characters" required minlength="6">
+                </div>
+
+                <!-- Privilege toggles -->
+                <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px; margin-bottom:18px;">
+                  <p style="font-size:11px; color:#8b949e; text-transform:uppercase; letter-spacing:0.05em; font-weight:600; margin:0 0 14px; font-family:'Inter',sans-serif;">Account Privileges</p>
+                  
+                  <div class="toggle-row" style="margin-bottom:12px;">
+                    <div>
+                      <p style="margin:0; font-size:13px; color:#c9d1d9; font-family:'Inter',sans-serif; font-weight:500;">Email Verified</p>
+                      <p style="margin:2px 0 0; font-size:11px; color:#8b949e; font-family:'Inter',sans-serif;">Account is pre-verified and can log in immediately</p>
+                    </div>
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="new-user-is-verified" checked>
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+
+                  <div class="toggle-row">
+                    <div>
+                      <p style="margin:0; font-size:13px; color:#c9d1d9; font-family:'Inter',sans-serif; font-weight:500;">Admin Role</p>
+                      <p style="margin:2px 0 0; font-size:11px; color:#8b949e; font-family:'Inter',sans-serif;">Grant full admin access including user management</p>
+                    </div>
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="new-user-is-admin">
+                      <span class="toggle-slider"></span>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Service Permissions Matrix -->
+                <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px; margin-bottom:18px;" id="permissions-section">
+                  <p style="font-size:11px; color:#8b949e; text-transform:uppercase; letter-spacing:0.05em; font-weight:600; margin:0 0 4px; font-family:'Inter',sans-serif;">Service Permissions</p>
+                  <p style="font-size:11px; color:#8b949e; margin:0 0 12px; font-family:'Inter',sans-serif;">Specify granular access control for standard users</p>
+                  <table style="width:100%; border-collapse:collapse; font-family:'Inter',sans-serif; font-size:13px; color:#c9d1d9;">
+                    <thead>
+                      <tr style="border-bottom:1px solid #30363d;">
+                        <th style="text-align:left; padding:8px 4px; color:#8b949e; font-weight:500;">Service</th>
+                        <th style="text-align:center; padding:8px 4px; color:#8b949e; font-weight:500;">Read</th>
+                        <th style="text-align:center; padding:8px 4px; color:#8b949e; font-weight:500;">Write</th>
+                        <th style="text-align:center; padding:8px 4px; color:#8b949e; font-weight:500;">Execute</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr style="border-bottom:1px solid #21262d;">
+                        <td style="padding:10px 4px; font-weight:500;">EC2</td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-ec2-read" checked></td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-ec2-write"></td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-ec2-execute"></td>
+                      </tr>
+                      <tr style="border-bottom:1px solid #21262d;">
+                        <td style="padding:10px 4px; font-weight:500;">VPC</td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-vpc-read" checked></td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-vpc-write"></td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-vpc-execute"></td>
+                      </tr>
+                      <tr style="border-bottom:1px solid #21262d;">
+                        <td style="padding:10px 4px; font-weight:500;">S3</td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-s3-read" checked></td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-s3-write"></td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-s3-execute"></td>
+                      </tr>
+                      <tr>
+                        <td style="padding:10px 4px; font-weight:500;">CloudFront</td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-cf-read" checked></td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-cf-write"></td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-cf-execute"></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <button type="submit" class="ec2-btn-primary" style="width:100%; background: linear-gradient(135deg, #a371f7, #7c3aed);">
+                  ➕ &nbsp;Create User Account
+                </button>
+              </form>
+            </div>
+          </div>
+        </div><!-- end svc-panel-users -->
+
+      </div><!-- end ec2-left-col -->
+
+      <!-- RIGHT: Live Logs (shared across all services) -->
+      <div class="ec2-right-col">
+        <div class="ec2-logs-header">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="ec2-logs-title">Live Terraform Logs</span>
+            <span id="log-status-badge" style="display:none;font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;"></span>
+          </div>
+          <button type="button" id="btn-clear-logs" style="background:none;border:1px solid #30363d;border-radius:4px;color:#8b949e;font-size:11px;padding:4px 10px;cursor:pointer;font-family:inherit;">Clear</button>
+        </div>
+
+        <div class="ec2-log-terminal" id="log-terminal-container">
+          <div class="log-line" style="color:#484f58;">— Select a service above, configure your resource, and click Provision to begin —</div>
+        </div>
+
+        <!-- EC2 SSH Banner -->
+        <div id="ssh-connect-banner" style="display:none;padding:16px 20px;border-top:1px solid #30363d;background:#0d1117;">
+          <div style="background:#0d2119;border:1px solid #238636;border-radius:8px;padding:12px 16px;">
+            <p style="margin:0;font-size:12px;color:#3fb950;line-height:1.7;font-family:'Inter',sans-serif;">
+              ✅ <strong>Instance running.</strong> Connect via SSH:<br>
+              <span style="color:#8b949e;font-family:'JetBrains Mono',monospace;display:block;margin:4px 0;" id="ssh-command-snippet">ssh -i ~/.ssh/key.pem ubuntu@&lt;ip&gt;</span>
+              <a id="ssh-download-key-btn" href="#" style="margin-top:8px;display:inline-flex;width:auto;font-size:11px;text-decoration:none;padding:6px 12px;border-radius:4px;border:1px solid #30363d;color:#e2e8f0;font-family:inherit;font-weight:500;">📥 Download Key (.pem)</a>
+            </p>
+          </div>
+        </div>
+
+        <!-- VPC Created Banner -->
+        <div id="vpc-created-banner" style="display:none;padding:16px 20px;border-top:1px solid #30363d;background:#0d1117;">
+          <div style="background:#0d1a2e;border:1px solid #1d3a6e;border-radius:8px;padding:12px 16px;">
+            <p style="margin:0;font-size:12px;color:#58a6ff;line-height:1.7;font-family:'Inter',sans-serif;">
+              🌐 <strong>VPC Active.</strong><br>
+              <span style="color:#8b949e;font-family:'JetBrains Mono',monospace;display:block;margin:4px 0;" id="vpc-id-snippet">vpc-xxxxxxxx</span>
+            </p>
+          </div>
+        </div>
+
+        <!-- S3 Created Banner -->
+        <div id="s3-created-banner" style="display:none;padding:16px 20px;border-top:1px solid #30363d;background:#0d1117;">
+          <div style="background:#1a1200;border:1px solid #6e4a00;border-radius:8px;padding:12px 16px;">
+            <p style="margin:0;font-size:12px;color:#e3b341;line-height:1.7;font-family:'Inter',sans-serif;">
+              🪣 <strong>S3 Bucket Active.</strong><br>
+              <span style="color:#8b949e;font-family:'JetBrains Mono',monospace;display:block;margin:4px 0;" id="s3-arn-snippet">arn:aws:s3:::bucket-name</span>
+            </p>
+          </div>
+        </div>
+
+        <!-- CloudFront Active Banner -->
+        <div id="cf-created-banner" style="display:none;padding:16px 20px;border-top:1px solid #30363d;background:#0d1117;">
+          <div class="cf-live-card">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a371f7" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+              <strong style="color:#a371f7;font-size:12px;">CloudFront Distribution Active</strong>
+            </div>
+            <div class="cf-detail-row"><span>Distribution ID</span><span id="cf-dist-id-snippet" style="font-family:'JetBrains Mono',monospace;">—</span></div>
+            <div class="cf-detail-row"><span>CloudFront Domain</span><span id="cf-domain-snippet" style="font-family:'JetBrains Mono',monospace;">—</span></div>
+            <div class="cf-detail-row" style="margin-top:8px;">
+              <a id="cf-open-url-btn" href="#" target="_blank" class="cf-open-btn">🔗 Open Distribution URL</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,169 @@
+version: '3.8'
+
+services:
+  nginx:
+    build: ./nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - app-network
+      - monitoring-network
+    depends_on:
+      - frontend
+      - api
+      - admin
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  api:
+    build: ./api
+    restart: unless-stopped
+    environment:
+      - MONGO_URL=mongodb://mongo:27017/test
+      - REDIS_URL=redis://redis:6379
+    networks:
+      - app-network
+      - data-network
+    depends_on:
+      - mongo
+      - redis
+
+  admin:
+    build: ./admin
+    restart: unless-stopped
+    networks:
+      - app-network
+      - data-network
+    depends_on:
+      - mongo
+      - redis
+
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    networks:
+      - data-network
+    volumes:
+      - mongo-data:/data/db
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    networks:
+      - data-network
+    volumes:
+      - redis-data:/data
+
+  # Prometheus monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=15d'
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/alert.rules.yml:/etc/prometheus/alert.rules.yml
+      - prometheus-data:/prometheus
+    networks:
+      - monitoring-network
+    depends_on:
+      - alertmanager
+      - node-exporter
+      - cadvisor
+
+  # Grafana Dashboard
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - monitoring-network
+
+  # Alertmanager
+  alertmanager:
+    image: prom/alertmanager:latest
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    networks:
+      - monitoring-network
+
+  # Node Exporter
+  node-exporter:
+    image: prom/node-exporter:latest
+    restart: unless-stopped
+    volumes:
+      - /:/host:ro,rslave
+    command:
+      - '--path.rootfs=/host'
+    networks:
+      - monitoring-network
+
+  # cAdvisor
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.0
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - "/dev/kmsg"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - monitoring-network
+
+  # Mongo Exporter
+  mongo-exporter:
+    image: percona/mongodb_exporter:0.40
+    restart: unless-stopped
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017
+    networks:
+      - monitoring-network
+      - data-network
+    depends_on:
+      - mongo
+
+  # Redis Exporter
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    restart: unless-stopped
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    networks:
+      - monitoring-network
+      - data-network
+    depends_on:
+      - redis
+
+networks:
+  app-network:
+    driver: bridge
+  data-network:
+    driver: bridge
+    internal: true
+  monitoring-network:
+    driver: bridge
+
+volumes:
+  mongo-data:
+  redis-data:
+  prometheus-data:
+  grafana-data:

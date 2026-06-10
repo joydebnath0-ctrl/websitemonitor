@@ -11,8 +11,12 @@
   <div class="shell">
     <div class="container">
       <header>
-        <h1>Astrology Report Generator</h1>
-        <p>Discover your celestial blueprint</p>
+        <div class="lang-switcher" aria-label="Language selector">
+          <button id="btnLangEn" class="lang-btn active" type="button">English</button>
+          <button id="btnLangBn" class="lang-btn" type="button">বাংলা</button>
+        </div>
+        <h1 data-key="header-title">Astrology Report Generator</h1>
+        <p data-key="header-tagline">Discover your celestial blueprint</p>
       </header>
 
       <!-- Birth Details Input Form -->
@@ -20,27 +24,27 @@
         <form id="astrologyForm">
           <div class="form-grid">
             <div class="input-group">
-              <label for="birthName">Full Name</label>
+              <label for="birthName" data-key="label-name">Full Name</label>
               <input type="text" id="birthName" required placeholder="Enter full name">
             </div>
             
             <div class="input-group">
-              <label for="birthPlace">Place of Birth</label>
+              <label for="birthPlace" data-key="label-place">Place of Birth</label>
               <input type="text" id="birthPlace" placeholder="City, State, Country (e.g., London, UK)">
             </div>
             
             <div class="input-group">
-              <label for="dob">Date of Birth</label>
+              <label for="dob" data-key="label-dob">Date of Birth</label>
               <input type="date" id="dob" required>
             </div>
             
             <div class="input-group">
-              <label for="birthTime">Time of Birth</label>
+              <label for="birthTime" data-key="label-time">Time of Birth</label>
               <input type="time" id="birthTime" required>
             </div>
           </div>
           
-          <button type="submit" class="btn-submit">Generate Astrology Report</button>
+          <button type="submit" class="btn-submit" id="btnSubmitForm" data-key="btn-generate">Generate Astrology Report</button>
         </form>
       </section>
 
@@ -49,26 +53,26 @@
         <div class="report-header">
           <h2 id="respName">Jane Doe</h2>
           <div class="birth-details-tagline">
-            Born on <span id="respDob">March 21, 1995 (Tuesday)</span> at <span id="respTime">08:30 AM</span> in <span id="respPlace">London, UK</span>
+            <span data-key="tagline-born">Born on</span> <span id="respDob">March 21, 1995 (Tuesday)</span> <span data-key="tagline-at">at</span> <span id="respTime">08:30 AM</span> <span data-key="tagline-in">in</span> <span id="respPlace">London, UK</span>
           </div>
         </div>
 
         <!-- Astrological Sign Overview Cards -->
         <section class="overview-grid" aria-label="Sign overview">
           <div class="overview-card">
-            <h3>Sun Sign (Zodiac)</h3>
+            <h3 data-key="card-sunsign">Sun Sign (Zodiac)</h3>
             <div class="card-value" id="valSunSign">♈ Aries</div>
             <div class="card-detail" id="detailSunSign">Element: Fire | Ruler: Mars</div>
           </div>
           
           <div class="overview-card">
-            <h3>Moon Sign</h3>
+            <h3 data-key="card-moonsign">Moon Sign</h3>
             <div class="card-value" id="valMoonSign">♌ Leo</div>
             <div class="card-detail" id="detailMoonSign">Element: Fire | Ruler: Sun</div>
           </div>
           
           <div class="overview-card">
-            <h3>Ascendant (Rising)</h3>
+            <h3 data-key="card-ascendant">Ascendant (Rising)</h3>
             <div class="card-value" id="valAscendant">♉ Taurus</div>
             <div class="card-detail" id="detailAscendant">Element: Earth | Ruler: Venus</div>
           </div>
@@ -78,7 +82,7 @@
         <div class="mid-section">
           <!-- North Indian Birth Chart -->
           <section class="chart-box">
-            <h3>Birth Chart (North Indian Kundli)</h3>
+            <h3 data-key="section-chart">Birth Chart (North Indian Kundli)</h3>
             <svg class="astrology-chart-svg" id="chartSvg" viewBox="0 0 320 320" role="img" aria-label="North Indian Kundli birth chart showing planetary positions in houses">
               <!-- Dynamically drawn via JS -->
             </svg>
@@ -86,11 +90,11 @@
 
           <!-- Elemental Balance -->
           <section class="element-box">
-            <h3>Elemental Balance</h3>
+            <h3 data-key="section-elements">Elemental Balance</h3>
             
             <div class="element-row">
               <div class="element-label">
-                <span>🔥 Fire</span>
+                <span data-key="el-fire">🔥 Fire</span>
                 <span id="pctFire">0%</span>
               </div>
               <div class="element-bar-container">
@@ -100,7 +104,7 @@
 
             <div class="element-row">
               <div class="element-label">
-                <span>⛰️ Earth</span>
+                <span data-key="el-earth">⛰️ Earth</span>
                 <span id="pctEarth">0%</span>
               </div>
               <div class="element-bar-container">
@@ -110,7 +114,7 @@
 
             <div class="element-row">
               <div class="element-label">
-                <span>💨 Air</span>
+                <span data-key="el-air">💨 Air</span>
                 <span id="pctAir">0%</span>
               </div>
               <div class="element-bar-container">
@@ -120,7 +124,7 @@
 
             <div class="element-row">
               <div class="element-label">
-                <span>💧 Water</span>
+                <span data-key="el-water">💧 Water</span>
                 <span id="pctWater">0%</span>
               </div>
               <div class="element-bar-container">
@@ -132,15 +136,15 @@
 
         <!-- Planetary Placements Table -->
         <section class="placements-table-box">
-          <h3>Planetary Placements</h3>
+          <h3 data-key="section-placements">Planetary Placements</h3>
           <table class="placements-table" id="placementsTable">
             <thead>
               <tr>
-                <th>Planet</th>
-                <th>Sign</th>
-                <th>House</th>
-                <th>Degree</th>
-                <th>Element</th>
+                <th data-key="th-planet">Planet</th>
+                <th data-key="th-sign">Sign</th>
+                <th data-key="th-house">House</th>
+                <th data-key="th-degree">Degree</th>
+                <th data-key="th-element">Element</th>
               </tr>
             </thead>
             <tbody>
@@ -152,25 +156,56 @@
         <!-- Personality Readings & Interpretations -->
         <section class="readings-box" aria-label="Personalized astrological readings">
           <div class="reading-section">
-            <h4 id="titleSunReading">Sun Sign Interpretation</h4>
+            <h4 id="titleSunReading" data-key="read-sun-title">Sun Sign Interpretation</h4>
             <p id="sunSignReading">...</p>
           </div>
           
           <div class="reading-section">
-            <h4 id="titleAscReading">Rising Sign (Ascendant) Interpretation</h4>
+            <h4 id="titleAscReading" data-key="read-asc-title">Rising Sign (Ascendant) Interpretation</h4>
             <p id="ascSignReading">...</p>
           </div>
           
           <div class="reading-section">
-            <h4 id="titleMoonReading">Moon Sign (Emotional Core)</h4>
+            <h4 id="titleMoonReading" data-key="read-moon-title">Moon Sign (Emotional Core)</h4>
             <p id="moonSignReading">...</p>
+          </div>
+        </section>
+
+        <!-- Graha Dasha & Antardasha Timeline -->
+        <section class="placements-table-box" id="dashaSection" style="margin-top: 40px;">
+          <h3 data-key="section-dasha">Graha Dasha Timeline (Birth to Death)</h3>
+          <p style="color: var(--muted); font-size: 14px; margin-bottom: 16px;" data-key="dasha-desc">Vimshottari Dasha calculations showing Maha Dasha and Antar Dasha cycles with yearly transits and remedies.</p>
+          <div class="dasha-table-wrapper" style="max-height: 400px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;">
+            <table class="placements-table" id="dashaTable" style="min-width: 700px;">
+              <thead>
+                <tr>
+                  <th style="position: sticky; top: 0; background: #130f26;" data-key="th-age">Age</th>
+                  <th style="position: sticky; top: 0; background: #130f26;" data-key="th-year">Year</th>
+                  <th style="position: sticky; top: 0; background: #130f26;" data-key="th-mahadasha">Maha Dasha</th>
+                  <th style="position: sticky; top: 0; background: #130f26;" data-key="th-antardasha">Antar Dasha</th>
+                  <th style="position: sticky; top: 0; background: #130f26;" data-key="th-effects">Transit Effects</th>
+                  <th style="position: sticky; top: 0; background: #130f26;" data-key="th-action-remedy">Specific Remedy</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Dynamically populated via JS -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Remedies Section -->
+        <section class="readings-box" id="remediesSection" style="margin-top: 40px;">
+          <h3 data-key="section-remedies" style="font-family: var(--font-title); font-size: 22px; color: var(--gold);">Recommended Astrological Remedies</h3>
+          <div class="readings-box" id="remediesGrid">
+            <!-- Dynamically populated via JS -->
           </div>
         </section>
 
         <!-- Print & Reset CTA Buttons -->
         <div class="actions-footer">
-          <button class="btn-action btn-action--reset" id="btnReset" type="button">Reset Form</button>
-          <button class="btn-action btn-action--print" id="btnPrint" type="button">Print / Save PDF</button>
+          <button class="btn-action btn-action--reset" id="btnReset" type="button" data-key="btn-reset">Reset Form</button>
+          <button class="btn-action btn-action--print" id="btnPrint" type="button" data-key="btn-print">Print / Save PDF</button>
         </div>
       </main>
     </div>
