@@ -47,16 +47,50 @@ const REGIONS = [
 ];
 
 const INSTANCE_TYPES = [
-  { value: "t3.nano",   label: "t3.nano — 2 vCPU, 0.5 GB RAM",  price: "$0.0052/hr" },
-  { value: "t3.micro",  label: "t3.micro — 2 vCPU, 1 GB RAM",   price: "$0.0104/hr" },
-  { value: "t3.small",  label: "t3.small — 2 vCPU, 2 GB RAM",   price: "$0.0208/hr" },
-  { value: "t3.medium", label: "t3.medium — 2 vCPU, 4 GB RAM",  price: "$0.0416/hr" },
-  { value: "t3.large",  label: "t3.large — 2 vCPU, 8 GB RAM",   price: "$0.0832/hr" },
-  { value: "m5.large",  label: "m5.large — 2 vCPU, 8 GB RAM",   price: "$0.096/hr"  },
-  { value: "m5.xlarge", label: "m5.xlarge — 4 vCPU, 16 GB RAM", price: "$0.192/hr"  },
-  { value: "c5.large",  label: "c5.large — 2 vCPU, 4 GB RAM",   price: "$0.085/hr"  },
-  { value: "c5.xlarge", label: "c5.xlarge — 4 vCPU, 8 GB RAM",  price: "$0.17/hr"   },
-  { value: "r5.large",  label: "r5.large — 2 vCPU, 16 GB RAM",  price: "$0.126/hr"  },
+  // T3 Family
+  { value: "t3.nano",     label: "t3.nano — 2 vCPU, 0.5 GB RAM",   price: "$0.0052/hr" },
+  { value: "t3.micro",    label: "t3.micro — 2 vCPU, 1 GB RAM",    price: "$0.0104/hr" },
+  { value: "t3.small",    label: "t3.small — 2 vCPU, 2 GB RAM",    price: "$0.0208/hr" },
+  { value: "t3.medium",   label: "t3.medium — 2 vCPU, 4 GB RAM",   price: "$0.0416/hr" },
+  { value: "t3.large",    label: "t3.large — 2 vCPU, 8 GB RAM",    price: "$0.0832/hr" },
+  { value: "t3.xlarge",   label: "t3.xlarge — 4 vCPU, 16 GB RAM",  price: "$0.1664/hr" },
+  { value: "t3.2xlarge",  label: "t3.2xlarge — 8 vCPU, 32 GB RAM", price: "$0.3328/hr" },
+
+  // T3a Family (AMD)
+  { value: "t3a.nano",    label: "t3a.nano — 2 vCPU, 0.5 GB RAM",  price: "$0.0047/hr" },
+  { value: "t3a.micro",   label: "t3a.micro — 2 vCPU, 1 GB RAM",   price: "$0.0094/hr" },
+  { value: "t3a.small",   label: "t3a.small — 2 vCPU, 2 GB RAM",   price: "$0.0188/hr" },
+  { value: "t3a.medium",  label: "t3a.medium — 2 vCPU, 4 GB RAM",  price: "$0.0376/hr" },
+  { value: "t3a.large",   label: "t3a.large — 2 vCPU, 8 GB RAM",   price: "$0.0752/hr" },
+  { value: "t3a.xlarge",  label: "t3a.xlarge — 4 vCPU, 16 GB RAM", price: "$0.1504/hr" },
+  { value: "t3a.2xlarge", label: "t3a.2xlarge — 8 vCPU, 32 GB RAM",price: "$0.3008/hr" },
+
+  // T2 Family (Burstable)
+  { value: "t2.nano",     label: "t2.nano — 1 vCPU, 0.5 GB RAM",   price: "$0.0058/hr" },
+  { value: "t2.micro",    label: "t2.micro — 1 vCPU, 1 GB RAM",    price: "$0.0116/hr" },
+  { value: "t2.small",    label: "t2.small — 1 vCPU, 2 GB RAM",    price: "$0.023/hr" },
+  { value: "t2.medium",   label: "t2.medium — 2 vCPU, 4 GB RAM",   price: "$0.0464/hr" },
+  { value: "t2.large",    label: "t2.large — 2 vCPU, 8 GB RAM",    price: "$0.0928/hr" },
+  { value: "t2.xlarge",   label: "t2.xlarge — 4 vCPU, 16 GB RAM",  price: "$0.1856/hr" },
+  { value: "t2.2xlarge",  label: "t2.2xlarge — 8 vCPU, 32 GB RAM", price: "$0.3712/hr" },
+
+  // M5 Family (General Purpose)
+  { value: "m5.large",    label: "m5.large — 2 vCPU, 8 GB RAM",    price: "$0.096/hr" },
+  { value: "m5.xlarge",   label: "m5.xlarge — 4 vCPU, 16 GB RAM",  price: "$0.192/hr" },
+  { value: "m5.2xlarge",  label: "m5.2xlarge — 8 vCPU, 32 GB RAM", price: "$0.384/hr" },
+  { value: "m5.4xlarge",  label: "m5.4xlarge — 16 vCPU, 64 GB RAM",price: "$0.768/hr" },
+
+  // C5 Family (Compute Optimized)
+  { value: "c5.large",    label: "c5.large — 2 vCPU, 4 GB RAM",    price: "$0.085/hr" },
+  { value: "c5.xlarge",   label: "c5.xlarge — 4 vCPU, 8 GB RAM",   price: "$0.17/hr" },
+  { value: "c5.2xlarge",  label: "c5.2xlarge — 8 vCPU, 16 GB RAM",  price: "$0.34/hr" },
+  { value: "c5.4xlarge",  label: "c5.4xlarge — 16 vCPU, 32 GB RAM", price: "$0.68/hr" },
+
+  // R5 Family (Memory Optimized)
+  { value: "r5.large",    label: "r5.large — 2 vCPU, 16 GB RAM",   price: "$0.126/hr" },
+  { value: "r5.xlarge",   label: "r5.xlarge — 4 vCPU, 32 GB RAM",   price: "$0.252/hr" },
+  { value: "r5.2xlarge",  label: "r5.2xlarge — 8 vCPU, 64 GB RAM",  price: "$0.504/hr" },
+  { value: "r5.4xlarge",  label: "r5.4xlarge — 16 vCPU, 128 GB RAM",price: "$1.008/hr" }
 ];
 
 const OS_IMAGES = [
@@ -68,6 +102,42 @@ const OS_IMAGES = [
   { value: "ami-windows-2022",  label: "Windows Server 2022",  tags: [] },
   { value: "custom",            label: "Custom AMI ID...",     tags: [] },
 ];
+
+const USERDATA_TEMPLATES = {
+  bash: `#!/bin/bash
+# Update system packages
+apt-get update -y && apt-get upgrade -y
+
+# Install Apache Web Server
+apt-get install apache2 -y
+systemctl start apache2
+systemctl enable apache2
+
+# Create sample index page
+echo "<h1>Hello from EC2 instance $(hostname -f)</h1>" > /var/www/html/index.html
+`,
+  powershell: `<powershell>
+# Update system and install IIS
+Install-WindowsFeature -name Web-Server -IncludeManagementTools
+
+# Create sample index page
+Set-Content -Path "C:\\inetpub\\wwwroot\\index.html" -Value "<h1>Hello from Windows EC2</h1>"
+</powershell>
+`,
+  'cloud-init': `#cloud-config
+package_update: true
+package_upgrade: true
+packages:
+  - apache2
+write_files:
+  - content: |
+      <h1>Hello from Cloud-Init EC2</h1>
+    path: /var/www/html/index.html
+runcmd:
+  - systemctl start apache2
+  - systemctl enable apache2
+`
+};
 
 const OS_AMI_MAP = {
   "ami-ubuntu-22":      { "us-east-1":"ami-0c7217cdde317cfec","us-east-2":"ami-05fb0b8c1424f266b","us-west-1":"ami-0ec6087c2fa028c2a","us-west-2":"ami-03f12c7a6f2b1d7d0","eu-west-1":"ami-0d940f23d527c3ab1","eu-central-1":"ami-0084a47cc718ce3ba","ap-south-1":"ami-007020fd9c84e18c7","ap-southeast-1":"ami-06c56143c12aa97de","ap-northeast-1":"ami-0d9793cbbda373493" },
@@ -274,20 +344,79 @@ function initEC2UI() {
   const btnToggleUserdata = document.getElementById('btn-toggle-userdata');
   const userdataTextarea = document.getElementById('user-data');
   const userdataSummary = document.getElementById('userdata-summary');
-  btnToggleUserdata.addEventListener('click', () => {
-    const hidden = userdataTextarea.style.display === 'none';
-    userdataTextarea.style.display = hidden ? 'block' : 'none';
-    userdataSummary.style.display = hidden ? 'none' : 'block';
-    btnToggleUserdata.textContent = hidden ? 'Hide' : 'Show';
-    if (!hidden) {
+  const userdataControls = document.getElementById('userdata-controls');
+  const userdataTypeSelect = document.getElementById('userdata-type');
+  const btnCopyUserdata = document.getElementById('btn-copy-userdata');
+  const btnResetUserdata = document.getElementById('btn-reset-userdata');
+
+  // Set initial default script value if empty
+  if (userdataTextarea && !userdataTextarea.value.trim()) {
+    userdataTextarea.value = USERDATA_TEMPLATES.bash;
+  }
+
+  if (btnToggleUserdata && userdataTextarea && userdataSummary) {
+    btnToggleUserdata.addEventListener('click', () => {
+      const hidden = userdataTextarea.style.display === 'none';
+      userdataTextarea.style.display = hidden ? 'block' : 'none';
+      if (userdataControls) userdataControls.style.display = hidden ? 'flex' : 'none';
+      userdataSummary.style.display = hidden ? 'none' : 'block';
+      btnToggleUserdata.textContent = hidden ? 'Hide' : 'Show';
+      if (!hidden) {
+        const lines = userdataTextarea.value.split('\n').filter(l => l.trim()).length;
+        userdataSummary.textContent = lines > 0 ? `${lines} lines of user data` : 'No user data configured';
+      }
+    });
+  }
+
+  if (userdataTextarea) {
+    userdataTextarea.addEventListener('input', () => {
       const lines = userdataTextarea.value.split('\n').filter(l => l.trim()).length;
       userdataSummary.textContent = lines > 0 ? `${lines} lines of user data` : 'No user data configured';
-    }
-  });
-  userdataTextarea.addEventListener('input', () => {
-    const lines = userdataTextarea.value.split('\n').filter(l => l.trim()).length;
-    userdataSummary.textContent = lines > 0 ? `${lines} lines of user data` : 'No user data configured';
-  });
+    });
+  }
+
+  if (userdataTypeSelect && userdataTextarea) {
+    userdataTypeSelect.addEventListener('change', () => {
+      const type = userdataTypeSelect.value;
+      if (USERDATA_TEMPLATES[type]) {
+        // Only override if textarea is empty or has another template
+        const currentVal = userdataTextarea.value.trim();
+        const templates = Object.values(USERDATA_TEMPLATES).map(t => t.trim());
+        if (!currentVal || templates.includes(currentVal)) {
+          userdataTextarea.value = USERDATA_TEMPLATES[type];
+          userdataTextarea.dispatchEvent(new Event('input'));
+        }
+      }
+    });
+  }
+
+  if (btnCopyUserdata && userdataTextarea) {
+    btnCopyUserdata.addEventListener('click', () => {
+      navigator.clipboard.writeText(userdataTextarea.value).then(() => {
+        const originalText = btnCopyUserdata.textContent;
+        btnCopyUserdata.textContent = 'Copied! ✓';
+        btnCopyUserdata.style.borderColor = '#2ea44f';
+        btnCopyUserdata.style.color = '#2ea44f';
+        setTimeout(() => {
+          btnCopyUserdata.textContent = originalText;
+          btnCopyUserdata.style.borderColor = '#30363d';
+          btnCopyUserdata.style.color = '#c9d1d9';
+        }, 2000);
+      }).catch(err => {
+        alert('Failed to copy: ' + err);
+      });
+    });
+  }
+
+  if (btnResetUserdata && userdataTextarea && userdataTypeSelect) {
+    btnResetUserdata.addEventListener('click', () => {
+      const type = userdataTypeSelect.value;
+      if (USERDATA_TEMPLATES[type] && confirm('Are you sure you want to reset the script to the default template?')) {
+        userdataTextarea.value = USERDATA_TEMPLATES[type];
+        userdataTextarea.dispatchEvent(new Event('input'));
+      }
+    });
+  }
 
   document.getElementById('btn-clear-logs').addEventListener('click', () => {
     document.getElementById('log-terminal-container').innerHTML = '<div class="log-line" style="color:#484f58;">Terminal cleared.</div>';

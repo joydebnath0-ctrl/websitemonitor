@@ -419,11 +419,22 @@
             <!-- ADVANCED TAB -->
             <div class="ec2-tab-content" id="tab-content-ec2-advanced">
               <div class="ec2-form-group">
-                <label class="ec2-label" style="display:flex;align-items:center;justify-content:space-between;">
-                  User Data (Startup Script)
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                  <label class="ec2-label" style="margin:0;">User Data (Startup Script)</label>
                   <button type="button" id="btn-toggle-userdata" style="background:none;border:none;color:#58a6ff;font-size:11px;cursor:pointer;padding:0;font-family:inherit;">Show</button>
-                </label>
-                <textarea id="user-data" class="ec2-input" placeholder="#!/bin/bash&#10;apt-get update" style="display:none;min-height:100px;font-family:'JetBrains Mono',monospace;"></textarea>
+                </div>
+                
+                <div id="userdata-controls" style="display:none;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+                  <select id="userdata-type" class="ec2-select" style="margin:0;max-width:200px;height:32px;padding:4px 8px;font-size:12px;">
+                    <option value="bash">Bash Script (Linux)</option>
+                    <option value="powershell">PowerShell Script (Windows)</option>
+                    <option value="cloud-init">Cloud-Init YAML</option>
+                  </select>
+                  <button type="button" id="btn-copy-userdata" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;cursor:pointer;font-family:inherit;">📋 Copy</button>
+                  <button type="button" id="btn-reset-userdata" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid rgba(247,129,102,0.3);border-radius:6px;color:#f78166;cursor:pointer;font-family:inherit;">Reset to Default</button>
+                </div>
+
+                <textarea id="user-data" class="ec2-input" placeholder="#!/bin/bash&#10;apt-get update" style="display:none;min-height:160px;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.5;"></textarea>
                 <div id="userdata-summary" style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 14px;font-size:12px;color:#8b949e;">No user data configured</div>
               </div>
               <div style="background:#161b22;border:1px solid #21262d;border-radius:8px;padding:16px;">
