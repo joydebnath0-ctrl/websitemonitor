@@ -206,11 +206,17 @@
                   <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-s3-write"></td>
                   <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-s3-execute"></td>
                 </tr>
-                <tr>
+                <tr style="border-bottom:1px solid #21262d;">
                   <td style="padding:10px 4px; font-weight:500;">CloudFront</td>
                   <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-cf-read"></td>
                   <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-cf-write"></td>
                   <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-cf-execute"></td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 4px; font-weight:500;">ECS</td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-ecs-read"></td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-ecs-write"></td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-ecs-execute"></td>
                 </tr>
               </tbody>
             </table>
@@ -237,9 +243,13 @@
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>
         S3 Buckets
       </button>
-      <button type="button" class="svc-btn" data-service="cf" id="svc-btn-cf">
+       <button type="button" class="svc-btn" data-service="cf" id="svc-btn-cf">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
         CloudFront CDN
+      </button>
+      <button type="button" class="svc-btn" data-service="ecs" id="svc-btn-ecs" style="display: none;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+        ECS Clusters
       </button>
       <button type="button" class="svc-btn" data-service="users" id="svc-btn-users" style="display: none;">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -898,6 +908,146 @@
           </div>
         </div><!-- end svc-panel-cf -->
 
+        <!-- ===== ECS SERVICE PANEL ===== -->
+        <div class="service-panel" id="svc-panel-ecs">
+          <div class="ec2-tabs-bar">
+            <button type="button" class="ec2-tab active" data-tab="ecs-config">Config</button>
+            <button type="button" class="ec2-tab" data-tab="ecs-preview">Code Preview</button>
+            <button type="button" class="ec2-tab" data-tab="ecs-list">ECS Clusters</button>
+          </div>
+
+          <div class="ec2-tab-contents-container">
+            <!-- ECS CONFIG TAB -->
+            <div class="ec2-tab-content active" id="tab-content-ecs-config">
+              <div class="ec2-form-group">
+                <label class="ec2-label">Cluster / Project Name</label>
+                <input type="text" id="ecs-name" class="ec2-input" placeholder="my-ecs-service" pattern="[a-zA-Z0-9-]+" title="Alphanumeric and dashes only">
+                <p class="field-err" id="err-ecs-name" style="display:none;"></p>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">
+                <div>
+                  <label class="ec2-label">AWS Profile</label>
+                  <select id="ecs-profile" class="ec2-select">
+                    <option value="default">default</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="ec2-label">Environment</label>
+                  <select id="ecs-env" class="ec2-select">
+                    <option value="dev">Development (dev)</option>
+                    <option value="staging">Staging (staging)</option>
+                    <option value="prod">Production (prod)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">
+                <div>
+                  <label class="ec2-label">Fargate CPU</label>
+                  <select id="ecs-cpu" class="ec2-select">
+                    <option value="256">0.25 vCPU (256)</option>
+                    <option value="512">0.5 vCPU (512)</option>
+                    <option value="1024" selected>1 vCPU (1024)</option>
+                    <option value="2048">2 vCPU (2048)</option>
+                    <option value="4096">4 vCPU (4096)</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="ec2-label">Fargate Memory</label>
+                  <select id="ecs-memory" class="ec2-select">
+                    <!-- Dynamic based on CPU selection -->
+                  </select>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">
+                <div>
+                  <label class="ec2-label">Container Port</label>
+                  <input type="number" id="ecs-port" class="ec2-input" value="80" min="1" max="65535">
+                  <p class="field-err" id="err-ecs-port" style="display:none;"></p>
+                </div>
+                <div>
+                  <label class="ec2-label">Desired Tasks</label>
+                  <input type="number" id="ecs-tasks" class="ec2-input" value="1" min="1" max="10">
+                  <p class="field-err" id="err-ecs-tasks" style="display:none;"></p>
+                </div>
+              </div>
+
+              <div class="ec2-form-group">
+                <label class="ec2-label">VPC Network</label>
+                <select id="ecs-vpc" class="ec2-select">
+                  <option value="">Default VPC</option>
+                </select>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">
+                <div>
+                  <label class="ec2-label">ALB Public Subnets</label>
+                  <div id="ecs-public-subnets-container" class="subnets-checkbox-list" style="background:#161b22; border:1px solid #30363d; border-radius:6px; padding:10px; max-height:120px; overflow-y:auto; font-size:12px; color:#c9d1d9;">
+                    <p style="margin:0;color:#8b949e;">Select a VPC first</p>
+                  </div>
+                  <p class="field-err" id="err-ecs-pub-subnets" style="display:none;"></p>
+                </div>
+                <div>
+                  <label class="ec2-label">Fargate Private Subnets</label>
+                  <div id="ecs-private-subnets-container" class="subnets-checkbox-list" style="background:#161b22; border:1px solid #30363d; border-radius:6px; padding:10px; max-height:120px; overflow-y:auto; font-size:12px; color:#c9d1d9;">
+                    <p style="margin:0;color:#8b949e;">Select a VPC first</p>
+                  </div>
+                  <p class="field-err" id="err-ecs-priv-subnets" style="display:none;"></p>
+                </div>
+              </div>
+
+              <div class="ec2-form-group">
+                <label class="ec2-label">S3 Bucket Access Reference <span style="color:#484f58;font-weight:400;">(optional)</span></label>
+                <select id="ecs-s3-bucket" class="ec2-select">
+                  <option value="">None</option>
+                </select>
+                <p style="font-size:11px;color:#8b949e;margin-top:4px;">Grants the ECS task read/write permissions to this S3 bucket</p>
+              </div>
+
+              <div class="summary-card summary-card-ecs" style="margin-top:14px;">
+                <p class="summary-card-title" style="color:#f78166;">ECS Cluster Summary</p>
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Cluster Name</span><span style="color:#e2e8f0;font-weight:500;" id="ecs-summary-name">—</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Environment</span><span style="color:#e2e8f0;font-weight:500;" id="ecs-summary-env">—</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Task Config</span><span style="color:#e2e8f0;font-weight:500;" id="ecs-summary-config">CPU 1024 / Mem 2048 MB</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Container Port</span><span style="color:#e2e8f0;font-weight:500;" id="ecs-summary-port">—</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">VPC / Subnets</span><span style="color:#e2e8f0;font-weight:500;" id="ecs-summary-vpc">—</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ECS CODE PREVIEW TAB -->
+            <div class="ec2-tab-content" id="tab-content-ecs-preview">
+              <h3 class="section-heading">Generated ECS Terraform Config</h3>
+              <p style="font-size:12px;color:#8b949e;margin:0 0 14px;line-height:1.5;">Review the Terraform code before deploying the cluster.</p>
+              <div class="ec2-form-group" style="margin-bottom:18px;">
+                <label class="ec2-label">main.tf</label>
+                <pre id="ecs-preview-main-tf" class="code-preview-block" style="max-height:260px;"></pre>
+              </div>
+              <div class="ec2-form-group">
+                <label class="ec2-label">terraform.tfvars.json</label>
+                <pre id="ecs-preview-tfvars" class="code-preview-block" style="max-height:180px;"></pre>
+              </div>
+            </div>
+
+            <!-- ECS CLUSTERS LIST TAB -->
+            <div class="ec2-tab-content" id="tab-content-ecs-list">
+              <h3 class="section-heading">Active ECS Clusters</h3>
+              <div id="ecs-resources-list" style="display:flex;flex-direction:column;gap:14px;">
+                <div class="empty-state-msg">No ECS clusters found.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ec2-deploy-btn-container" id="ecs-deploy-btn-wrapper">
+            <button type="button" class="ec2-btn-ecs" id="btn-ecs-action" style="width:100%;">
+              <span id="btn-ecs-text">🚀&nbsp; Preview ECS Configuration</span>
+            </button>
+          </div>
+        </div><!-- end svc-panel-ecs -->
+
         <!-- ===== USER MANAGEMENT SERVICE PANEL (ADMIN ONLY) ===== -->
         <div class="service-panel" id="svc-panel-users">
           <div class="ec2-tabs-bar">
@@ -1017,11 +1167,17 @@
                         <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-s3-write"></td>
                         <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-s3-execute"></td>
                       </tr>
-                      <tr>
+                      <tr style="border-bottom:1px solid #21262d;">
                         <td style="padding:10px 4px; font-weight:500;">CloudFront</td>
                         <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-cf-read" checked></td>
                         <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-cf-write"></td>
                         <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-cf-execute"></td>
+                      </tr>
+                      <tr>
+                        <td style="padding:10px 4px; font-weight:500;">ECS</td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-ecs-read" checked></td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-ecs-write"></td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-ecs-execute"></td>
                       </tr>
                     </tbody>
                   </table>
@@ -1094,6 +1250,18 @@
             <div class="cf-detail-row" style="margin-top:8px;">
               <a id="cf-open-url-btn" href="#" target="_blank" class="cf-open-btn">🔗 Open Distribution URL</a>
             </div>
+          </div>
+        </div>
+
+        <!-- ECS Active Banner -->
+        <div id="ecs-created-banner" style="display:none;padding:16px 20px;border-top:1px solid #30363d;background:#0d1117;">
+          <div class="cf-live-card" style="border-color:#f78166;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f78166" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+              <strong style="color:#f78166;font-size:12px;">ECS Cluster Deployed Successfully</strong>
+            </div>
+            <div class="cf-detail-row"><span>Repository URL</span><span id="ecs-repo-url-snippet" style="font-family:'JetBrains Mono',monospace;word-break:break-all;font-size:11px;">—</span></div>
+            <div class="cf-detail-row"><span>ALB DNS Endpoint</span><span id="ecs-alb-dns-snippet" style="font-family:'JetBrains Mono',monospace;word-break:break-all;font-size:11px;">—</span></div>
           </div>
         </div>
       </div>

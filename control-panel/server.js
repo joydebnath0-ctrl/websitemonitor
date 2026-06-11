@@ -92,6 +92,20 @@ if (!fs.existsSync(CF_DB_FILE)) {
   fs.writeFileSync(CF_DB_FILE, JSON.stringify([]));
 }
 
+const ECS_DEPLOYMENTS_DIR = path.join(BASE_DIR, 'ecs-deployments');
+const ECS_DB_FILE = path.join(BASE_DIR, 'ecs_deployments.json');
+if (!fs.existsSync(ECS_DEPLOYMENTS_DIR)) {
+  fs.mkdirSync(ECS_DEPLOYMENTS_DIR, { recursive: true });
+}
+if (!fs.existsSync(ECS_DB_FILE)) {
+  fs.writeFileSync(ECS_DB_FILE, JSON.stringify([]));
+}
+
+function readEcsDB() {
+  try { return JSON.parse(fs.readFileSync(ECS_DB_FILE, 'utf8')); } catch (e) { return []; }
+}
+function writeEcsDB(data) { fs.writeFileSync(ECS_DB_FILE, JSON.stringify(data, null, 2)); }
+
 const USERS_FILE = path.join(BASE_DIR, 'users.json');
 const SESSIONS_FILE = path.join(BASE_DIR, 'sessions.json');
 if (!fs.existsSync(USERS_FILE)) {
@@ -366,7 +380,8 @@ app.post('/api/auth/signup', (req, res) => {
       ec2: ['read'],
       vpc: ['read'],
       s3: ['read'],
-      cf: ['read']
+      cf: ['read'],
+      ecs: ['read']
     },
     createdAt: new Date().toISOString()
   };
@@ -430,7 +445,7 @@ app.post('/api/auth/login', (req, res) => {
       name: user.name,
       email: user.email,
       isAdmin: !!user.isAdmin,
-      permissions: user.isAdmin ? { ec2: ['read','write','execute'], vpc: ['read','write','execute'], s3: ['read','write','execute'], cf: ['read','write','execute'] } : (user.permissions || {})
+      permissions: user.isAdmin ? { ec2: ['read','write','execute'], vpc: ['read','write','execute'], s3: ['read','write','execute'], cf: ['read','write','execute'], ecs: ['read','write','execute'] } : (user.permissions || {})
     }
   });
 });
@@ -457,7 +472,7 @@ app.get('/api/auth/me', (req, res) => {
     name: user.name,
     email: user.email,
     isAdmin: !!user.isAdmin,
-    permissions: user.isAdmin ? { ec2: ['read','write','execute'], vpc: ['read','write','execute'], s3: ['read','write','execute'], cf: ['read','write','execute'] } : (user.permissions || {})
+    permissions: user.isAdmin ? { ec2: ['read','write','execute'], vpc: ['read','write','execute'], s3: ['read','write','execute'], cf: ['read','write','execute'], ecs: ['read','write','execute'] } : (user.permissions || {})
   });
 });
 
@@ -564,7 +579,8 @@ app.put('/api/users/update', requireAdmin, (req, res) => {
         ec2: ['read'],
         vpc: ['read'],
         s3: ['read'],
-        cf: ['read']
+        cf: ['read'],
+        ecs: ['read']
       };
     } else {
       delete users[userIndex].permissions;
@@ -572,7 +588,7 @@ app.put('/api/users/update', requireAdmin, (req, res) => {
   }
 
   if (permissions !== undefined && !users[userIndex].isAdmin) {
-    const VALID_SERVICES = ['ec2', 'vpc', 's3', 'cf'];
+    const VALID_SERVICES = ['ec2', 'vpc', 's3', 'cf', 'ecs'];
     const VALID_PERMS = ['read', 'write', 'execute'];
     const sanitizedPermissions = {};
     if (permissions && typeof permissions === 'object') {
@@ -698,7 +714,7 @@ app.post('/api/users/create', requireAdmin, (req, res) => {
   const passwordHash = hashPassword(password, salt);
 
   // Sanitize permissions: only allow valid services/levels
-  const VALID_SERVICES = ['ec2', 'vpc', 's3', 'cf'];
+  const VALID_SERVICES = ['ec2', 'vpc', 's3', 'cf', 'ecs'];
   const VALID_PERMS = ['read', 'write', 'execute'];
   const sanitizedPermissions = {};
   if (permissions && typeof permissions === 'object') {
@@ -2286,6 +2302,317 @@ app.post('/api/cf/destroy', requirePermission('cf','execute'), (req, res) => {
       if (m) { m.status = 'destroy-failed'; writeCfDB(currentDB); }
     }
   };
+  execute();
+});
+
+// === ECS ROUTES ===
+
+const ECS_TERRAFORM_TEMPLATE = `
+terraform {
+  required_version = ">= 1.0.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.aws_region
+}
+
+variable "aws_region" {
+  type    = string
+  default = "us-east-1"
+}
+
+variable "project_name" {
+  type = string
+}
+
+variable "environment" {
+  type    = string
+  default = "dev"
+}
+
+variable "vpc_id" {
+  type = string
+}
+
+variable "public_subnet_ids" {
+  type = list(string)
+}
+
+variable "private_subnet_ids" {
+  type = list(string)
+}
+
+variable "app_port" {
+  type    = number
+  default = 80
+}
+
+variable "desired_count" {
+  type    = number
+  default = 1
+}
+
+variable "task_cpu" {
+  type    = number
+  default = 256
+}
+
+variable "task_memory" {
+  type    = number
+  default = 512
+}
+
+variable "s3_bucket_name" {
+  type    = string
+  default = ""
+}
+
+module "ecr" {
+  source       = "./modules/ecr"
+  project_name = var.project_name
+  environment  = var.environment
+}
+
+module "ecs" {
+  source             = "./modules/ecs"
+  project_name       = var.project_name
+  environment        = var.environment
+  vpc_id             = var.vpc_id
+  public_subnet_ids   = var.public_subnet_ids
+  private_subnet_ids  = var.private_subnet_ids
+  ecr_repo_url       = module.ecr.repository_url
+  image_tag          = "latest"
+  app_port           = var.app_port
+  desired_count      = var.desired_count
+  task_cpu           = var.task_cpu
+  task_memory        = var.task_memory
+  s3_bucket_name     = var.s3_bucket_name != "" ? var.s3_bucket_name : "none-bucket"
+}
+
+output "ecr_repository_url" {
+  value = module.ecr.repository_url
+}
+
+output "ecs_cluster_name" {
+  value = module.ecs.cluster_name
+}
+
+output "ecs_service_name" {
+  value = module.ecs.service_name
+}
+
+output "alb_dns_name" {
+  value = module.ecs.alb_dns_name
+}
+`;
+
+app.get('/api/ecs-clusters', requirePermission('ecs', 'read'), (req, res) => {
+  res.json(readEcsDB());
+});
+
+app.post('/api/ecs/preview', requirePermission('ecs', 'write'), (req, res) => {
+  const { ecsName, env, cpu, memory, port, tasks, vpcId, publicSubnets, privateSubnets, s3Bucket } = req.body;
+  if (!ecsName || !cpu || !memory || !port || !tasks || !vpcId || !publicSubnets || !privateSubnets) {
+    return res.status(400).json({ error: 'Missing required parameters' });
+  }
+  if (!/^[a-zA-Z0-9-]+$/.test(ecsName)) {
+    return res.status(400).json({ error: 'Cluster/Project name must be alphanumeric and dashes only' });
+  }
+  // Retrieve region from selected VPC profile
+  const vpcDb = readVpcDB();
+  const matchedVpc = vpcDb.find(v => v.vpcId === vpcId);
+  const region = matchedVpc ? matchedVpc.region : 'us-east-1';
+
+  const tfVars = {
+    aws_region: region,
+    project_name: ecsName,
+    environment: env || 'dev',
+    vpc_id: vpcId,
+    public_subnet_ids: publicSubnets,
+    private_subnet_ids: privateSubnets,
+    app_port: parseInt(port, 10),
+    desired_count: parseInt(tasks, 10),
+    task_cpu: parseInt(cpu, 10),
+    task_memory: parseInt(memory, 10),
+    s3_bucket_name: s3Bucket || ''
+  };
+
+  res.json({
+    mainTf: ECS_TERRAFORM_TEMPLATE,
+    tfVarsJson: JSON.stringify(tfVars, null, 2)
+  });
+});
+
+app.post('/api/ecs/create', requirePermission('ecs', 'write'), (req, res) => {
+  const { ecsName, env, cpu, memory, port, tasks, vpcId, publicSubnets, privateSubnets, s3Bucket, awsProfile } = req.body;
+  if (!ecsName || !cpu || !memory || !port || !tasks || !vpcId || !publicSubnets || !privateSubnets) {
+    return res.status(400).json({ error: 'Missing required parameters' });
+  }
+  if (!/^[a-zA-Z0-9-]+$/.test(ecsName)) {
+    return res.status(400).json({ error: 'Cluster/Project name must be alphanumeric and dashes only' });
+  }
+
+  const db = readEcsDB();
+  if (db.find(c => c.name === ecsName)) {
+    return res.status(400).json({ error: `ECS cluster "${ecsName}" already exists` });
+  }
+
+  const vpcDb = readVpcDB();
+  const matchedVpc = vpcDb.find(v => v.vpcId === vpcId);
+  const region = matchedVpc ? matchedVpc.region : 'us-east-1';
+
+  const targetDir = path.join(ECS_DEPLOYMENTS_DIR, ecsName);
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
+  }
+
+  // Copy modules folder recursively
+  const modulesDir = path.join(targetDir, 'modules');
+  if (!fs.existsSync(modulesDir)) {
+    fs.mkdirSync(modulesDir, { recursive: true });
+  }
+
+  // Write main.tf and terraform.tfvars.json
+  fs.writeFileSync(path.join(targetDir, 'main.tf'), ECS_TERRAFORM_TEMPLATE);
+  const tfVars = {
+    aws_region: region,
+    project_name: ecsName,
+    environment: env || 'dev',
+    vpc_id: vpcId,
+    public_subnet_ids: publicSubnets,
+    private_subnet_ids: privateSubnets,
+    app_port: parseInt(port, 10),
+    desired_count: parseInt(tasks, 10),
+    task_cpu: parseInt(cpu, 10),
+    task_memory: parseInt(memory, 10),
+    s3_bucket_name: s3Bucket || ''
+  };
+  fs.writeFileSync(path.join(targetDir, 'terraform.tfvars.json'), JSON.stringify(tfVars, null, 2));
+
+  // Add ECS deployment to DB
+  const newDeployment = {
+    name: ecsName,
+    region,
+    env: env || 'dev',
+    cpu: parseInt(cpu, 10),
+    memory: parseInt(memory, 10),
+    port: parseInt(port, 10),
+    tasks: parseInt(tasks, 10),
+    vpcId,
+    s3Bucket: s3Bucket || 'none',
+    status: 'creating',
+    repositoryUrl: 'N/A',
+    albDnsName: 'N/A',
+    awsProfile: awsProfile || 'default',
+    createdAt: new Date().toISOString()
+  };
+  db.push(newDeployment);
+  writeEcsDB(db);
+
+  logHistory[ecsName] = [];
+  res.json({ message: 'ECS deployment started', name: ecsName });
+
+  const execute = async () => {
+    try {
+      sendLog(ecsName, `=== Copying Terraform Modules to Local Workspace ===`);
+      // Run Linux shell execution to copy /home/ubuntu/modules/ecr and /home/ubuntu/modules/ecs into targetDir/modules
+      await new Promise((resolve, reject) => {
+        const cpEcr = spawn('cp', ['-r', '/home/ubuntu/modules/ecr', path.join(modulesDir, 'ecr')]);
+        cpEcr.on('close', code => {
+          if (code !== 0) reject(new Error('Failed to copy ECR module'));
+          else {
+            const cpEcs = spawn('cp', ['-r', '/home/ubuntu/modules/ecs', path.join(modulesDir, 'ecs')]);
+            cpEcs.on('close', codeEcs => {
+              if (codeEcs !== 0) reject(new Error('Failed to copy ECS module'));
+              else resolve();
+            });
+          }
+        });
+      });
+
+      sendLog(ecsName, `=== Initializing ECS/ECR Terraform Workspace for ${ecsName} ===`);
+      await runCmd('terraform', ['init', '-no-color'], targetDir, ecsName, awsProfile);
+
+      sendLog(ecsName, `=== Deploying ECS Cluster and ECR Registry (Fargate) ===`);
+      await runCmd('terraform', ['apply', '-auto-approve', '-no-color'], targetDir, ecsName, awsProfile);
+
+      sendLog(ecsName, `=== Fetching ECS Terraform Output ===`);
+      const outputs = await getOutput(targetDir, awsProfile);
+
+      const currentDB = readEcsDB();
+      const match = currentDB.find(c => c.name === ecsName);
+      if (match) {
+        match.status = 'active';
+        match.repositoryUrl = outputs.ecr_repository_url ? outputs.ecr_repository_url.value : 'N/A';
+        match.albDnsName = outputs.alb_dns_name ? outputs.alb_dns_name.value : 'N/A';
+        writeEcsDB(currentDB);
+      }
+
+      sendLog(ecsName, `=== ECS Cluster Successfully Deployed ===`);
+      sendLog(ecsName, `Repository URL: ${outputs.ecr_repository_url ? outputs.ecr_repository_url.value : 'N/A'}`);
+      sendLog(ecsName, `Load Balancer DNS Name: ${outputs.alb_dns_name ? outputs.alb_dns_name.value : 'N/A'}`);
+    } catch (err) {
+      sendLog(ecsName, `=== ECS DEPLOYMENT FAILED ===\nError: ${err.message}`);
+      const currentDB = readEcsDB();
+      const match = currentDB.find(c => c.name === ecsName);
+      if (match) {
+        match.status = 'failed';
+        writeEcsDB(currentDB);
+      }
+    }
+  };
+
+  execute();
+});
+
+app.post('/api/ecs/destroy', requirePermission('ecs', 'execute'), (req, res) => {
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name is required' });
+
+  const db = readEcsDB();
+  const match = db.find(c => c.name === name);
+  if (!match) return res.status(404).json({ error: 'ECS deployment not found' });
+
+  const awsProfile = match.awsProfile || 'default';
+  match.status = 'destroying';
+  writeEcsDB(db);
+
+  logHistory[name] = [];
+  res.json({ message: 'ECS Destroy started', name });
+
+  const execute = async () => {
+    try {
+      const targetDir = path.join(ECS_DEPLOYMENTS_DIR, name);
+      sendLog(name, `=== Initializing Terraform for ${name} using profile "${awsProfile}" ===`);
+      await runCmd('terraform', ['init', '-no-color'], targetDir, name, awsProfile);
+      sendLog(name, `=== Destroying ECS Cluster resources for ${name} using profile "${awsProfile}" ===`);
+      await runCmd('terraform', ['destroy', '-auto-approve', '-no-color'], targetDir, name, awsProfile);
+
+      sendLog(name, `=== Cleaning Deployment Files ===`);
+      safeRmSync(targetDir);
+
+      const currentDB = readEcsDB();
+      const filtered = currentDB.filter(c => c.name !== name);
+      writeEcsDB(filtered);
+
+      sendLog(name, `=== ECS DESTRUCTION COMPLETE ===`);
+    } catch (err) {
+      sendLog(name, `=== ECS DESTRUCTION FAILED ===\nError: ${err.message}`);
+      const currentDB = readEcsDB();
+      const match = currentDB.find(c => c.name === name);
+      if (match) {
+        match.status = 'destroy-failed';
+        writeEcsDB(currentDB);
+      }
+    }
+  };
+
   execute();
 });
 

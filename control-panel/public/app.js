@@ -194,6 +194,7 @@ function initServiceNav() {
       document.getElementById('cf-created-banner').style.display = 'none';
       // Reload S3 bucket list for CloudFront selector when switching to CF
       if (svc === 'cf') fetchS3BucketOptions();
+      if (svc === 'ecs') { fetchVpcOptionsForEcs(); fetchS3BucketOptionsForEcs(); }
       // Fetch users list when switching to User Management
       if (svc === 'users') fetchUsers();
     });
@@ -1976,7 +1977,7 @@ function initializeDashboard(user) {
 
   // Gate service sidebar navigation buttons by permissions
   const perms = user.permissions || {};
-  const services = ['ec2', 'vpc', 's3', 'cf'];
+  const services = ['ec2', 'vpc', 's3', 'cf', 'ecs'];
   let defaultService = null;
   
   services.forEach(svc => {
@@ -2013,7 +2014,8 @@ function initializeDashboard(user) {
     ec2: 'btn-provision-instance',
     vpc: 'btn-vpc-action',
     s3: 'btn-s3-action',
-    cf: 'btn-cf-action'
+    cf: 'btn-cf-action',
+    ecs: 'btn-ecs-action'
   };
   services.forEach(svc => {
     if (!hasPermission(svc, 'write')) {
@@ -2032,6 +2034,9 @@ function initializeDashboard(user) {
     fetchUsers();
   }
 
+  // Init ECS UI
+  initEcsUI();
+
   // Start polling only if user has read permission
   if (user.isAdmin || (perms['ec2'] && perms['ec2'].includes('read'))) {
     fetchDeployments();
@@ -2048,6 +2053,10 @@ function initializeDashboard(user) {
   if (user.isAdmin || (perms['cf'] && perms['cf'].includes('read'))) {
     fetchDistributions();
     setInterval(fetchDistributions, 12000);
+  }
+  if (user.isAdmin || (perms['ecs'] && perms['ecs'].includes('read'))) {
+    fetchEcsClusters();
+    setInterval(fetchEcsClusters, 10000);
   }
 
   // Init password change modal (available to all authenticated users)
@@ -2156,7 +2165,7 @@ function initUsersUI() {
           if (adminChk.checked) {
             permSection.style.display = 'none';
             // Clear checked inputs
-            ['ec2', 'vpc', 's3', 'cf'].forEach(svc => {
+            ['ec2', 'vpc', 's3', 'cf', 'ecs'].forEach(svc => {
               ['read', 'write', 'execute'].forEach(p => {
                 const el = document.getElementById(`perm-${svc}-${p}`);
                 if (el) el.checked = false;
@@ -2165,7 +2174,7 @@ function initUsersUI() {
           } else {
             permSection.style.display = 'block';
             // Reset checkboxes explicitly to only read checked
-            ['ec2', 'vpc', 's3', 'cf'].forEach(svc => {
+            ['ec2', 'vpc', 's3', 'cf', 'ecs'].forEach(svc => {
               ['read', 'write', 'execute'].forEach(p => {
                 const el = document.getElementById(`perm-${svc}-${p}`);
                 if (el) el.checked = (p === 'read');
@@ -2371,7 +2380,8 @@ async function handleCreateUser(e) {
     ec2: getCheckedPerms('ec2'),
     vpc: getCheckedPerms('vpc'),
     s3: getCheckedPerms('s3'),
-    cf: getCheckedPerms('cf')
+    cf: getCheckedPerms('cf'),
+    ecs: getCheckedPerms('ecs')
   };
 
   try {
@@ -2394,7 +2404,7 @@ async function handleCreateUser(e) {
     const permSection = document.getElementById('permissions-section');
     if (permSection) permSection.style.display = 'block';
     // Reset checkboxes explicitly
-    ['ec2', 'vpc', 's3', 'cf'].forEach(svc => {
+    ['ec2', 'vpc', 's3', 'cf', 'ecs'].forEach(svc => {
       ['read', 'write', 'execute'].forEach(p => {
         const el = document.getElementById(`perm-${svc}-${p}`);
         if (el) el.checked = (p === 'read');
@@ -2540,7 +2550,7 @@ function openPermsModal(email, name) {
   const perms = user ? user.permissions || {} : {};
   
   // Pre-fill checkboxes
-  ['ec2', 'vpc', 's3', 'cf'].forEach(svc => {
+  ['ec2', 'vpc', 's3', 'cf', 'ecs'].forEach(svc => {
     ['read', 'write', 'execute'].forEach(p => {
       const el = document.getElementById(`edit-perm-${svc}-${p}`);
       if (el) {
@@ -2586,7 +2596,8 @@ function initPermsModal() {
       ec2: getCheckedPerms('ec2'),
       vpc: getCheckedPerms('vpc'),
       s3: getCheckedPerms('s3'),
-      cf: getCheckedPerms('cf')
+      cf: getCheckedPerms('cf'),
+      ecs: getCheckedPerms('ecs')
     };
 
     submitBtn.disabled = true;
@@ -2651,5 +2662,444 @@ function initThemeToggle() {
   }
   if (toggleBtnPortal) {
     toggleBtnPortal.addEventListener('click', toggleTheme);
+  }
+}
+
+// ===== ECS (FARGATE) CLUSTERS UI & LOGIC =====
+let activeEcsClusters = [];
+
+const FARGATE_CPU_MEM_MAP = {
+  "256": [
+    { value: "512", label: "512 MB" },
+    { value: "1024", label: "1 GB" },
+    { value: "2048", label: "2 GB" }
+  ],
+  "512": [
+    { value: "1024", label: "1 GB" },
+    { value: "2048", label: "2 GB" },
+    { value: "3072", label: "3 GB" },
+    { value: "4096", label: "4 GB" }
+  ],
+  "1024": [
+    { value: "2048", label: "2 GB" },
+    { value: "3072", label: "3 GB" },
+    { value: "4096", label: "4 GB" },
+    { value: "5120", label: "5 GB" },
+    { value: "6144", label: "6 GB" },
+    { value: "7168", label: "7 GB" },
+    { value: "8192", label: "8 GB" }
+  ],
+  "2048": [
+    { value: "4096", label: "4 GB" },
+    { value: "5120", label: "5 GB" },
+    { value: "6144", label: "6 GB" },
+    { value: "7168", label: "7 GB" },
+    { value: "8192", label: "8 GB" },
+    { value: "9216", label: "9 GB" },
+    { value: "10240", label: "10 GB" },
+    { value: "11264", label: "11 GB" },
+    { value: "12288", label: "12 GB" },
+    { value: "13312", label: "13 GB" },
+    { value: "14336", label: "14 GB" },
+    { value: "15360", label: "15 GB" },
+    { value: "16384", label: "16 GB" }
+  ],
+  "4096": [
+    { value: "8192", label: "8 GB" },
+    { value: "10240", label: "10 GB" },
+    { value: "12288", label: "12 GB" },
+    { value: "14336", label: "14 GB" },
+    { value: "16384", label: "16 GB" },
+    { value: "18432", label: "18 GB" },
+    { value: "20480", label: "20 GB" },
+    { value: "22528", label: "22 GB" },
+    { value: "24576", label: "24 GB" },
+    { value: "26624", label: "26 GB" },
+    { value: "28672", label: "28 GB" },
+    { value: "30720", label: "30 GB" }
+  ]
+};
+
+function updateEcsMemoryOptions() {
+  const cpuVal = document.getElementById('ecs-cpu').value;
+  const memorySelect = document.getElementById('ecs-memory');
+  if (!memorySelect) return;
+  memorySelect.innerHTML = '';
+  const options = FARGATE_CPU_MEM_MAP[cpuVal] || [];
+  options.forEach(optData => {
+    const opt = document.createElement('option');
+    opt.value = optData.value;
+    opt.textContent = optData.label;
+    memorySelect.appendChild(opt);
+  });
+  if (cpuVal === '1024') {
+    memorySelect.value = '2048';
+  } else {
+    memorySelect.selectedIndex = 0;
+  }
+}
+
+function initEcsUI() {
+  const tabs = document.querySelectorAll('#svc-panel-ecs .ec2-tab');
+  const tabContents = document.querySelectorAll('#svc-panel-ecs .ec2-tab-content');
+  const deployBtnWrapper = document.getElementById('ecs-deploy-btn-wrapper');
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const targetTab = tab.dataset.tab;
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      tabContents.forEach(c => c.classList.toggle('active', c.id === `tab-content-${targetTab}`));
+      const btnText = document.getElementById('btn-ecs-text');
+      if (targetTab === 'ecs-list') {
+        deployBtnWrapper.style.display = 'none';
+      } else {
+        deployBtnWrapper.style.display = 'block';
+        if (targetTab === 'ecs-preview') {
+          btnText.textContent = '🚀 Deploy ECS Cluster';
+          fetchEcsPreview();
+        } else {
+          btnText.textContent = '🚀\u00a0 Preview ECS Configuration';
+        }
+      }
+    });
+  });
+
+  // Bind CPU change to adjust Memory dropdown dynamically
+  const cpuSelect = document.getElementById('ecs-cpu');
+  if (cpuSelect) {
+    cpuSelect.addEventListener('change', () => {
+      updateEcsMemoryOptions();
+      updateEcsSummary();
+    });
+    updateEcsMemoryOptions();
+  }
+
+  // Bind inputs for summary
+  ['ecs-name', 'ecs-env', 'ecs-cpu', 'ecs-memory', 'ecs-port', 'ecs-tasks', 'ecs-vpc', 'ecs-s3-bucket'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('change', updateEcsSummary);
+      if (el.tagName === 'INPUT') el.addEventListener('input', updateEcsSummary);
+    }
+  });
+
+  const vpcSelect = document.getElementById('ecs-vpc');
+  if (vpcSelect) {
+    vpcSelect.addEventListener('change', () => {
+      updateSubnetOptionsForEcs();
+    });
+  }
+
+  document.getElementById('btn-ecs-action').addEventListener('click', () => {
+    const activeTab = document.querySelector('#svc-panel-ecs .ec2-tab.active').dataset.tab;
+    if (activeTab === 'ecs-preview') {
+      deployEcsCluster();
+    } else {
+      if (validateEcsForm()) {
+        document.querySelector('#svc-panel-ecs [data-tab="ecs-preview"]').click();
+      }
+    }
+  });
+
+  updateEcsSummary();
+}
+
+function updateEcsSummary() {
+  const name = document.getElementById('ecs-name').value.trim();
+  const env = document.getElementById('ecs-env').value;
+  const cpu = document.getElementById('ecs-cpu').value;
+  const memory = document.getElementById('ecs-memory').value;
+  const port = document.getElementById('ecs-port').value;
+  const tasks = document.getElementById('ecs-tasks').value;
+  const vpc = document.getElementById('ecs-vpc').value;
+
+  const getCheckedCount = (nameAttr) => {
+    return Array.from(document.querySelectorAll(`input[name="${nameAttr}"]:checked`)).length;
+  };
+
+  const pubCount = getCheckedCount('ecs-pub-sub');
+  const privCount = getCheckedCount('ecs-priv-sub');
+
+  document.getElementById('ecs-summary-name').textContent = name || '\u2014';
+  document.getElementById('ecs-summary-env').textContent = env || 'dev';
+  document.getElementById('ecs-summary-config').textContent = `${tasks} Tasks @ CPU ${cpu} / Mem ${memory} MB`;
+  document.getElementById('ecs-summary-port').textContent = port || '80';
+  document.getElementById('ecs-summary-vpc').textContent = vpc ? `${vpc} (${pubCount} pub, ${privCount} priv subnets)` : '\u2014';
+}
+
+function updateSubnetOptionsForEcs() {
+  const vpcSelect = document.getElementById('ecs-vpc');
+  const pubContainer = document.getElementById('ecs-public-subnets-container');
+  const privContainer = document.getElementById('ecs-private-subnets-container');
+  if (!vpcSelect || !pubContainer || !privContainer) return;
+  const vpcName = vpcSelect.value;
+  if (!vpcName) {
+    pubContainer.innerHTML = '<p style="margin:0;color:#8b949e;">Select a VPC first</p>';
+    privContainer.innerHTML = '<p style="margin:0;color:#8b949e;">Select a VPC first</p>';
+    return;
+  }
+  const vpc = activeVpcs.find(v => v.name === vpcName);
+  if (!vpc) {
+    pubContainer.innerHTML = '<p style="margin:0;color:#8b949e;">VPC not found</p>';
+    privContainer.innerHTML = '<p style="margin:0;color:#8b949e;">VPC not found</p>';
+    return;
+  }
+  // Public Subnets checkboxes
+  if (Array.isArray(vpc.publicSubnetIds) && vpc.publicSubnetIds.length > 0) {
+    pubContainer.innerHTML = vpc.publicSubnetIds.map((id, idx) => `
+      <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;">
+        <input type="checkbox" name="ecs-pub-sub" value="${id}" checked onchange="updateEcsSummary()">
+        <span>Pub Subnet ${idx+1} (${id})</span>
+      </label>
+    `).join('');
+  } else {
+    pubContainer.innerHTML = '<p style="margin:0;color:#ff7b72;">No public subnets</p>';
+  }
+  // Private Subnets checkboxes
+  if (Array.isArray(vpc.privateSubnetIds) && vpc.privateSubnetIds.length > 0) {
+    privContainer.innerHTML = vpc.privateSubnetIds.map((id, idx) => `
+      <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;">
+        <input type="checkbox" name="ecs-priv-sub" value="${id}" checked onchange="updateEcsSummary()">
+        <span>Priv Subnet ${idx+1} (${id})</span>
+      </label>
+    `).join('');
+  } else {
+    privContainer.innerHTML = '<p style="margin:0;color:#ff7b72;">No private subnets</p>';
+  }
+  updateEcsSummary();
+}
+
+async function fetchS3BucketOptionsForEcs() {
+  const select = document.getElementById('ecs-s3-bucket');
+  if (!select) return;
+  select.innerHTML = '<option value="">None</option>';
+  activeS3Buckets.filter(b => b.status === 'active').forEach(b => {
+    const opt = document.createElement('option');
+    opt.value = b.name;
+    opt.textContent = b.name;
+    select.appendChild(opt);
+  });
+}
+
+async function fetchVpcOptionsForEcs() {
+  const select = document.getElementById('ecs-vpc');
+  if (!select) return;
+  const previouslySelected = select.value;
+  select.innerHTML = '<option value="">-- Select VPC --</option>';
+  activeVpcs.filter(v => v.status === 'active').forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v.name;
+    opt.textContent = `${v.name} (${v.vpcId})`;
+    select.appendChild(opt);
+  });
+  if (activeVpcs.find(v => v.name === previouslySelected)) {
+    select.value = previouslySelected;
+  } else {
+    select.selectedIndex = 0;
+  }
+  updateSubnetOptionsForEcs();
+}
+
+function validateEcsForm() {
+  const name = document.getElementById('ecs-name').value.trim();
+  const nameErr = document.getElementById('err-ecs-name');
+  nameErr.style.display = 'none';
+  document.getElementById('ecs-name').classList.remove('err');
+  if (!name) {
+    nameErr.textContent = 'Cluster name is required';
+    nameErr.style.display = 'block';
+    document.getElementById('ecs-name').classList.add('err');
+    return false;
+  }
+  if (!/^[a-zA-Z0-9-]+$/.test(name)) {
+    nameErr.textContent = 'Cluster name must be alphanumeric and dashes only';
+    nameErr.style.display = 'block';
+    document.getElementById('ecs-name').classList.add('err');
+    return false;
+  }
+
+  const vpc = document.getElementById('ecs-vpc').value;
+  if (!vpc) {
+    alert('Please select a VPC network');
+    return false;
+  }
+
+  const pubChecked = Array.from(document.querySelectorAll('input[name="ecs-pub-sub"]:checked')).map(el => el.value);
+  const privChecked = Array.from(document.querySelectorAll('input[name="ecs-priv-sub"]:checked')).map(el => el.value);
+  
+  if (pubChecked.length === 0) {
+    alert('Please select at least one public subnet for the load balancer');
+    return false;
+  }
+  if (privChecked.length === 0) {
+    alert('Please select at least one private subnet for Fargate tasks');
+    return false;
+  }
+
+  return true;
+}
+
+async function fetchEcsPreview() {
+  const ecsName = document.getElementById('ecs-name').value.trim();
+  const env = document.getElementById('ecs-env').value;
+  const cpu = document.getElementById('ecs-cpu').value;
+  const memory = document.getElementById('ecs-memory').value;
+  const port = document.getElementById('ecs-port').value;
+  const tasks = document.getElementById('ecs-tasks').value;
+  const vpcName = document.getElementById('ecs-vpc').value;
+  const vpc = activeVpcs.find(v => v.name === vpcName);
+  const vpcId = vpc ? vpc.vpcId : '';
+  const s3Bucket = document.getElementById('ecs-s3-bucket').value;
+
+  const publicSubnets = Array.from(document.querySelectorAll('input[name="ecs-pub-sub"]:checked')).map(el => el.value);
+  const privateSubnets = Array.from(document.querySelectorAll('input[name="ecs-priv-sub"]:checked')).map(el => el.value);
+
+  const preMain = document.getElementById('ecs-preview-main-tf');
+  const preVars = document.getElementById('ecs-preview-tfvars');
+  preMain.textContent = 'Generating preview...';
+  preVars.textContent = 'Generating preview...';
+
+  try {
+    const res = await fetch('/api/ecs/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ecsName, env, cpu, memory, port, tasks, vpcId, publicSubnets, privateSubnets, s3Bucket })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Preview failed');
+    preMain.textContent = data.mainTf;
+    preVars.textContent = data.tfVarsJson;
+  } catch (err) {
+    preMain.textContent = `Error: ${err.message}`;
+    preVars.textContent = '';
+  }
+}
+
+async function deployEcsCluster() {
+  if (!validateEcsForm()) return;
+  const ecsName = document.getElementById('ecs-name').value.trim();
+  const env = document.getElementById('ecs-env').value;
+  const cpu = document.getElementById('ecs-cpu').value;
+  const memory = document.getElementById('ecs-memory').value;
+  const port = document.getElementById('ecs-port').value;
+  const tasks = document.getElementById('ecs-tasks').value;
+  const vpcName = document.getElementById('ecs-vpc').value;
+  const vpc = activeVpcs.find(v => v.name === vpcName);
+  const vpcId = vpc ? vpc.vpcId : '';
+  const s3Bucket = document.getElementById('ecs-s3-bucket').value;
+  const awsProfile = vpc ? vpc.awsProfile : 'default';
+
+  const publicSubnets = Array.from(document.querySelectorAll('input[name="ecs-pub-sub"]:checked')).map(el => el.value);
+  const privateSubnets = Array.from(document.querySelectorAll('input[name="ecs-priv-sub"]:checked')).map(el => el.value);
+
+  const btn = document.getElementById('btn-ecs-action');
+  const btnText = document.getElementById('btn-ecs-text');
+  btn.disabled = true;
+  btnText.innerHTML = `<svg class="spinning" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> Deploying Cluster…`;
+  
+  startLogStream(ecsName);
+
+  try {
+    const res = await fetch('/api/ecs/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ecsName, env, cpu, memory, port, tasks, vpcId, publicSubnets, privateSubnets, s3Bucket, awsProfile })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'ECS deployment failed');
+    document.querySelector('#svc-panel-ecs [data-tab="ecs-list"]').click();
+    fetchEcsClusters();
+  } catch (err) {
+    appendLogLine(`[ERROR] ECS Deploy Error: ${err.message}`);
+  } finally {
+    btn.disabled = false;
+    btnText.textContent = '🚀 Deploy ECS Cluster';
+  }
+}
+
+async function fetchEcsClusters() {
+  try {
+    const res = await fetch('/api/ecs-clusters');
+    activeEcsClusters = await res.json();
+    renderEcsList();
+    updateHeaderStatus();
+    updateEcsBanner();
+  } catch (err) {
+    console.error('Error fetching ECS clusters:', err);
+  }
+}
+
+function renderEcsList() {
+  const container = document.getElementById('ecs-resources-list');
+  if (activeEcsClusters.length === 0) {
+    container.innerHTML = '<div class="empty-state-msg">No ECS clusters found.</div>';
+    return;
+  }
+  container.innerHTML = '';
+  activeEcsClusters.forEach(cluster => {
+    const card = document.createElement('div');
+    card.className = 'deployment-card resource-card-ecs';
+    const badgeClass = `status-badge ${cluster.status === 'active' ? 'active' : cluster.status === 'creating' ? 'creating' : cluster.status === 'destroying' ? 'destroying' : 'failed'}`;
+    const repoUrlValue = cluster.repositoryUrl !== 'N/A' ? cluster.repositoryUrl : 'N/A';
+    const albDnsValue = cluster.albDnsName !== 'N/A' ? `<a href="http://${cluster.albDnsName}" target="_blank" style="color:#f78166;text-decoration:none;">${cluster.albDnsName}</a>` : 'N/A';
+    card.innerHTML = `
+      <div class="deployment-header">
+        <span class="deployment-name">${cluster.name} (${cluster.env})</span>
+        <span class="${badgeClass}">${cluster.status}</span>
+      </div>
+      <div class="deployment-details-grid">
+        <span class="detail-lbl">Repository URL</span><span class="detail-val" style="word-break:break-all;font-size:11px;font-family:monospace;">${repoUrlValue}</span>
+        <span class="detail-lbl">ALB DNS Endpoint</span><span class="detail-val" style="word-break:break-all;font-size:11px;font-family:monospace;">${albDnsValue}</span>
+        <span class="detail-lbl">Tasks Config</span><span class="detail-val">${cluster.tasks} Task(s) @ ${cluster.cpu} CPU / ${cluster.memory} MB</span>
+        <span class="detail-lbl">Container Port</span><span class="detail-val">${cluster.port}</span>
+        <span class="detail-lbl">S3 Bucket Access</span><span class="detail-val">${cluster.s3Bucket}</span>
+        <span class="detail-lbl">Region</span><span class="detail-val">${cluster.region}</span>
+        <span class="detail-lbl">Profile</span><span class="detail-val">${cluster.awsProfile || 'default'}</span>
+      </div>
+      <div class="deployment-actions-bar">
+        <button type="button" class="ec2-btn-outline" onclick="startLogStream('${cluster.name}')">View Logs</button>
+        ${cluster.status !== 'destroying' ? `<button type="button" class="ec2-btn-danger" onclick="triggerEcsDestroy('${cluster.name}')" ${hasPermission('ecs', 'execute') ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;" title="No execute permission"'}>Destroy</button>` : ''}
+      </div>`;
+    container.appendChild(card);
+  });
+}
+
+async function triggerEcsDestroy(name) {
+  if (!hasPermission('ecs', 'execute')) {
+    alert('Permission Denied: You do not have execute permission for ECS.');
+    return;
+  }
+  if (!confirm(`Are you sure you want to destroy ECS cluster "${name}"? This will delete the ECR repository and ALB as well.`)) return;
+  document.querySelector('#svc-panel-ecs [data-tab="ecs-list"]').click();
+  startLogStream(name);
+  try {
+    const res = await fetch('/api/ecs/destroy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'ECS destroy failed');
+    fetchEcsClusters();
+  } catch (err) {
+    appendLogLine(`[ERROR] ECS Destroy Error: ${err.message}`);
+  }
+}
+
+function updateEcsBanner() {
+  const banner = document.getElementById('ecs-created-banner');
+  if (!currentLogTarget) { banner.style.display = 'none'; return; }
+  const cluster = activeEcsClusters.find(c => c.name === currentLogTarget);
+  if (cluster && cluster.status === 'active' && cluster.albDnsName !== 'N/A') {
+    document.getElementById('ecs-repo-url-snippet').textContent = cluster.repositoryUrl;
+    document.getElementById('ecs-alb-dns-snippet').innerHTML = `<a href="http://${cluster.albDnsName}" target="_blank" style="color:#f78166;text-decoration:none;">http://${cluster.albDnsName}</a>`;
+    banner.style.display = 'block';
+    document.getElementById('ssh-connect-banner').style.display = 'none';
+    document.getElementById('vpc-created-banner').style.display = 'none';
+    document.getElementById('s3-created-banner').style.display = 'none';
+    document.getElementById('cf-created-banner').style.display = 'none';
+  } else {
+    banner.style.display = 'none';
   }
 }
