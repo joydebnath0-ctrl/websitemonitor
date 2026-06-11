@@ -1208,6 +1208,11 @@ variable "force_destroy" {
   default = false
 }
 
+variable "bucket_namespace" {
+  type    = string
+  default = "global"
+}
+
 resource "aws_s3_bucket" "bucket" {
   bucket        = var.bucket_name
   force_destroy = var.force_destroy
@@ -1884,7 +1889,7 @@ app.get('/api/s3-buckets', requirePermission('s3','read'), (req, res) => {
 });
 
 app.post('/api/s3/preview', requirePermission('s3','write'), (req, res) => {
-  const { bucketName, region, versioningEnabled, blockPublicAccess, encryptionAlgorithm, forceDestroy } = req.body;
+  const { bucketName, region, versioningEnabled, blockPublicAccess, encryptionAlgorithm, forceDestroy, bucketNamespace } = req.body;
   if (!bucketName || !region) return res.status(400).json({ error: 'Missing required parameters' });
   if (!/^[a-z0-9-]+$/.test(bucketName)) return res.status(400).json({ error: 'Bucket name must be lowercase alphanumeric and dashes only' });
   const tfVars = {
@@ -1893,13 +1898,19 @@ app.post('/api/s3/preview', requirePermission('s3','write'), (req, res) => {
     versioning_enabled: !!versioningEnabled,
     block_public_access: blockPublicAccess !== false,
     encryption_algorithm: encryptionAlgorithm || 'AES256',
-    force_destroy: !!forceDestroy
+    force_destroy: !!forceDestroy,
+    bucket_namespace: bucketNamespace || 'global'
   };
-  res.json({ mainTf: S3_TERRAFORM_TEMPLATE, tfVarsJson: JSON.stringify(tfVars, null, 2) });
+  let mainTf = S3_TERRAFORM_TEMPLATE;
+  if (bucketNamespace === 'account-regional') {
+    mainTf = mainTf.replace('version = "~> 5.0"', 'version = "~> 6.37"')
+                  .replace('bucket        = var.bucket_name', 'bucket        = var.bucket_name\n  bucket_namespace = var.bucket_namespace');
+  }
+  res.json({ mainTf, tfVarsJson: JSON.stringify(tfVars, null, 2) });
 });
 
 app.post('/api/s3/create', requirePermission('s3','write'), (req, res) => {
-  const { bucketName, region, versioningEnabled, blockPublicAccess, encryptionAlgorithm, forceDestroy, awsProfile } = req.body;
+  const { bucketName, region, versioningEnabled, blockPublicAccess, encryptionAlgorithm, forceDestroy, awsProfile, bucketNamespace } = req.body;
   if (!bucketName || !region) return res.status(400).json({ error: 'Missing required parameters' });
   if (!/^[a-z0-9-]+$/.test(bucketName)) return res.status(400).json({ error: 'Bucket name must be lowercase alphanumeric and dashes only' });
   const db = readS3DB();
@@ -1907,17 +1918,25 @@ app.post('/api/s3/create', requirePermission('s3','write'), (req, res) => {
 
   const targetDir = path.join(S3_DEPLOYMENTS_DIR, bucketName);
   if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
-  fs.writeFileSync(path.join(targetDir, 'main.tf'), S3_TERRAFORM_TEMPLATE);
+  
+  let mainTf = S3_TERRAFORM_TEMPLATE;
+  if (bucketNamespace === 'account-regional') {
+    mainTf = mainTf.replace('version = "~> 5.0"', 'version = "~> 6.37"')
+                  .replace('bucket        = var.bucket_name', 'bucket        = var.bucket_name\n  bucket_namespace = var.bucket_namespace');
+  }
+  fs.writeFileSync(path.join(targetDir, 'main.tf'), mainTf);
+  
   const tfVars = {
     aws_region: region,
     bucket_name: bucketName,
     versioning_enabled: !!versioningEnabled,
     block_public_access: blockPublicAccess !== false,
     encryption_algorithm: encryptionAlgorithm || 'AES256',
-    force_destroy: !!forceDestroy
+    force_destroy: !!forceDestroy,
+    bucket_namespace: bucketNamespace || 'global'
   };
   fs.writeFileSync(path.join(targetDir, 'terraform.tfvars.json'), JSON.stringify(tfVars, null, 2));
-  const newBucket = { name: bucketName, region, versioningEnabled: tfVars.versioning_enabled, blockPublicAccess: tfVars.block_public_access, encryptionAlgorithm: tfVars.encryption_algorithm, forceDestroy: tfVars.force_destroy, awsProfile: awsProfile || 'default', status: 'creating', bucketArn: 'N/A', bucketDomain: 'N/A', createdAt: new Date().toISOString() };
+  const newBucket = { name: bucketName, region, versioningEnabled: tfVars.versioning_enabled, blockPublicAccess: tfVars.block_public_access, encryptionAlgorithm: tfVars.encryption_algorithm, forceDestroy: tfVars.force_destroy, bucketNamespace: tfVars.bucket_namespace, awsProfile: awsProfile || 'default', status: 'creating', bucketArn: 'N/A', bucketDomain: 'N/A', createdAt: new Date().toISOString() };
   db.push(newBucket);
   writeS3DB(db);
   logHistory[bucketName] = [];

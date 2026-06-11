@@ -515,7 +515,7 @@ function initS3UI() {
     });
   });
 
-  ['s3-name','s3-encryption','s3-block-public','s3-versioning','s3-force-destroy'].forEach(id => {
+  ['s3-name','s3-encryption','s3-block-public','s3-versioning','s3-force-destroy','s3-namespace'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', updateS3Summary);
     if (el && el.tagName === 'INPUT' && el.type === 'text') el.addEventListener('input', updateS3Summary);
@@ -694,7 +694,9 @@ function updateS3Summary() {
   const enc = document.getElementById('s3-encryption').value;
   const blockPub = document.getElementById('s3-block-public').checked;
   const versioning = document.getElementById('s3-versioning').checked;
+  const namespace = document.getElementById('s3-namespace').value;
   document.getElementById('s3-summary-name').textContent = name || '—';
+  document.getElementById('s3-summary-namespace').textContent = namespace === 'account-regional' ? 'Account Regional Namespace' : 'Global Namespace';
   document.getElementById('s3-summary-encryption').textContent = enc === 'aws:kms' ? 'AWS KMS' : 'AES-256';
   document.getElementById('s3-summary-public').textContent = blockPub ? 'Blocked ✓' : 'Public ⚠';
   document.getElementById('s3-summary-versioning').textContent = versioning ? 'Enabled' : 'Disabled';
@@ -975,12 +977,13 @@ async function fetchS3Preview() {
   const blockPublicAccess = document.getElementById('s3-block-public').checked;
   const encryptionAlgorithm = document.getElementById('s3-encryption').value;
   const forceDestroy = document.getElementById('s3-force-destroy').checked;
+  const bucketNamespace = document.getElementById('s3-namespace').value;
   const preMain = document.getElementById('s3-preview-main-tf');
   const preVars = document.getElementById('s3-preview-tfvars');
   preMain.textContent = 'Generating preview...';
   preVars.textContent = 'Generating preview...';
   try {
-    const res = await fetch('/api/s3/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bucketName: bucketName || 'my-bucket', region, versioningEnabled, blockPublicAccess, encryptionAlgorithm, forceDestroy }) });
+    const res = await fetch('/api/s3/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bucketName: bucketName || 'my-bucket', region, versioningEnabled, blockPublicAccess, encryptionAlgorithm, forceDestroy, bucketNamespace }) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Preview failed');
     preMain.textContent = data.mainTf;
@@ -1094,13 +1097,14 @@ async function createS3Bucket() {
   const blockPublicAccess = document.getElementById('s3-block-public').checked;
   const encryptionAlgorithm = document.getElementById('s3-encryption').value;
   const forceDestroy = document.getElementById('s3-force-destroy').checked;
+  const bucketNamespace = document.getElementById('s3-namespace').value;
   const btn = document.getElementById('btn-s3-action');
   const btnText = document.getElementById('btn-s3-text');
   btn.disabled = true;
   btnText.innerHTML = `<svg class="spinning" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> Creating Bucket…`;
   startLogStream(bucketName);
   try {
-    const res = await fetch('/api/s3/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bucketName, region, versioningEnabled, blockPublicAccess, encryptionAlgorithm, forceDestroy, awsProfile }) });
+    const res = await fetch('/api/s3/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bucketName, region, versioningEnabled, blockPublicAccess, encryptionAlgorithm, forceDestroy, awsProfile, bucketNamespace }) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'S3 creation failed');
     document.querySelector('#svc-panel-s3 [data-tab="s3-list"]').click();
@@ -1285,6 +1289,7 @@ function renderS3BucketList() {
       <div class="deployment-details-grid">
         <span class="detail-lbl">ARN</span><span class="detail-val">${bucket.bucketArn || 'N/A'}</span>
         <span class="detail-lbl">Domain</span><span class="detail-val">${bucket.bucketDomain || 'N/A'}</span>
+        <span class="detail-lbl">Namespace</span><span class="detail-val">${bucket.bucketNamespace === 'account-regional' ? 'Account Regional' : 'Global'}</span>
         <span class="detail-lbl">Region</span><span class="detail-val">${bucket.region}</span>
         <span class="detail-lbl">Profile</span><span class="detail-val">${bucket.awsProfile || 'default'}</span>
         <span class="detail-lbl">Encryption</span><span class="detail-val">${bucket.encryptionAlgorithm || 'AES256'}</span>

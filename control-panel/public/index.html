@@ -693,6 +693,14 @@
                 </select>
               </div>
 
+              <div class="ec2-form-group">
+                <label class="ec2-label">Bucket Namespace</label>
+                <select id="s3-namespace" class="ec2-select">
+                  <option value="global" selected>Global S3 Namespace</option>
+                  <option value="account-regional">Account Regional Namespace</option>
+                </select>
+              </div>
+
               <div class="options-card">
                 <p class="options-card-title">Bucket Options</p>
                 <label class="toggle-row">
@@ -731,6 +739,7 @@
                 <p class="summary-card-title" style="color:#e3b341;">Bucket Summary</p>
                 <div style="display:flex;flex-direction:column;gap:6px;">
                   <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Name</span><span style="color:#e2e8f0;font-weight:500;" id="s3-summary-name">—</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Namespace</span><span style="color:#e2e8f0;font-weight:500;" id="s3-summary-namespace">Global Namespace</span></div>
                   <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Encryption</span><span style="color:#e2e8f0;font-weight:500;" id="s3-summary-encryption">AES-256</span></div>
                   <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Public Access</span><span style="color:#e2e8f0;font-weight:500;" id="s3-summary-public">Blocked</span></div>
                   <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Versioning</span><span style="color:#e2e8f0;font-weight:500;" id="s3-summary-versioning">Disabled</span></div>
