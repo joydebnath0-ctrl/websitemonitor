@@ -924,6 +924,7 @@ async function fetchEC2Preview() {
   const associateEip = document.getElementById('ec2-associate-eip') ? document.getElementById('ec2-associate-eip').checked : false;
   const keyNameInput = document.getElementById('ec2-key-name');
   const keyName = keyNameInput ? keyNameInput.value.trim() : '';
+  const instanceCount = parseInt(document.getElementById('instance-count').value, 10) || 1;
 
   let amiId = '';
   if (os === 'custom') amiId = document.getElementById('custom-ami-id').value.trim() || 'ami-custom-input';
@@ -933,7 +934,7 @@ async function fetchEC2Preview() {
   preMain.textContent = 'Generating preview...';
   preVars.textContent = 'Generating preview...';
   try {
-    const res = await fetch('/api/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, region, instanceType, amiId, volumeSize, ingressRules: ec2IngressRules, userData, vpcId, subnetId, associateEip, keyName }) });
+    const res = await fetch('/api/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, region, instanceType, amiId, volumeSize, ingressRules: ec2IngressRules, userData, vpcId, subnetId, associateEip, keyName, instanceCount }) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Preview failed');
     preMain.textContent = data.mainTf;
@@ -1013,6 +1014,7 @@ async function deployEC2Instance() {
   const associateEip = document.getElementById('ec2-associate-eip') ? document.getElementById('ec2-associate-eip').checked : false;
   const keyNameInput = document.getElementById('ec2-key-name');
   const keyName = keyNameInput ? keyNameInput.value.trim() : '';
+  const instanceCount = parseInt(document.getElementById('instance-count').value, 10) || 1;
 
   let amiId = '';
   if (os === 'custom') amiId = document.getElementById('custom-ami-id').value.trim();
@@ -1021,7 +1023,7 @@ async function deployEC2Instance() {
   setDeployingState(true);
   startLogStream(name);
   try {
-    const res = await fetch('/api/deploy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, region, instanceType, amiId, volumeSize, ingressRules: ec2IngressRules, awsProfile, userData, vpcId, subnetId, associateEip, keyName }) });
+    const res = await fetch('/api/deploy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, region, instanceType, amiId, volumeSize, ingressRules: ec2IngressRules, awsProfile, userData, vpcId, subnetId, associateEip, keyName, instanceCount }) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Provision failed');
     document.querySelector('#svc-panel-ec2 [data-tab="ec2-deployments"]').click();
@@ -1034,6 +1036,8 @@ async function deployEC2Instance() {
     document.getElementById('disk-number').value = 30;
     const ec2AssociateEip = document.getElementById('ec2-associate-eip');
     if (ec2AssociateEip) ec2AssociateEip.checked = false;
+    const ec2InstCountInput = document.getElementById('instance-count');
+    if (ec2InstCountInput) ec2InstCountInput.value = 1;
     
     // Reset Inbound Rules
     ec2IngressRules = [
@@ -1174,7 +1178,12 @@ function renderDeploymentsList() {
       </div>
       <div class="deployment-details-grid">
         <span class="detail-lbl">Instance ID</span><span class="detail-val">${dep.instanceId || 'N/A'}</span>
-        <span class="detail-lbl">Public IP</span><span class="detail-val">${dep.publicIp !== 'N/A' ? `<a href="http://${dep.publicIp}" target="_blank" style="color:#58a6ff;text-decoration:none;">${dep.publicIp}</a>` : 'N/A'}</span>
+        <span class="detail-lbl">Public IP</span><span class="detail-val">${
+          dep.publicIp !== 'N/A' 
+            ? dep.publicIp.split(',').map(ip => `<a href="http://${ip.trim()}" target="_blank" style="color:#58a6ff;text-decoration:none;margin-right:8px;">${ip.trim()}</a>`).join(', ') 
+            : 'N/A'
+        }</span>
+        <span class="detail-lbl">Instance Count</span><span class="detail-val">${dep.instanceCount || 1}</span>
         <span class="detail-lbl">Elastic IP</span><span class="detail-val">${dep.associateEip ? 'Yes (EIP)' : 'No'}</span>
         <span class="detail-lbl">Profile</span><span class="detail-val">${dep.awsProfile || 'default'}</span>
         <span class="detail-lbl">Region</span><span class="detail-val">${dep.region}</span>
@@ -1596,7 +1605,8 @@ function updateSSHBanner() {
   const dep = activeDeployments.find(d => d.name === currentLogTarget);
   if (dep && dep.status === 'active' && dep.publicIp !== 'N/A') {
     const keyFile = dep.keyName ? `${dep.keyName}.pem` : `${dep.name}.pem`;
-    document.getElementById('ssh-command-snippet').textContent = `ssh -i ~/.ssh/${keyFile} ubuntu@${dep.publicIp}`;
+    const firstIp = dep.publicIp.split(',')[0].trim();
+    document.getElementById('ssh-command-snippet').textContent = `ssh -i ~/.ssh/${keyFile} ubuntu@${firstIp}`;
     document.getElementById('ssh-download-key-btn').href = `/api/download-key/${dep.name}?token=${encodeURIComponent(localStorage.getItem('auth_token') || '')}`;
     banner.style.display = 'block';
     document.getElementById('vpc-created-banner').style.display = 'none';

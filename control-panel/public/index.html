@@ -345,10 +345,16 @@
                 </div>
               </div>
 
-              <div class="ec2-form-group">
-                <label class="ec2-label">OS Image (AMI)</label>
-                <select id="os-image" class="ec2-select"></select>
-                <p id="os-ami-id-info" style="font-size:11px;color:#8b949e;margin-top:4px;font-family:'JetBrains Mono',monospace;"></p>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">
+                <div>
+                  <label class="ec2-label">OS Image (AMI)</label>
+                  <select id="os-image" class="ec2-select"></select>
+                  <p id="os-ami-id-info" style="font-size:11px;color:#8b949e;margin-top:4px;font-family:'JetBrains Mono',monospace;"></p>
+                </div>
+                <div>
+                  <label class="ec2-label">Instance Count</label>
+                  <input type="number" id="instance-count" min="1" max="100" value="1" class="ec2-input">
+                </div>
               </div>
 
               <div class="ec2-form-group" id="custom-ami-container" style="display:none;">

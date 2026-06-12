@@ -911,6 +911,11 @@ variable "associate_eip" {
   default = false
 }
 
+variable "instance_count" {
+  type    = number
+  default = 1
+}
+
 resource "tls_private_key" "key" {
   algorithm = "RSA"
   rsa_bits  = 4096
@@ -949,12 +954,13 @@ resource "aws_security_group" "sg" {
 }
 
 resource "aws_instance" "instance" {
+  count                  = var.instance_count
   ami                    = var.ami_id
   instance_type          = var.instance_type
   key_name               = aws_key_pair.key.key_name
   vpc_security_group_ids = [aws_security_group.sg.id]
   subnet_id              = var.subnet_id != "" ? var.subnet_id : null
-  user_data              = var.user_data != "" ? var.user_data : null
+  user_data_base64       = var.user_data != "" ? base64encode(var.user_data) : null
 
   root_block_device {
     volume_type           = "gp3"
@@ -964,26 +970,26 @@ resource "aws_instance" "instance" {
   }
 
   tags = {
-    Name = var.instance_name
+    Name = var.instance_count > 1 ? "\${var.instance_name}-\${count.index + 1}" : var.instance_name
   }
 }
 
 resource "aws_eip" "eip" {
-  count    = var.associate_eip ? 1 : 0
-  instance = aws_instance.instance.id
+  count    = var.associate_eip ? var.instance_count : 0
+  instance = aws_instance.instance[count.index].id
   domain   = "vpc"
 
   tags = {
-    Name = "\${var.instance_name}-eip"
+    Name = var.instance_count > 1 ? "\${var.instance_name}-eip-\${count.index + 1}" : "\${var.instance_name}-eip"
   }
 }
 
 output "public_ip" {
-  value = var.associate_eip ? aws_eip.eip[0].public_ip : aws_instance.instance.public_ip
+  value = var.associate_eip ? join(", ", aws_eip.eip[*].public_ip) : join(", ", aws_instance.instance[*].public_ip)
 }
 
 output "instance_id" {
-  value = aws_instance.instance.id
+  value = join(", ", aws_instance.instance[*].id)
 }
 
 output "private_key_pem" {
@@ -1356,7 +1362,7 @@ app.get('/api/stream-logs', (req, res) => {
 
 // 2.5 Preview deployment configuration
 app.post('/api/preview', requirePermission('ec2','write'), (req, res) => {
-  const { name, region, instanceType, amiId, volumeSize, userData, vpcId, subnetId, associateEip, keyName } = req.body;
+  const { name, region, instanceType, amiId, volumeSize, userData, vpcId, subnetId, associateEip, keyName, instanceCount } = req.body;
 
   if (!name || !region || !instanceType || !amiId) {
     return res.status(400).json({ error: 'Missing required parameters' });
@@ -1434,13 +1440,14 @@ app.post('/api/preview', requirePermission('ec2','write'), (req, res) => {
     instance_name: name,
     instance_type: instanceType,
     ami_id: amiId,
-    user_data: userData || '',
+    user_data: (userData || '').replace(/\r\n/g, '\n'),
     volume_size: parseInt(volumeSize, 10) || 30,
     ingress_rules: parsedRules,
     vpc_id: vpcId || '',
     subnet_id: subnetId || '',
     associate_eip: !!associateEip,
-    key_name: keyName || `${name}-key`
+    key_name: keyName || `${name}-key`,
+    instance_count: parseInt(instanceCount, 10) || 1
   };
 
   res.json({
@@ -1451,7 +1458,7 @@ app.post('/api/preview', requirePermission('ec2','write'), (req, res) => {
 
 // 3. Trigger new deployment
 app.post('/api/deploy', requirePermission('ec2','write'), (req, res) => {
-  const { name, region, instanceType, amiId, volumeSize, awsProfile, userData, vpcId, subnetId, associateEip, keyName } = req.body;
+  const { name, region, instanceType, amiId, volumeSize, awsProfile, userData, vpcId, subnetId, associateEip, keyName, instanceCount } = req.body;
 
   if (!name || !region || !instanceType || !amiId) {
     return res.status(400).json({ error: 'Missing required parameters' });
@@ -1546,13 +1553,14 @@ app.post('/api/deploy', requirePermission('ec2','write'), (req, res) => {
     instance_name: name,
     instance_type: instanceType,
     ami_id: amiId,
-    user_data: userData || "",
+    user_data: (userData || "").replace(/\r\n/g, "\n"),
     volume_size: parseInt(volumeSize, 10) || 30,
     ingress_rules: parsedRules,
     vpc_id: vpcId || '',
     subnet_id: subnetId || '',
     associate_eip: !!associateEip,
-    key_name: finalKeyName
+    key_name: finalKeyName,
+    instance_count: parseInt(instanceCount, 10) || 1
   };
   fs.writeFileSync(path.join(targetDir, 'terraform.tfvars.json'), JSON.stringify(tfVars, null, 2));
 
@@ -1572,7 +1580,8 @@ app.post('/api/deploy', requirePermission('ec2','write'), (req, res) => {
     publicIp: 'N/A',
     instanceId: 'N/A',
     awsProfile: awsProfile || 'default',
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    instanceCount: parseInt(instanceCount, 10) || 1
   };
   db.push(newDeployment);
   writeDB(db);
