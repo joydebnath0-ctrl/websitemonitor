@@ -1434,13 +1434,21 @@ app.post('/api/preview', requirePermission('ec2','write'), (req, res) => {
     });
   }
 
+  let normalizedUserData = (userData || '').replace(/\r\n/g, '\n');
+  if (normalizedUserData.trim() !== '') {
+    const trimmed = normalizedUserData.trim();
+    if (!trimmed.startsWith('#!') && !trimmed.startsWith('<') && !trimmed.startsWith('#cloud-config')) {
+      normalizedUserData = '#!/bin/bash\n' + normalizedUserData;
+    }
+  }
+
   // Generate tfvars object representation
   const tfVars = {
     aws_region: region,
     instance_name: name,
     instance_type: instanceType,
     ami_id: amiId,
-    user_data: (userData || '').replace(/\r\n/g, '\n'),
+    user_data: normalizedUserData,
     volume_size: parseInt(volumeSize, 10) || 30,
     ingress_rules: parsedRules,
     vpc_id: vpcId || '',
@@ -1547,13 +1555,21 @@ app.post('/api/deploy', requirePermission('ec2','write'), (req, res) => {
   // Write main.tf
   fs.writeFileSync(path.join(targetDir, 'main.tf'), TERRAFORM_TEMPLATE);
 
+  let normalizedUserData = (userData || '').replace(/\r\n/g, '\n');
+  if (normalizedUserData.trim() !== '') {
+    const trimmed = normalizedUserData.trim();
+    if (!trimmed.startsWith('#!') && !trimmed.startsWith('<') && !trimmed.startsWith('#cloud-config')) {
+      normalizedUserData = '#!/bin/bash\n' + normalizedUserData;
+    }
+  }
+
   // Write tfvars
   const tfVars = {
     aws_region: region,
     instance_name: name,
     instance_type: instanceType,
     ami_id: amiId,
-    user_data: (userData || "").replace(/\r\n/g, "\n"),
+    user_data: normalizedUserData,
     volume_size: parseInt(volumeSize, 10) || 30,
     ingress_rules: parsedRules,
     vpc_id: vpcId || '',
