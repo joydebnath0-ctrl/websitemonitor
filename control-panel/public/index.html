@@ -212,11 +212,17 @@
                   <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-cf-write"></td>
                   <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-cf-execute"></td>
                 </tr>
-                <tr>
+                <tr style="border-bottom:1px solid #21262d;">
                   <td style="padding:10px 4px; font-weight:500;">ECS</td>
                   <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-ecs-read"></td>
                   <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-ecs-write"></td>
                   <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-ecs-execute"></td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 4px; font-weight:500;">Billing</td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-billing-read"></td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-billing-write"></td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-billing-execute"></td>
                 </tr>
               </tbody>
             </table>
@@ -250,6 +256,10 @@
       <button type="button" class="svc-btn" data-service="ecs" id="svc-btn-ecs" style="display: none;">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
         ECS Clusters
+      </button>
+      <button type="button" class="svc-btn" data-service="billing" id="svc-btn-billing" style="display: none;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+        AWS Billing
       </button>
       <button type="button" class="svc-btn" data-service="users" id="svc-btn-users" style="display: none;">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -1057,6 +1067,127 @@
           </div>
         </div><!-- end svc-panel-ecs -->
 
+        <!-- ===== AWS BILLING PANEL ===== -->
+        <div class="service-panel" id="svc-panel-billing">
+          <div class="ec2-tabs-bar">
+            <button type="button" class="ec2-tab active" data-tab="billing-dashboard">Dashboard</button>
+            <button type="button" class="ec2-tab" data-tab="billing-history">Billing History</button>
+          </div>
+
+          <div class="ec2-tab-contents-container">
+            <!-- BILLING DASHBOARD TAB -->
+            <div class="ec2-tab-content active" id="tab-content-billing-dashboard">
+              <div class="ec2-form-group">
+                <label class="ec2-label">AWS Account/Profile</label>
+                <div style="display:flex;gap:8px;">
+                  <select id="billing-profile" class="ec2-select" style="flex:1;">
+                    <option value="default">default</option>
+                  </select>
+                  <button type="button" class="ec2-btn-secondary" id="btn-refresh-billing" style="width:auto;padding:0 14px;height:38px;margin:0;">🔄 Refresh</button>
+                </div>
+              </div>
+
+              <!-- Fallback Simulated warning -->
+              <div id="billing-warning-banner" style="display:none;background:rgba(227,179,65,0.1);border:1px solid rgba(227,179,65,0.3);border-radius:8px;padding:12px 16px;margin-bottom:18px;">
+                <p style="margin:0;font-size:12px;color:#e3b341;line-height:1.6;font-family:'Inter',sans-serif;">
+                  <strong>⚠️ Simulated Billing Data Shown:</strong> Cost Explorer is not enabled or credentials lack billing permissions for the selected profile. Displaying realistic simulated data instead.
+                </p>
+              </div>
+
+              <!-- Estimated cost summary card (Redesigned to match AWS Estimated Bill Summary layout) -->
+              <div style="border: 1px solid #30363d; border-radius: 8px; background: #161b22; padding: 20px; margin-bottom: 20px; font-family: 'Inter', sans-serif;">
+                <!-- Header Row -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <h2 style="margin: 0; font-size: 16px; color: #f0f6fc; font-weight: 600;">AWS estimated bill summary</h2>
+                    <span style="color: #58a6ff; font-size: 12px; font-weight: 500; cursor: pointer;">Info</span>
+                  </div>
+                  <span style="color: #8b949e; cursor: pointer; font-size: 16px;">⚙️</span>
+                </div>
+                <p style="margin: 0 0 20px 0; font-size: 12px; color: #8b949e;">Total charges and payment information</p>
+
+                <!-- 3-Column Info Row -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; border-bottom: 1px solid #30363d; padding-bottom: 16px; margin-bottom: 16px;">
+                  <!-- Account ID -->
+                  <div>
+                    <div style="font-size: 11px; color: #8b949e; margin-bottom: 6px;">Account ID</div>
+                    <div id="billing-card-account-id" style="font-size: 14px; color: #f0f6fc; font-weight: 700; font-family: 'JetBrains Mono', monospace;">672929527806</div>
+                  </div>
+                  <!-- Billing Period -->
+                  <div style="border-left: 1px solid #30363d; padding-left: 20px;">
+                    <div style="font-size: 11px; color: #8b949e; margin-bottom: 6px;">Billing period <span style="color: #58a6ff; font-weight: normal; cursor: pointer;">Info</span></div>
+                    <div id="billing-card-period" style="font-size: 14px; color: #f0f6fc; font-weight: 700;">June 1 - June 30, 2026</div>
+                  </div>
+                  <!-- Bill Status -->
+                  <div style="border-left: 1px solid #30363d; padding-left: 20px;">
+                    <div style="font-size: 11px; color: #8b949e; margin-bottom: 6px;">Bill status <span style="color: #58a6ff; font-weight: normal; cursor: pointer;">Info</span></div>
+                    <div id="billing-card-status" style="font-size: 14px; color: #8b949e; font-weight: 700; display: flex; align-items: center; gap: 6px;">
+                      <span style="font-size: 13px;">🕒</span> Pending
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Provider and Total Row -->
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #30363d; padding-bottom: 16px; margin-bottom: 16px;">
+                  <div>
+                    <div style="font-size: 11px; color: #8b949e; margin-bottom: 6px;">Service provider</div>
+                    <div style="font-size: 13px; color: #f0f6fc; font-weight: 700;">Amazon Web Services India Private Limited</div>
+                  </div>
+                  <div style="text-align: right;">
+                    <div style="font-size: 11px; color: #8b949e; margin-bottom: 6px;">Total in USD</div>
+                    <div id="billing-card-total-usd" style="font-size: 14px; color: #f0f6fc; font-weight: 700; font-family: 'JetBrains Mono', monospace;">USD 8.22</div>
+                  </div>
+                </div>
+
+                <!-- Estimated Grand Total Row -->
+                <div style="display: flex; justify-content: flex-end; align-items: center; gap: 10px;">
+                  <span style="font-size: 15px; color: #f0f6fc; font-weight: 700;">Estimated grand total:</span>
+                  <span id="billing-card-grand-total" style="font-size: 18px; color: #f0f6fc; font-weight: 800; font-family: 'JetBrains Mono', monospace; border-bottom: 1px dotted #f0f6fc; padding-bottom: 2px;">USD 8.22</span>
+                </div>
+              </div>
+
+              <!-- 2-Column Layout for Service Breakdown and Daily Billing -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px;">
+                <!-- Left: Cost Breakdown by Service -->
+                <div>
+                  <h3 class="section-heading" style="margin-bottom:12px;">Cost Breakdown by Service</h3>
+                  <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;overflow:hidden;">
+                    <table style="width:100%;border-collapse:collapse;font-size:12px;text-align:left;">
+                      <thead>
+                        <tr style="border-bottom:1px solid #30363d;background:#0d1117;">
+                          <th style="padding:10px 14px;color:#8b949e;font-weight:500;">Service</th>
+                          <th style="padding:10px 14px;color:#8b949e;font-weight:500;text-align:right;">Cost (USD)</th>
+                        </tr>
+                      </thead>
+                      <tbody id="billing-service-breakdown-body">
+                        <tr>
+                          <td colspan="2" style="padding:20px;text-align:center;color:#8b949e;">No billing data loaded. Click Refresh.</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <!-- Right: Daily Billing Section -->
+                <div>
+                  <h3 class="section-heading" style="margin-bottom:12px;">Daily Billing (Past 14 Days)</h3>
+                  <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;max-height:280px;overflow-y:auto;" id="billing-daily-list">
+                    <div style="padding:20px;text-align:center;color:#8b949e;font-size:12px;">No daily billing data loaded. Click Refresh.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- BILLING HISTORY TAB -->
+            <div class="ec2-tab-content" id="tab-content-billing-history">
+              <h3 class="section-heading" style="margin-bottom:14px;">Chronological Billing History (Past 12 Months)</h3>
+              <div id="billing-history-list" style="display:flex;flex-direction:column;gap:10px;">
+                <div class="empty-state-msg">No history data loaded. Click Refresh.</div>
+              </div>
+            </div>
+          </div>
+        </div><!-- end svc-panel-billing -->
+
         <!-- ===== USER MANAGEMENT SERVICE PANEL (ADMIN ONLY) ===== -->
         <div class="service-panel" id="svc-panel-users">
           <div class="ec2-tabs-bar">
@@ -1182,11 +1313,17 @@
                         <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-cf-write"></td>
                         <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-cf-execute"></td>
                       </tr>
-                      <tr>
+                      <tr style="border-bottom:1px solid #21262d;">
                         <td style="padding:10px 4px; font-weight:500;">ECS</td>
                         <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-ecs-read" checked></td>
                         <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-ecs-write"></td>
                         <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-ecs-execute"></td>
+                      </tr>
+                      <tr>
+                        <td style="padding:10px 4px; font-weight:500;">Billing</td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-billing-read" checked></td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-billing-write"></td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-billing-execute"></td>
                       </tr>
                     </tbody>
                   </table>
