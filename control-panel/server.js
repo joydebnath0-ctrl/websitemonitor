@@ -1739,6 +1739,15 @@ app.post('/api/deploy', requirePermission('ec2','write'), (req, res) => {
         match.status = 'failed';
         writeDB(currentDB);
       }
+    } finally {
+      setTimeout(() => {
+        if (clients[name]) {
+          clients[name].forEach(clientRes => {
+            try { clientRes.end(); } catch (e) {}
+          });
+          delete clients[name];
+        }
+      }, 1500);
     }
   };
 
@@ -1804,6 +1813,15 @@ app.post('/api/destroy', requirePermission('ec2', 'execute'), (req, res) => {
         match.status = 'destroy-failed';
         writeDB(currentDB);
       }
+    } finally {
+      setTimeout(() => {
+        if (clients[name]) {
+          clients[name].forEach(clientRes => {
+            try { clientRes.end(); } catch (e) {}
+          });
+          delete clients[name];
+        }
+      }, 1500);
     }
   };
 
