@@ -461,6 +461,7 @@
                   </select>
                   <button type="button" id="btn-add-script" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;cursor:pointer;font-family:inherit;">➕ Add Script</button>
                   <button type="button" id="btn-save-script" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;cursor:pointer;font-family:inherit;">💾 Save Current</button>
+                  <button type="button" id="btn-rename-script" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;cursor:pointer;font-family:inherit;display:none;">✏️ Rename</button>
                   <button type="button" id="btn-delete-script" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid rgba(247,129,102,0.3);border-radius:6px;color:#f78166;cursor:pointer;font-family:inherit;display:none;">Delete</button>
                   <button type="button" id="btn-copy-userdata" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;cursor:pointer;font-family:inherit;">📋 Copy</button>
                   <button type="button" id="btn-reset-userdata" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid rgba(247,129,102,0.3);border-radius:6px;color:#f78166;cursor:pointer;font-family:inherit;">Reset to Default</button>
@@ -1353,16 +1354,20 @@
 
       <!-- RIGHT: Live Logs (shared across all services) -->
       <div class="ec2-right-col">
-        <div class="ec2-logs-header">
-          <div style="display:flex;align-items:center;gap:10px;">
-            <span class="ec2-logs-title">Live Terraform Logs</span>
-            <span id="log-status-badge" style="display:none;font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;"></span>
+        <div class="ec2-logs-header" style="padding:0;border-bottom:1px solid #30363d;display:flex;align-items:center;justify-content:space-between;height:45px;flex-shrink:0;background:#0d1117;">
+          <div style="display:flex;align-items:center;height:100%;padding-left:20px;">
+            <button type="button" class="ec2-tab active" id="tab-logs-terraform" style="background:none;border:none;color:#58a6ff;padding:8px 16px;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;cursor:pointer;border-bottom:2px solid #58a6ff;transition:all 0.15s;height:100%;">Terraform Logs</button>
+            <button type="button" class="ec2-tab" id="tab-logs-startup" style="background:none;border:none;color:#8b949e;padding:8px 16px;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;height:100%;">Startup Logs</button>
+            <span id="log-status-badge" style="display:none;font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;margin-left:8px;"></span>
           </div>
-          <button type="button" id="btn-clear-logs" style="background:none;border:1px solid #30363d;border-radius:4px;color:#8b949e;font-size:11px;padding:4px 10px;cursor:pointer;font-family:inherit;">Clear</button>
+          <button type="button" id="btn-clear-logs" style="background:none;border:1px solid #30363d;border-radius:4px;color:#8b949e;font-size:11px;padding:4px 10px;cursor:pointer;font-family:inherit;margin-right:20px;">Clear</button>
         </div>
 
         <div class="ec2-log-terminal" id="log-terminal-container">
           <div class="log-line" style="color:#484f58;">— Select a service above, configure your resource, and click Provision to begin —</div>
+        </div>
+        <div class="ec2-log-terminal" id="startup-terminal-container" style="display:none;">
+          <div class="log-line" style="color:#484f58;">— Select an active deployment and click "Startup Logs" to monitor execution —</div>
         </div>
 
         <!-- EC2 SSH Banner -->

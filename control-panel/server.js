@@ -1340,6 +1340,90 @@ app.get('/api/deployments', requirePermission('ec2','read'), (req, res) => {
   res.json(readDB());
 });
 
+function getSshUser(amiId) {
+  if (!amiId) return 'ubuntu';
+  const id = amiId.toLowerCase();
+  if (id.includes('ubuntu')) return 'ubuntu';
+  if (id.includes('amazon') || id.includes('linux') || id.includes('rhel')) return 'ec2-user';
+  if (id.includes('debian')) return 'admin';
+  return 'ubuntu'; // default fallback
+}
+
+app.get('/api/deployments/:name/startup-logs', requirePermission('ec2', 'read'), (req, res) => {
+  const { name } = req.params;
+  const db = readDB();
+  const deployment = db.find(d => d.name === name);
+  if (!deployment) {
+    return res.status(404).json({ error: 'Deployment not found' });
+  }
+  if (deployment.status !== 'active') {
+    return res.status(400).json({ error: 'Deployment is not active yet.' });
+  }
+  if (!deployment.publicIp || deployment.publicIp === 'N/A') {
+    return res.status(400).json({ error: 'No public IP address available for this deployment.' });
+  }
+
+  const firstIp = deployment.publicIp.split(',')[0].trim();
+  const keyName = deployment.keyName || `${name}-key`;
+  let keyPath = path.join(DEPLOYMENTS_DIR, name, `${keyName}.pem`);
+  if (!fs.existsSync(keyPath)) {
+    const legacyPath = path.join(DEPLOYMENTS_DIR, name, `${name}.pem`);
+    if (fs.existsSync(legacyPath)) {
+      keyPath = legacyPath;
+    } else {
+      return res.status(404).json({ error: 'Private key not found for this deployment.' });
+    }
+  }
+
+  const sshUser = getSshUser(deployment.amiId);
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  res.write(`data: ${JSON.stringify({ text: `=== Connecting to ${sshUser}@${firstIp} to stream startup logs ===` })}\n\n`);
+
+  const sshCmd = 'ssh';
+  const sshArgs = [
+    '-i', keyPath,
+    '-o', 'StrictHostKeyChecking=no',
+    '-o', 'ConnectTimeout=10',
+    `${sshUser}@${firstIp}`,
+    "echo '=== CLOUD-INIT STATUS ===' && (cloud-init status 2>/dev/null || echo 'status: not available') && echo '=== STARTUP SCRIPT LOGS ===' && (tail -f -n +1 /var/log/cloud-init-output.log 2>/dev/null || echo 'No startup logs found or log file is unreadable.')"
+  ];
+
+  const proc = spawn(sshCmd, sshArgs);
+
+  let buffer = '';
+  proc.stdout.on('data', (data) => {
+    buffer += data.toString();
+    const lines = buffer.split('\n');
+    buffer = lines.pop();
+    lines.forEach(line => {
+      res.write(`data: ${JSON.stringify({ text: line })}\n\n`);
+    });
+  });
+
+  proc.stderr.on('data', (data) => {
+    const lines = data.toString().split('\n');
+    lines.forEach(line => {
+      if (line.trim()) {
+        res.write(`data: ${JSON.stringify({ text: `[SSH] ${line}` })}\n\n`);
+      }
+    });
+  });
+
+  proc.on('close', (code) => {
+    res.write(`data: ${JSON.stringify({ text: `=== SSH session closed with code ${code} ===` })}\n\n`);
+    res.end();
+  });
+
+  req.on('close', () => {
+    proc.kill();
+  });
+});
+
 // 2. Stream logs via Server-Sent Events (SSE)
 app.get('/api/stream-logs', (req, res) => {
   const { name } = req.query;
@@ -1792,6 +1876,28 @@ app.delete('/api/scripts/:id', requirePermission('ec2', 'write'), (req, res) => 
   }
   writeScriptsDB(db);
   res.json({ success: true, message: 'Script deleted successfully.' });
+});
+
+app.post('/api/scripts/:id/rename', requirePermission('ec2', 'write'), (req, res) => {
+  const { id } = req.params;
+  const { name } = req.body;
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Name is required.' });
+  }
+  const db = readScriptsDB();
+  const script = db.find(s => s.id === id);
+  if (!script) {
+    return res.status(404).json({ error: 'Script not found.' });
+  }
+  const trimmedName = name.trim();
+  const duplicate = db.find(s => s.id !== id && s.name.toLowerCase() === trimmedName.toLowerCase());
+  if (duplicate) {
+    return res.status(400).json({ error: `A script named "${trimmedName}" already exists.` });
+  }
+  script.name = trimmedName;
+  script.updatedAt = new Date().toISOString();
+  writeScriptsDB(db);
+  res.json({ success: true, message: 'Script renamed successfully.' });
 });
 
 // Helper to spawn child processes and pipe output to SSE log stream

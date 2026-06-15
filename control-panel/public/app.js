@@ -421,8 +421,46 @@ function initEC2UI() {
     });
   }
 
+  const tabLogsTerraform = document.getElementById('tab-logs-terraform');
+  const tabLogsStartup = document.getElementById('tab-logs-startup');
+  const logTerminal = document.getElementById('log-terminal-container');
+  const startupTerminal = document.getElementById('startup-terminal-container');
+
+  if (tabLogsTerraform && tabLogsStartup && logTerminal && startupTerminal) {
+    tabLogsTerraform.addEventListener('click', () => {
+      tabLogsTerraform.classList.add('active');
+      tabLogsTerraform.style.color = '#58a6ff';
+      tabLogsTerraform.style.borderBottomColor = '#58a6ff';
+
+      tabLogsStartup.classList.remove('active');
+      tabLogsStartup.style.color = '#8b949e';
+      tabLogsStartup.style.borderBottomColor = 'transparent';
+
+      logTerminal.style.display = 'block';
+      startupTerminal.style.display = 'none';
+    });
+
+    tabLogsStartup.addEventListener('click', () => {
+      tabLogsStartup.classList.add('active');
+      tabLogsStartup.style.color = '#58a6ff';
+      tabLogsStartup.style.borderBottomColor = '#58a6ff';
+
+      tabLogsTerraform.classList.remove('active');
+      tabLogsTerraform.style.color = '#8b949e';
+      tabLogsTerraform.style.borderBottomColor = 'transparent';
+
+      startupTerminal.style.display = 'block';
+      logTerminal.style.display = 'none';
+    });
+  }
+
   document.getElementById('btn-clear-logs').addEventListener('click', () => {
-    document.getElementById('log-terminal-container').innerHTML = '<div class="log-line" style="color:#484f58;">Terminal cleared.</div>';
+    const isStartupActive = tabLogsStartup && tabLogsStartup.classList.contains('active');
+    if (isStartupActive) {
+      if (startupTerminal) startupTerminal.innerHTML = '<div class="log-line" style="color:#484f58;">Terminal cleared.</div>';
+    } else {
+      if (logTerminal) logTerminal.innerHTML = '<div class="log-line" style="color:#484f58;">Terminal cleared.</div>';
+    }
   });
 
   document.getElementById('btn-provision-instance').addEventListener('click', () => {
@@ -441,6 +479,7 @@ function initEC2UI() {
   const savedScriptsSelect = document.getElementById('saved-scripts-select');
   const btnAddScript = document.getElementById('btn-add-script');
   const btnSaveScript = document.getElementById('btn-save-script');
+  const btnRenameScript = document.getElementById('btn-rename-script');
   const btnDeleteScript = document.getElementById('btn-delete-script');
 
   if (btnAddScript && userdataTextarea && userdataTypeSelect && savedScriptsSelect && btnDeleteScript) {
@@ -453,8 +492,9 @@ function initEC2UI() {
       userdataTextarea.value = USERDATA_TEMPLATES[type] || '';
       userdataTextarea.dispatchEvent(new Event('input'));
       
-      // Hide delete button since we are in draft mode
+      // Hide delete and rename buttons since we are in draft mode
       btnDeleteScript.style.display = 'none';
+      if (btnRenameScript) btnRenameScript.style.display = 'none';
       
       // Focus script textarea
       userdataTextarea.focus();
@@ -466,6 +506,7 @@ function initEC2UI() {
       const selectedId = savedScriptsSelect.value;
       if (!selectedId) {
         btnDeleteScript.style.display = 'none';
+        if (btnRenameScript) btnRenameScript.style.display = 'none';
         return;
       }
       const script = savedScripts.find(s => s.id === selectedId);
@@ -477,6 +518,7 @@ function initEC2UI() {
         }
         userdataTextarea.dispatchEvent(new Event('input'));
         btnDeleteScript.style.display = 'inline-block';
+        if (btnRenameScript) btnRenameScript.style.display = 'inline-block';
       }
     });
   }
@@ -522,6 +564,43 @@ function initEC2UI() {
     });
   }
 
+  if (btnRenameScript && savedScriptsSelect) {
+    btnRenameScript.addEventListener('click', async () => {
+      const selectedId = savedScriptsSelect.value;
+      if (!selectedId) return;
+      const script = savedScripts.find(s => s.id === selectedId);
+      if (!script) return;
+      
+      const newName = prompt(`Enter a new name for the script "${script.name}":`, script.name);
+      if (newName === null) return; // User clicked Cancel
+      
+      const trimmedName = newName.trim();
+      if (!trimmedName) {
+        alert('Please enter a name for the script.');
+        return;
+      }
+      if (trimmedName === script.name) return; // Name didn't change
+      
+      try {
+        const res = await fetch(`/api/scripts/${selectedId}/rename`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: trimmedName })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to rename script');
+        alert('Script renamed successfully!');
+        await fetchSavedScripts();
+        
+        // Ensure the renamed script is selected in the dropdown
+        savedScriptsSelect.value = selectedId;
+        savedScriptsSelect.dispatchEvent(new Event('change'));
+      } catch (err) {
+        alert('Error renaming script: ' + err.message);
+      }
+    });
+  }
+
   if (btnDeleteScript && savedScriptsSelect) {
     btnDeleteScript.addEventListener('click', async () => {
       const selectedId = savedScriptsSelect.value;
@@ -535,6 +614,7 @@ function initEC2UI() {
         if (!res.ok) throw new Error(data.error || 'Failed to delete script');
         alert('Script deleted successfully!');
         btnDeleteScript.style.display = 'none';
+        if (btnRenameScript) btnRenameScript.style.display = 'none';
         await fetchSavedScripts();
       } catch (err) {
         alert('Error deleting script: ' + err.message);
@@ -1298,6 +1378,8 @@ function renderSavedScriptsDropdown() {
     select.value = '';
     const btnDelete = document.getElementById('btn-delete-script');
     if (btnDelete) btnDelete.style.display = 'none';
+    const btnRename = document.getElementById('btn-rename-script');
+    if (btnRename) btnRename.style.display = 'none';
   }
 }
 
@@ -1331,6 +1413,7 @@ function renderDeploymentsList() {
       </div>
       <div class="deployment-actions-bar">
         <button type="button" class="ec2-btn-outline" onclick="startLogStream('${dep.name}')">View Logs</button>
+        ${dep.status === 'active' ? `<button type="button" class="ec2-btn-outline" onclick="startStartupLogStream('${dep.name}')">Startup Logs</button>` : ''}
         ${dep.status !== 'destroying' ? `<button type="button" class="ec2-btn-danger" onclick="triggerEC2Destroy('${dep.name}')" ${hasPermission('ec2', 'execute') ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;" title="No execute permission"'}>Destroy</button>` : ''}
       </div>`;
     container.appendChild(card);
@@ -1704,7 +1787,19 @@ function startLogStream(name) {
     badge.style.color = '#fff';
     eventSource.close();
     setDeployingState(false);
-    fetchDeployments();
+    
+    const targetName = currentLogTarget;
+    fetchDeployments().then(() => {
+      if (targetName) {
+        const dep = activeDeployments.find(d => d.name === targetName);
+        if (dep && dep.status === 'active') {
+          setTimeout(() => {
+            startStartupLogStream(targetName);
+          }, 500);
+        }
+      }
+    });
+
     fetchVpcs();
     fetchS3Buckets();
     fetchDistributions();
@@ -1730,6 +1825,61 @@ function appendLogLine(text) {
   terminal.appendChild(line);
   const badge = document.getElementById('log-status-badge');
   if (badge.textContent === 'LIVE') {
+    const blinker = document.createElement('span');
+    blinker.className = 'log-cursor';
+    terminal.appendChild(blinker);
+  }
+  terminal.scrollTop = terminal.scrollHeight;
+}
+
+let startupEventSource = null;
+function startStartupLogStream(name) {
+  const tabLogsStartup = document.getElementById('tab-logs-startup');
+  if (tabLogsStartup) tabLogsStartup.click();
+
+  if (startupEventSource) startupEventSource.close();
+  const terminal = document.getElementById('startup-terminal-container');
+  if (terminal) terminal.innerHTML = `<div class="log-line log-line-info">=== Connecting to startup script log stream for "${name}" ===</div>`;
+  const badge = document.getElementById('log-status-badge');
+  if (badge) {
+    badge.textContent = 'LIVE';
+    badge.style.background = '#e3b341';
+    badge.style.color = '#000';
+    badge.style.display = 'inline-block';
+  }
+  const token = localStorage.getItem('auth_token') || '';
+  startupEventSource = new EventSource(`/api/deployments/${encodeURIComponent(name)}/startup-logs?token=${encodeURIComponent(token)}`);
+  startupEventSource.onmessage = event => {
+    const data = JSON.parse(event.data);
+    appendStartupLogLine(data.text);
+  };
+  startupEventSource.onerror = () => {
+    appendStartupLogLine('=== Log stream disconnected ===', 'info');
+    if (badge) {
+      badge.textContent = 'COMPLETE';
+      badge.style.background = '#238636';
+      badge.style.color = '#fff';
+    }
+    startupEventSource.close();
+  };
+}
+
+function appendStartupLogLine(text, type = '') {
+  const terminal = document.getElementById('startup-terminal-container');
+  if (!terminal) return;
+  const cursor = terminal.querySelector('.log-cursor');
+  if (cursor) cursor.remove();
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  if (type === 'error' || text.includes('[ERROR]') || text.toLowerCase().includes('error') || text.includes('FAILED')) line.classList.add('log-line-error');
+  else if (type === 'success' || text.includes('[OK]') || text.includes('Successfully') || text.includes('complete') || text.includes('COMPLETE') || text.toLowerCase().includes('status: done')) line.classList.add('log-line-success');
+  else if (text.includes('===')) line.classList.add('log-line-header');
+  else if (type === 'info' || text.includes('[INFO]') || text.includes('Initializing') || text.includes('Applying')) line.classList.add('log-line-info');
+  else line.classList.add('log-line-default');
+  line.textContent = text;
+  terminal.appendChild(line);
+  const badge = document.getElementById('log-status-badge');
+  if (badge && badge.textContent === 'LIVE') {
     const blinker = document.createElement('span');
     blinker.className = 'log-cursor';
     terminal.appendChild(blinker);
