@@ -48,7 +48,14 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-const BASE_DIR = '/home/ubuntu';
+const BASE_DIR = process.platform === 'win32'
+  ? path.join(os.homedir(), '.aws-control-panel')
+  : '/home/ubuntu';
+
+if (!fs.existsSync(BASE_DIR)) {
+  fs.mkdirSync(BASE_DIR, { recursive: true });
+}
+
 const DEPLOYMENTS_DIR = path.join(BASE_DIR, 'deployments');
 const DB_FILE = path.join(BASE_DIR, 'deployments.json');
 const VPC_DEPLOYMENTS_DIR = path.join(BASE_DIR, 'vpc-deployments');
@@ -138,11 +145,36 @@ function writeSessionsDB(data) {
   fs.writeFileSync(SESSIONS_FILE, JSON.stringify(data, null, 2));
 }
 
-// Migration: Ensure Joy Debnath is Admin & isVerified is true by default
+// Migration: Ensure default Admin exists & Joy Debnath has admin privileges
 (function migrateUsers() {
   try {
     const users = readUsersDB();
     let updated = false;
+
+    const hasAdmin = users.find(u => u.email.toLowerCase() === 'test.admin@example.com');
+    if (!hasAdmin) {
+      const salt = generateSalt();
+      const passwordHash = hashPassword('adminpassword123', salt);
+      users.push({
+        name: "Test Admin",
+        email: "test.admin@example.com",
+        salt,
+        passwordHash,
+        isVerified: true,
+        isAdmin: true,
+        permissions: {
+          ec2: ['read', 'write', 'execute'],
+          vpc: ['read', 'write', 'execute'],
+          s3: ['read', 'write', 'execute'],
+          cf: ['read', 'write', 'execute'],
+          ecs: ['read', 'write', 'execute'],
+          billing: ['read']
+        },
+        createdAt: new Date().toISOString()
+      });
+      updated = true;
+    }
+
     users.forEach(u => {
       if (u.email.toLowerCase() === 'joy.debnath@webskitters.com') {
         if (!u.isAdmin) {
@@ -157,7 +189,7 @@ function writeSessionsDB(data) {
     });
     if (updated) {
       writeUsersDB(users);
-      console.log('User database migrated: Admin privileges granted to Joy Debnath and verification flags verified.');
+      console.log('User database migrated and admin users verified/seeded.');
     }
   } catch (err) {
     console.error('Migration error:', err);
