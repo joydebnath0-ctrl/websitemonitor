@@ -451,11 +451,17 @@
                 </div>
                 
                 <div id="userdata-controls" style="display:none;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
-                  <select id="userdata-type" class="ec2-select" style="margin:0;max-width:200px;height:32px;padding:4px 8px;font-size:12px;">
+                  <select id="userdata-type" class="ec2-select" style="margin:0;max-width:160px;height:32px;padding:4px 8px;font-size:12px;">
                     <option value="bash">Bash Script (Linux)</option>
                     <option value="powershell">PowerShell Script (Windows)</option>
                     <option value="cloud-init">Cloud-Init YAML</option>
                   </select>
+                  <select id="saved-scripts-select" class="ec2-select" style="margin:0;max-width:180px;height:32px;padding:4px 8px;font-size:12px;">
+                    <option value="">-- Load Saved Script --</option>
+                  </select>
+                  <button type="button" id="btn-add-script" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;cursor:pointer;font-family:inherit;">➕ Add Script</button>
+                  <button type="button" id="btn-save-script" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;cursor:pointer;font-family:inherit;">💾 Save Current</button>
+                  <button type="button" id="btn-delete-script" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid rgba(247,129,102,0.3);border-radius:6px;color:#f78166;cursor:pointer;font-family:inherit;display:none;">Delete</button>
                   <button type="button" id="btn-copy-userdata" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;cursor:pointer;font-family:inherit;">📋 Copy</button>
                   <button type="button" id="btn-reset-userdata" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid rgba(247,129,102,0.3);border-radius:6px;color:#f78166;cursor:pointer;font-family:inherit;">Reset to Default</button>
                 </div>
@@ -1420,6 +1426,6 @@
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=2.1"></script>
 </body>
 </html>

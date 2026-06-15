@@ -157,6 +157,7 @@ let activeS3Buckets = [];
 let activeDistributions = [];
 let isDeploying = false;
 let currentService = 'ec2';
+let savedScripts = [];
 
 function hasPermission(service, level) {
   const userStr = localStorage.getItem('auth_user');
@@ -436,6 +437,112 @@ function initEC2UI() {
   });
 
   updateEC2Summary();
+
+  const savedScriptsSelect = document.getElementById('saved-scripts-select');
+  const btnAddScript = document.getElementById('btn-add-script');
+  const btnSaveScript = document.getElementById('btn-save-script');
+  const btnDeleteScript = document.getElementById('btn-delete-script');
+
+  if (btnAddScript && userdataTextarea && userdataTypeSelect && savedScriptsSelect && btnDeleteScript) {
+    btnAddScript.addEventListener('click', () => {
+      // Deselect dropdown
+      savedScriptsSelect.value = '';
+      
+      // Reset textarea content to standard template for current type
+      const type = userdataTypeSelect.value;
+      userdataTextarea.value = USERDATA_TEMPLATES[type] || '';
+      userdataTextarea.dispatchEvent(new Event('input'));
+      
+      // Hide delete button since we are in draft mode
+      btnDeleteScript.style.display = 'none';
+      
+      // Focus script textarea
+      userdataTextarea.focus();
+    });
+  }
+
+  if (savedScriptsSelect && userdataTextarea && userdataTypeSelect && btnDeleteScript) {
+    savedScriptsSelect.addEventListener('change', () => {
+      const selectedId = savedScriptsSelect.value;
+      if (!selectedId) {
+        btnDeleteScript.style.display = 'none';
+        return;
+      }
+      const script = savedScripts.find(s => s.id === selectedId);
+      if (script) {
+        userdataTextarea.value = script.content;
+        userdataTypeSelect.value = script.type;
+        if (userdataTextarea.style.display === 'none') {
+          btnToggleUserdata.click();
+        }
+        userdataTextarea.dispatchEvent(new Event('input'));
+        btnDeleteScript.style.display = 'inline-block';
+      }
+    });
+  }
+
+  if (btnSaveScript && userdataTextarea && userdataTypeSelect) {
+    btnSaveScript.addEventListener('click', async () => {
+      const selectedId = savedScriptsSelect.value;
+      const currentScript = selectedId ? savedScripts.find(s => s.id === selectedId) : null;
+      const defaultName = currentScript ? currentScript.name : '';
+      
+      const name = prompt('Enter a name to save this script:', defaultName);
+      if (name === null) return; // User clicked Cancel
+      
+      const trimmedName = name.trim();
+      if (!trimmedName) {
+        alert('Please enter a name for the script.');
+        return;
+      }
+      
+      const content = userdataTextarea.value;
+      const type = userdataTypeSelect.value;
+      
+      try {
+        const res = await fetch('/api/scripts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: trimmedName, type, content })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to save script');
+        alert('Script saved successfully!');
+        await fetchSavedScripts();
+        
+        // Auto-select the saved script in the dropdown
+        const saved = savedScripts.find(s => s.name.toLowerCase() === trimmedName.toLowerCase());
+        if (saved) {
+          savedScriptsSelect.value = saved.id;
+          savedScriptsSelect.dispatchEvent(new Event('change'));
+        }
+      } catch (err) {
+        alert('Error saving script: ' + err.message);
+      }
+    });
+  }
+
+  if (btnDeleteScript && savedScriptsSelect) {
+    btnDeleteScript.addEventListener('click', async () => {
+      const selectedId = savedScriptsSelect.value;
+      if (!selectedId) return;
+      const script = savedScripts.find(s => s.id === selectedId);
+      if (!script) return;
+      if (!confirm(`Are you sure you want to delete script "${script.name}"?`)) return;
+      try {
+        const res = await fetch(`/api/scripts/${selectedId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to delete script');
+        alert('Script deleted successfully!');
+        btnDeleteScript.style.display = 'none';
+        await fetchSavedScripts();
+      } catch (err) {
+        alert('Error deleting script: ' + err.message);
+      }
+    });
+  }
+
+  fetchSavedScripts();
 }
 
 // ===== VPC UI =====
@@ -1161,6 +1268,37 @@ async function fetchDeployments() {
     updateHeaderStatus();
     updateSSHBanner();
   } catch (err) { console.error('Error fetching deployments:', err); }
+}
+
+async function fetchSavedScripts() {
+  try {
+    const res = await fetch('/api/scripts');
+    if (!res.ok) throw new Error('Failed to load scripts');
+    savedScripts = await res.json();
+    renderSavedScriptsDropdown();
+  } catch (err) {
+    console.error('Error fetching scripts:', err);
+  }
+}
+
+function renderSavedScriptsDropdown() {
+  const select = document.getElementById('saved-scripts-select');
+  if (!select) return;
+  const currentVal = select.value;
+  select.innerHTML = '<option value="">-- Load Saved Script --</option>';
+  savedScripts.forEach(script => {
+    const opt = document.createElement('option');
+    opt.value = script.id;
+    opt.textContent = `${script.name} (${script.type})`;
+    select.appendChild(opt);
+  });
+  if (savedScripts.find(s => s.id === currentVal)) {
+    select.value = currentVal;
+  } else {
+    select.value = '';
+    const btnDelete = document.getElementById('btn-delete-script');
+    if (btnDelete) btnDelete.style.display = 'none';
+  }
 }
 
 function renderDeploymentsList() {

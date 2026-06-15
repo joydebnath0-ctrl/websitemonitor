@@ -55,6 +55,16 @@ const VPC_DEPLOYMENTS_DIR = path.join(BASE_DIR, 'vpc-deployments');
 const VPC_DB_FILE = path.join(BASE_DIR, 'vpcs.json');
 const S3_DEPLOYMENTS_DIR = path.join(BASE_DIR, 's3-deployments');
 const S3_DB_FILE = path.join(BASE_DIR, 's3buckets.json');
+const SCRIPTS_DB_FILE = path.join(BASE_DIR, 'user_scripts.json');
+if (!fs.existsSync(SCRIPTS_DB_FILE)) {
+  fs.writeFileSync(SCRIPTS_DB_FILE, JSON.stringify([]));
+}
+function readScriptsDB() {
+  try { return JSON.parse(fs.readFileSync(SCRIPTS_DB_FILE, 'utf8')); } catch (e) { return []; }
+}
+function writeScriptsDB(data) {
+  fs.writeFileSync(SCRIPTS_DB_FILE, JSON.stringify(data, null, 2));
+}
 
 function safeRmSync(dirPath) {
   if (fs.rmSync) {
@@ -1740,6 +1750,48 @@ app.get('/api/download-key/:name', requirePermission('ec2','read'), (req, res) =
   } else {
     res.status(404).send('Private key not found for this deployment.');
   }
+});
+
+// 6. User-defined custom startup scripts (multiple templates)
+app.get('/api/scripts', requirePermission('ec2', 'read'), (req, res) => {
+  res.json(readScriptsDB());
+});
+
+app.post('/api/scripts', requirePermission('ec2', 'write'), (req, res) => {
+  const { name, type, content } = req.body;
+  if (!name || !type || !content) {
+    return res.status(400).json({ error: 'Name, type, and content are required.' });
+  }
+  const db = readScriptsDB();
+  const existing = db.find(s => s.name.toLowerCase() === name.toLowerCase().trim());
+  if (existing) {
+    existing.type = type;
+    existing.content = content;
+    existing.updatedAt = new Date().toISOString();
+  } else {
+    const id = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString();
+    db.push({
+      id,
+      name: name.trim(),
+      type,
+      content,
+      createdAt: new Date().toISOString()
+    });
+  }
+  writeScriptsDB(db);
+  res.json({ success: true, message: 'Script saved successfully.' });
+});
+
+app.delete('/api/scripts/:id', requirePermission('ec2', 'write'), (req, res) => {
+  const { id } = req.params;
+  let db = readScriptsDB();
+  const initialLen = db.length;
+  db = db.filter(s => s.id !== id);
+  if (db.length === initialLen) {
+    return res.status(404).json({ error: 'Script not found.' });
+  }
+  writeScriptsDB(db);
+  res.json({ success: true, message: 'Script deleted successfully.' });
 });
 
 // Helper to spawn child processes and pipe output to SSE log stream
