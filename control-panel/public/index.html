@@ -218,11 +218,17 @@
                   <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-ecs-write"></td>
                   <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-ecs-execute"></td>
                 </tr>
-                <tr>
+                <tr style="border-bottom:1px solid #21262d;">
                   <td style="padding:10px 4px; font-weight:500;">Billing</td>
                   <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-billing-read"></td>
                   <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-billing-write"></td>
                   <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-billing-execute"></td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 4px; font-weight:500;">RDS</td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-rds-read"></td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-rds-write"></td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-rds-execute"></td>
                 </tr>
               </tbody>
             </table>
@@ -256,6 +262,10 @@
       <button type="button" class="svc-btn" data-service="ecs" id="svc-btn-ecs" style="display: none;">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
         ECS Clusters
+      </button>
+      <button type="button" class="svc-btn" data-service="rds" id="svc-btn-rds" style="display: none;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-2.239 10-5V5c0-2.761-4.477-5-10-5S2 2.239 2 5v12c0 2.761 4.477 5 10 5Z"/><path d="M22 5c0 2.761-4.477 5-10 5S2 7.761 2 5"/><path d="M22 11c0 2.761-4.477 5-10 5S2 13.761 2 11"/></svg>
+        RDS Databases
       </button>
       <button type="button" class="svc-btn" data-service="billing" id="svc-btn-billing" style="display: none;">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
@@ -1080,6 +1090,218 @@
           </div>
         </div><!-- end svc-panel-ecs -->
 
+        <!-- ===== AWS RDS DATABASE PANEL ===== -->
+        <div class="service-panel" id="svc-panel-rds">
+          <div class="ec2-tabs-bar">
+            <button type="button" class="ec2-tab active" data-tab="rds-config">Config</button>
+            <button type="button" class="ec2-tab" data-tab="rds-preview">Code Preview</button>
+            <button type="button" class="ec2-tab" data-tab="rds-list">RDS Databases</button>
+          </div>
+
+          <div class="ec2-tab-contents-container">
+            <!-- RDS CONFIG TAB -->
+            <div class="ec2-tab-content active" id="tab-content-rds-config">
+              
+              <!-- Creation Method selector card -->
+              <div class="options-card" style="margin-bottom:18px;">
+                <p class="options-card-title">Database Creation Method</p>
+                <div style="display:flex; gap:16px; margin-top:8px;">
+                  <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                    <input type="radio" name="rds-creation-method" id="rds-create-easy" value="easy" checked style="accent-color:#a371f7;">
+                    <span style="font-size:13px; color:#f0f6fc; font-weight:600;">Easy Create</span>
+                  </label>
+                  <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                    <input type="radio" name="rds-creation-method" id="rds-create-standard" value="standard" style="accent-color:#a371f7;">
+                    <span style="font-size:13px; color:#f0f6fc; font-weight:600;">Standard Create</span>
+                  </label>
+                </div>
+                <p style="font-size:11px; color:#8b949e; margin-top:6px; line-height:1.4;" id="rds-creation-method-desc">
+                  Uses recommended best-practice database parameters (e.g. lightweight instance sizing, gp2 storage, default credentials, private access).
+                </p>
+              </div>
+
+              <!-- Engine Type selection card -->
+              <div class="options-card" style="margin-bottom:18px;">
+                <p class="options-card-title">Database Engine Type</p>
+                <div style="display:grid; grid-template-columns: repeat(5, 1fr); gap:10px; margin-top:8px;" id="rds-engine-buttons-group">
+                  <div class="db-engine-card active" data-engine="mysql">
+                    <span style="font-size:20px;">🐬</span>
+                    <span style="font-size:11px; font-weight:600; margin-top:4px;">MySQL</span>
+                  </div>
+                  <div class="db-engine-card" data-engine="postgres">
+                    <span style="font-size:20px;">🐘</span>
+                    <span style="font-size:11px; font-weight:600; margin-top:4px;">PostgreSQL</span>
+                  </div>
+                  <div class="db-engine-card" data-engine="mariadb">
+                    <span style="font-size:20px;">🦭</span>
+                    <span style="font-size:11px; font-weight:600; margin-top:4px;">MariaDB</span>
+                  </div>
+                  <div class="db-engine-card" data-engine="sqlserver-ex">
+                    <span style="font-size:20px;">💼</span>
+                    <span style="font-size:11px; font-weight:600; margin-top:4px;">SQL Server</span>
+                  </div>
+                  <div class="db-engine-card" data-engine="oracle-se2">
+                    <span style="font-size:20px;">🔴</span>
+                    <span style="font-size:11px; font-weight:600; margin-top:4px;">Oracle</span>
+                  </div>
+                </div>
+                <input type="hidden" id="rds-engine" value="mysql">
+              </div>
+
+              <!-- Engine Version (Hidden in Easy mode) -->
+              <div class="ec2-form-group rds-standard-only" style="display:none;">
+                <label class="ec2-label">Engine Version</label>
+                <select id="rds-version" class="ec2-select"></select>
+              </div>
+
+              <!-- DB Instance Identifier -->
+              <div class="ec2-form-group">
+                <label class="ec2-label">DB Instance Identifier</label>
+                <input type="text" id="rds-identifier" class="ec2-input" placeholder="database-1" value="database-1" pattern="[a-z0-9-]+" title="Lowercase alphanumeric and dashes only, starting with a letter">
+                <p style="font-size:11px;color:#8b949e;margin-top:4px;">Name of your RDS instance. Lowercase letters, numbers, and dashes only.</p>
+                <p class="field-err" id="err-rds-identifier" style="display:none;"></p>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                <div>
+                  <label class="ec2-label">AWS Profile</label>
+                  <select id="rds-profile" class="ec2-select">
+                    <option value="default">default</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="ec2-label">AWS Region</label>
+                  <select id="rds-region" class="ec2-select">
+                    <option value="us-east-1">us-east-1 (N. Virginia)</option>
+                    <option value="us-east-2">us-east-2 (Ohio)</option>
+                    <option value="us-west-1">us-west-1 (N. California)</option>
+                    <option value="us-west-2">us-west-2 (Oregon)</option>
+                    <option value="eu-west-1">eu-west-1 (Ireland)</option>
+                    <option value="eu-central-1">eu-central-1 (Frankfurt)</option>
+                    <option value="ap-south-1">ap-south-1 (Mumbai)</option>
+                    <option value="ap-southeast-1">ap-southeast-1 (Singapore)</option>
+                    <option value="ap-northeast-1">ap-northeast-1 (Tokyo)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Database Sizing Configuration (Hidden in Easy mode) -->
+              <div class="rds-standard-only" style="display:none; margin-top:18px;">
+                <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:14px; margin-bottom:18px;">
+                  <div>
+                    <label class="ec2-label">DB Instance Class</label>
+                    <select id="rds-class" class="ec2-select">
+                      <option value="db.t3.micro">db.t3.micro (2 vCPU, 1 GB RAM)</option>
+                      <option value="db.t3.small">db.t3.small (2 vCPU, 2 GB RAM)</option>
+                      <option value="db.t3.medium">db.t3.medium (2 vCPU, 4 GB RAM)</option>
+                      <option value="db.m6g.large">db.m6g.large (2 vCPU, 8 GB RAM)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="ec2-label">Storage Type</label>
+                    <select id="rds-storage-type" class="ec2-select">
+                      <option value="gp2" selected>General Purpose SSD (gp2)</option>
+                      <option value="gp3">General Purpose SSD (gp3)</option>
+                      <option value="io1">Provisioned IOPS SSD (io1)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Allocated Storage (GB)</label>
+                  <input type="number" id="rds-storage" class="ec2-input" value="20" min="20" max="1000">
+                  <p style="font-size:11px;color:#8b949e;margin-top:4px;">Minimum storage is 20 GB. High volume instances require more storage space.</p>
+                </div>
+
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Initial Database Name <span style="color:#8b949e; font-weight:normal;">(Optional)</span></label>
+                  <input type="text" id="rds-dbname" class="ec2-input" placeholder="rdsdb">
+                </div>
+              </div>
+
+              <!-- Master Credentials -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px; margin-top:18px;">
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Master Username</label>
+                  <input type="text" id="rds-username" class="ec2-input" value="admin" placeholder="admin">
+                </div>
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Master Password</label>
+                  <input type="password" id="rds-password" class="ec2-input" placeholder="••••••••••••" value="SuperSecurePass123!">
+                </div>
+              </div>
+
+              <!-- Database Options (Hidden in Easy mode) -->
+              <div class="options-card rds-standard-only" style="display:none; margin-top:18px;">
+                <p class="options-card-title">Database Options</p>
+                <label class="toggle-row">
+                  <span class="toggle-info">
+                    <span class="toggle-title">Multi-AZ Deployment</span>
+                    <span class="toggle-desc">Create a standby in a different AZ for high availability</span>
+                  </span>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="rds-multi-az">
+                    <span class="toggle-slider"></span>
+                  </div>
+                </label>
+                <label class="toggle-row">
+                  <span class="toggle-info">
+                    <span class="toggle-title">Publicly Accessible</span>
+                    <span class="toggle-desc">Assign a public IP address to the DB instance</span>
+                  </span>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="rds-public">
+                    <span class="toggle-slider"></span>
+                  </div>
+                </label>
+              </div>
+
+              <!-- DB Summary Card -->
+              <div class="summary-card summary-card-rds" style="margin-top:18px;">
+                <p class="summary-card-title" style="color:#a371f7;">RDS DB Summary</p>
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Identifier</span><span style="color:#e2e8f0;font-weight:500;" id="rds-summary-identifier">—</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Engine</span><span style="color:#e2e8f0;font-weight:500;" id="rds-summary-engine">MySQL</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Version</span><span style="color:#e2e8f0;font-weight:500;" id="rds-summary-version">—</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Instance Class</span><span style="color:#e2e8f0;font-weight:500;" id="rds-summary-class">—</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Storage</span><span style="color:#e2e8f0;font-weight:500;" id="rds-summary-storage">—</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Accessibility</span><span style="color:#e2e8f0;font-weight:500;" id="rds-summary-access">Private</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- RDS CODE PREVIEW TAB -->
+            <div class="ec2-tab-content" id="tab-content-rds-preview">
+              <h3 class="section-heading">Generated RDS Terraform Config</h3>
+              <p style="font-size:12px;color:#8b949e;margin:0 0 14px;line-height:1.5;">Review the Terraform code before creating your database instance.</p>
+              <div class="ec2-form-group" style="margin-bottom:18px;">
+                <label class="ec2-label">main.tf</label>
+                <pre id="rds-preview-main-tf" class="code-preview-block"></pre>
+              </div>
+              <div class="ec2-form-group">
+                <label class="ec2-label">terraform.tfvars.json</label>
+                <pre id="rds-preview-tfvars" class="code-preview-block" style="max-height:180px;"></pre>
+              </div>
+            </div>
+
+            <!-- RDS LIST TAB -->
+            <div class="ec2-tab-content" id="tab-content-rds-list">
+              <h3 class="section-heading">Managed RDS Databases</h3>
+              <div id="rds-resources-list" style="display:flex;flex-direction:column;gap:14px;">
+                <div class="empty-state-msg">No RDS databases found.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ec2-deploy-btn-container" id="rds-deploy-btn-wrapper">
+            <button type="button" class="ec2-btn-primary" id="btn-rds-action" style="width:100%; background:linear-gradient(135deg,#a371f7,#7c3aed);">
+              <span id="btn-rds-text">💾&nbsp; Preview Database Configuration</span>
+            </button>
+          </div>
+        </div>
+
+        </div><!-- end svc-panel-ecs -->
+
         <!-- ===== AWS BILLING PANEL ===== -->
         <div class="service-panel" id="svc-panel-billing">
           <div class="ec2-tabs-bar">
@@ -1331,11 +1553,17 @@
                         <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-ecs-write"></td>
                         <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-ecs-execute"></td>
                       </tr>
-                      <tr>
+                      <tr style="border-bottom:1px solid #21262d;">
                         <td style="padding:10px 4px; font-weight:500;">Billing</td>
                         <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-billing-read" checked></td>
                         <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-billing-write"></td>
                         <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-billing-execute"></td>
+                      </tr>
+                      <tr>
+                        <td style="padding:10px 4px; font-weight:500;">RDS</td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-rds-read" checked></td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-rds-write"></td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-rds-execute"></td>
                       </tr>
                     </tbody>
                   </table>

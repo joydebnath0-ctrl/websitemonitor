@@ -168,6 +168,7 @@ function writeSessionsDB(data) {
           s3: ['read', 'write', 'execute'],
           cf: ['read', 'write', 'execute'],
           ecs: ['read', 'write', 'execute'],
+          rds: ['read', 'write', 'execute'],
           billing: ['read']
         },
         createdAt: new Date().toISOString()
@@ -488,7 +489,7 @@ app.post('/api/auth/login', (req, res) => {
       name: user.name,
       email: user.email,
       isAdmin: !!user.isAdmin,
-      permissions: user.isAdmin ? { ec2: ['read','write','execute'], vpc: ['read','write','execute'], s3: ['read','write','execute'], cf: ['read','write','execute'], ecs: ['read','write','execute'] } : (user.permissions || {})
+      permissions: user.isAdmin ? { ec2: ['read','write','execute'], vpc: ['read','write','execute'], s3: ['read','write','execute'], cf: ['read','write','execute'], ecs: ['read','write','execute'], rds: ['read','write','execute'] } : (user.permissions || {})
     }
   });
 });
@@ -515,7 +516,7 @@ app.get('/api/auth/me', (req, res) => {
     name: user.name,
     email: user.email,
     isAdmin: !!user.isAdmin,
-    permissions: user.isAdmin ? { ec2: ['read','write','execute'], vpc: ['read','write','execute'], s3: ['read','write','execute'], cf: ['read','write','execute'], ecs: ['read','write','execute'] } : (user.permissions || {})
+    permissions: user.isAdmin ? { ec2: ['read','write','execute'], vpc: ['read','write','execute'], s3: ['read','write','execute'], cf: ['read','write','execute'], ecs: ['read','write','execute'], rds: ['read','write','execute'] } : (user.permissions || {})
   });
 });
 
@@ -3135,6 +3136,310 @@ app.post('/api/ecs/destroy', requirePermission('ecs', 'execute'), (req, res) => 
       if (match) {
         match.status = 'destroy-failed';
         writeEcsDB(currentDB);
+      }
+    }
+  };
+
+  execute();
+});
+// ===== RDS DATABASE SERVICE =====
+
+const RDS_DEPLOYMENTS_DIR = path.join(BASE_DIR, 'rds-deployments');
+const RDS_DB_FILE = path.join(BASE_DIR, 'rds.json');
+
+if (!fs.existsSync(RDS_DEPLOYMENTS_DIR)) {
+  fs.mkdirSync(RDS_DEPLOYMENTS_DIR, { recursive: true });
+}
+if (!fs.existsSync(RDS_DB_FILE)) {
+  fs.writeFileSync(RDS_DB_FILE, JSON.stringify([]));
+}
+
+function readRdsDB() {
+  try { return JSON.parse(fs.readFileSync(RDS_DB_FILE, 'utf8')); } catch (e) { return []; }
+}
+function writeRdsDB(data) { fs.writeFileSync(RDS_DB_FILE, JSON.stringify(data, null, 2)); }
+
+const RDS_TERRAFORM_TEMPLATE = `
+terraform {
+  required_version = ">= 1.0.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.aws_region
+}
+
+variable "aws_region" {
+  type    = string
+  default = "us-east-1"
+}
+
+variable "db_identifier" {
+  type = string
+}
+
+variable "engine" {
+  type    = string
+  default = "mysql"
+}
+
+variable "engine_version" {
+  type = string
+}
+
+variable "instance_class" {
+  type = string
+}
+
+variable "allocated_storage" {
+  type = number
+}
+
+variable "storage_type" {
+  type    = string
+  default = "gp2"
+}
+
+variable "username" {
+  type = string
+}
+
+variable "password" {
+  type      = string
+  sensitive = true
+}
+
+variable "db_name" {
+  type    = string
+  default = ""
+}
+
+variable "multi_az" {
+  type    = bool
+  default = false
+}
+
+variable "publicly_accessible" {
+  type    = bool
+  default = false
+}
+
+resource "aws_db_instance" "default" {
+  identifier             = var.db_identifier
+  db_name                = var.db_name != "" ? var.db_name : null
+  engine                 = var.engine
+  engine_version         = var.engine_version
+  instance_class         = var.instance_class
+  allocated_storage      = var.allocated_storage
+  storage_type           = var.storage_type
+  username               = var.username
+  password               = var.password
+  multi_az               = var.multi_az
+  publicly_accessible    = var.publicly_accessible
+  skip_final_snapshot    = true
+}
+
+output "db_instance_endpoint" {
+  value = aws_db_instance.default.endpoint
+}
+
+output "db_instance_address" {
+  value = aws_db_instance.default.address
+}
+
+output "db_instance_port" {
+  value = aws_db_instance.default.port
+}
+`;
+
+app.get('/api/rds', requirePermission('rds', 'read'), (req, res) => {
+  res.json(readRdsDB());
+});
+
+app.post('/api/rds/preview', requirePermission('rds', 'write'), (req, res) => {
+  const { dbIdentifier, engine, engineVersion, instanceClass, allocatedStorage, storageType, username, password, dbName, multiAz, publiclyAccessible, region } = req.body;
+  if (!dbIdentifier || !engine || !engineVersion || !instanceClass || !allocatedStorage || !username || !password) {
+    return res.status(400).json({ error: 'Missing required parameters' });
+  }
+  if (!/^[a-z][a-z0-9-]*$/.test(dbIdentifier)) {
+    return res.status(400).json({ error: 'DB instance identifier must start with a letter and contain only lowercase alphanumeric characters and dashes' });
+  }
+
+  const tfVars = {
+    aws_region: region || 'us-east-1',
+    db_identifier: dbIdentifier,
+    engine: engine,
+    engine_version: engineVersion,
+    instance_class: instanceClass,
+    allocated_storage: parseInt(allocatedStorage, 10),
+    storage_type: storageType || 'gp2',
+    username: username,
+    password: password,
+    db_name: dbName || '',
+    multi_az: !!multiAz,
+    publicly_accessible: !!publiclyAccessible
+  };
+
+  res.json({
+    mainTf: RDS_TERRAFORM_TEMPLATE,
+    tfVarsJson: JSON.stringify(tfVars, null, 2)
+  });
+});
+
+app.post('/api/rds/create', requirePermission('rds', 'write'), (req, res) => {
+  const { dbIdentifier, engine, engineVersion, instanceClass, allocatedStorage, storageType, username, password, dbName, multiAz, publiclyAccessible, region, awsProfile } = req.body;
+  if (!dbIdentifier || !engine || !engineVersion || !instanceClass || !allocatedStorage || !username || !password) {
+    return res.status(400).json({ error: 'Missing required parameters' });
+  }
+  if (!/^[a-z][a-z0-9-]*$/.test(dbIdentifier)) {
+    return res.status(400).json({ error: 'DB instance identifier must start with a letter and contain only lowercase alphanumeric characters and dashes' });
+  }
+
+  const db = readRdsDB();
+  if (db.find(d => d.name === dbIdentifier)) {
+    return res.status(400).json({ error: `RDS instance "${dbIdentifier}" already exists` });
+  }
+
+  const targetDir = path.join(RDS_DEPLOYMENTS_DIR, dbIdentifier);
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
+  }
+
+  fs.writeFileSync(path.join(targetDir, 'main.tf'), RDS_TERRAFORM_TEMPLATE);
+  const tfVars = {
+    aws_region: region || 'us-east-1',
+    db_identifier: dbIdentifier,
+    engine: engine,
+    engine_version: engineVersion,
+    instance_class: instanceClass,
+    allocated_storage: parseInt(allocatedStorage, 10),
+    storage_type: storageType || 'gp2',
+    username: username,
+    password: password,
+    db_name: dbName || '',
+    multi_az: !!multiAz,
+    publicly_accessible: !!publiclyAccessible
+  };
+  fs.writeFileSync(path.join(targetDir, 'terraform.tfvars.json'), JSON.stringify(tfVars, null, 2));
+
+  const newRds = {
+    name: dbIdentifier,
+    engine,
+    engineVersion,
+    instanceClass,
+    allocatedStorage: tfVars.allocated_storage,
+    storageType: tfVars.storage_type,
+    username,
+    dbName: tfVars.db_name,
+    multiAz: tfVars.multi_az,
+    publiclyAccessible: tfVars.publicly_accessible,
+    region: tfVars.aws_region,
+    awsProfile: awsProfile || 'default',
+    status: 'creating',
+    endpoint: 'N/A',
+    address: 'N/A',
+    port: 'N/A',
+    createdAt: new Date().toISOString()
+  };
+  db.push(newRds);
+  writeRdsDB(db);
+
+  logHistory[dbIdentifier] = [];
+  res.json({ message: 'RDS creation started', name: dbIdentifier });
+
+  const execute = async () => {
+    try {
+      sendLog(dbIdentifier, `=== Initializing Terraform for RDS "${dbIdentifier}" using profile "${awsProfile || 'default'}" ===`);
+      await runCmd('terraform', ['init', '-no-color'], targetDir, dbIdentifier, awsProfile);
+      sendLog(dbIdentifier, `=== Applying RDS Terraform Plan for "${dbIdentifier}" ===`);
+      await runCmd('terraform', ['apply', '-auto-approve', '-no-color'], targetDir, dbIdentifier, awsProfile);
+      sendLog(dbIdentifier, `=== Fetching RDS Outputs ===`);
+      const outputs = await getOutput(targetDir, awsProfile);
+      
+      const currentDB = readRdsDB();
+      const match = currentDB.find(d => d.name === dbIdentifier);
+      if (match) {
+        match.status = 'active';
+        match.endpoint = outputs.db_instance_endpoint ? outputs.db_instance_endpoint.value : 'N/A';
+        match.address = outputs.db_instance_address ? outputs.db_instance_address.value : 'N/A';
+        match.port = outputs.db_instance_port ? outputs.db_instance_port.value.toString() : 'N/A';
+        writeRdsDB(currentDB);
+      }
+      sendLog(dbIdentifier, `=== RDS Successfully Created ===`);
+      sendLog(dbIdentifier, `Endpoint: ${outputs.db_instance_endpoint ? outputs.db_instance_endpoint.value : 'N/A'}`);
+    } catch (err) {
+      sendLog(dbIdentifier, `=== RDS CREATION FAILED ===\nError: ${err.message}`);
+      const currentDB = readRdsDB();
+      const match = currentDB.find(d => d.name === dbIdentifier);
+      if (match) {
+        match.status = 'failed';
+        writeRdsDB(currentDB);
+      }
+    }
+  };
+  execute();
+});
+
+app.post('/api/rds/destroy', requirePermission('rds', 'execute'), (req, res) => {
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name is required' });
+
+  const db = readRdsDB();
+  const match = db.find(d => d.name === name);
+  if (!match) return res.status(404).json({ error: 'RDS instance not found' });
+
+  const awsProfile = match.awsProfile || 'default';
+  match.status = 'destroying';
+  writeRdsDB(db);
+
+  logHistory[name] = [];
+  res.json({ message: 'RDS Destroy started', name });
+
+  const execute = async () => {
+    try {
+      const targetDir = path.join(RDS_DEPLOYMENTS_DIR, name);
+      const statePath = path.join(targetDir, 'terraform.tfstate');
+      let hasResources = false;
+      if (fs.existsSync(statePath)) {
+        try {
+          const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+          if (state.resources && state.resources.length > 0) {
+            hasResources = true;
+          }
+        } catch (e) {}
+      }
+
+      if (hasResources) {
+        if (!fs.existsSync(path.join(targetDir, '.terraform'))) {
+          sendLog(name, `=== Initializing Terraform for ${name} using profile "${awsProfile}" ===`);
+          await runCmd('terraform', ['init', '-no-color'], targetDir, name, awsProfile);
+        }
+        sendLog(name, `=== Destroying RDS instance for ${name} using profile "${awsProfile}" ===`);
+        await runCmd('terraform', ['destroy', '-auto-approve', '-no-color'], targetDir, name, awsProfile);
+      } else {
+        sendLog(name, `=== No resources found in state for RDS "${name}". Skipping Terraform execution. ===`);
+      }
+
+      sendLog(name, `=== Cleaning Deployment Files ===`);
+      safeRmSync(targetDir);
+
+      const currentDB = readRdsDB();
+      const filtered = currentDB.filter(d => d.name !== name);
+      writeRdsDB(filtered);
+
+      sendLog(name, `=== RDS DESTRUCTION COMPLETE ===`);
+    } catch (err) {
+      sendLog(name, `=== RDS DESTRUCTION FAILED ===\nError: ${err.message}`);
+      const currentDB = readRdsDB();
+      const match = currentDB.find(d => d.name === name);
+      if (match) {
+        match.status = 'destroy-failed';
+        writeRdsDB(currentDB);
       }
     }
   };

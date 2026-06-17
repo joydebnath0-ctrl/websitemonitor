@@ -196,6 +196,7 @@ function initServiceNav() {
       // Reload S3 bucket list for CloudFront selector when switching to CF
       if (svc === 'cf') fetchS3BucketOptions();
       if (svc === 'ecs') { fetchVpcOptionsForEcs(); fetchS3BucketOptionsForEcs(); }
+      if (svc === 'rds') fetchRds();
       // Fetch users list when switching to User Management
       if (svc === 'users') fetchUsers();
       if (svc === 'billing') fetchBilling();
@@ -789,7 +790,7 @@ async function fetchAwsProfiles(selectProfileName = null) {
   try {
     const res = await fetch('/api/aws-profiles');
     const profiles = await res.json();
-    const selects = ['aws-profile', 'vpc-profile', 's3-profile', 'cf-profile', 'ecs-profile', 'billing-profile'];
+    const selects = ['aws-profile', 'vpc-profile', 's3-profile', 'cf-profile', 'ecs-profile', 'billing-profile', 'rds-profile'];
     selects.forEach(id => {
       const sel = document.getElementById(id);
       if (!sel) return;
@@ -1803,6 +1804,7 @@ function startLogStream(name) {
     fetchVpcs();
     fetchS3Buckets();
     fetchDistributions();
+    fetchRds();
     updateSSHBanner();
     updateVpcBanner();
     updateS3Banner();
@@ -2277,11 +2279,12 @@ function initializeDashboard(user) {
   initVpcUI();
   initS3UI();
   initCfUI();
+  initRdsUI();
   fetchAwsProfiles();
 
   // Gate service sidebar navigation buttons by permissions
   const perms = user.permissions || {};
-  const services = ['ec2', 'vpc', 's3', 'cf', 'ecs', 'billing'];
+  const services = ['ec2', 'vpc', 's3', 'cf', 'ecs', 'rds', 'billing'];
   let defaultService = null;
   
   services.forEach(svc => {
@@ -2319,7 +2322,8 @@ function initializeDashboard(user) {
     vpc: 'btn-vpc-action',
     s3: 'btn-s3-action',
     cf: 'btn-cf-action',
-    ecs: 'btn-ecs-action'
+    ecs: 'btn-ecs-action',
+    rds: 'btn-rds-action'
   };
   services.forEach(svc => {
     if (!hasPermission(svc, 'write')) {
@@ -2361,6 +2365,10 @@ function initializeDashboard(user) {
   if (user.isAdmin || (perms['ecs'] && perms['ecs'].includes('read'))) {
     fetchEcsClusters();
     setInterval(fetchEcsClusters, 10000);
+  }
+  if (user.isAdmin || (perms['rds'] && perms['rds'].includes('read'))) {
+    fetchRds();
+    setInterval(fetchRds, 10000);
   }
 
   // Init Billing UI
@@ -2692,6 +2700,7 @@ async function handleCreateUser(e) {
     s3: getCheckedPerms('s3'),
     cf: getCheckedPerms('cf'),
     ecs: getCheckedPerms('ecs'),
+    rds: getCheckedPerms('rds'),
     billing: getCheckedPerms('billing')
   };
 
@@ -2909,6 +2918,7 @@ function initPermsModal() {
       s3: getCheckedPerms('s3'),
       cf: getCheckedPerms('cf'),
       ecs: getCheckedPerms('ecs'),
+      rds: getCheckedPerms('rds'),
       billing: getCheckedPerms('billing')
     };
 
@@ -3757,4 +3767,392 @@ function formatDailyDate(dateStr) {
   if (isNaN(d.getTime())) return dateStr;
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   return `${months[d.getUTCMonth()]} ${d.getUTCDate()}`;
+}
+
+// ===== RDS DATABASE UI LOGIC =====
+
+let activeRds = [];
+
+const RDS_ENGINES_CONFIG = {
+  mysql: {
+    versions: [
+      { value: '8.0.35', label: '8.0.35 (Recommended)' },
+      { value: '8.0.36', label: '8.0.36' },
+      { value: '5.7.44', label: '5.7.44' }
+    ],
+    defaultVersion: '8.0.35',
+    defaultClass: 'db.t3.micro',
+    classes: ['db.t3.micro', 'db.t3.small', 'db.t3.medium', 'db.m6g.large'],
+    defaultUsername: 'admin'
+  },
+  postgres: {
+    versions: [
+      { value: '16.1', label: '16.1 (Recommended)' },
+      { value: '15.5', label: '15.5' },
+      { value: '14.10', label: '14.10' },
+      { value: '13.13', label: '13.13' }
+    ],
+    defaultVersion: '16.1',
+    defaultClass: 'db.t3.micro',
+    classes: ['db.t3.micro', 'db.t3.small', 'db.t3.medium', 'db.m6g.large'],
+    defaultUsername: 'postgres'
+  },
+  mariadb: {
+    versions: [
+      { value: '10.11.6', label: '10.11.6 (Recommended)' },
+      { value: '10.6.16', label: '10.6.16' },
+      { value: '10.5.23', label: '10.5.23' }
+    ],
+    defaultVersion: '10.11.6',
+    defaultClass: 'db.t3.micro',
+    classes: ['db.t3.micro', 'db.t3.small', 'db.t3.medium', 'db.m6g.large'],
+    defaultUsername: 'admin'
+  },
+  'sqlserver-ex': {
+    versions: [
+      { value: '15.00.4345.5.v1', label: '2019 Express (15.00.4345.5.v1)' },
+      { value: '16.00.4095.4.v1', label: '2022 Express (16.00.4095.4.v1)' }
+    ],
+    defaultVersion: '15.00.4345.5.v1',
+    defaultClass: 'db.t3.small',
+    classes: ['db.t3.small', 'db.t3.medium', 'db.m6g.large'],
+    defaultUsername: 'admin'
+  },
+  'oracle-se2': {
+    versions: [
+      { value: '19.0.0.0.ru-2023-10.rur-2023-10.r1', label: '19c (19.0.0.0.ru-2023-10.rur-2023-10.r1)' }
+    ],
+    defaultVersion: '19.0.0.0.ru-2023-10.rur-2023-10.r1',
+    defaultClass: 'db.t3.small',
+    classes: ['db.t3.small', 'db.t3.medium', 'db.m6g.large'],
+    defaultUsername: 'admin'
+  }
+};
+
+function initRdsUI() {
+  const tabs = document.querySelectorAll('#svc-panel-rds .ec2-tab');
+  const tabContents = document.querySelectorAll('#svc-panel-rds .ec2-tab-content');
+  const deployBtnWrapper = document.getElementById('rds-deploy-btn-wrapper');
+  
+  // Wire up tabs
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const targetTab = tab.dataset.tab;
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      tabContents.forEach(c => c.classList.toggle('active', c.id === `tab-content-${targetTab}`));
+      
+      const btnText = document.getElementById('btn-rds-text');
+      if (targetTab === 'rds-list') {
+        deployBtnWrapper.style.display = 'none';
+      } else {
+        deployBtnWrapper.style.display = 'block';
+        if (targetTab === 'rds-preview') {
+          btnText.textContent = '💾 Create RDS Database';
+          fetchRdsPreview();
+        } else {
+          btnText.textContent = '💾 Preview Database Configuration';
+        }
+      }
+    });
+  });
+
+  // Easy vs Standard toggle
+  const creationMethodRadios = document.querySelectorAll('input[name="rds-creation-method"]');
+  creationMethodRadios.forEach(radio => {
+    radio.addEventListener('change', () => {
+      const isStandard = radio.value === 'standard';
+      document.getElementById('rds-creation-method-desc').textContent = isStandard
+        ? "Allows full customization of versions, instances, storage types, Multi-AZ deployments, and network configurations."
+        : "Uses recommended best-practice database parameters (e.g. lightweight instance sizing, gp2 storage, default credentials, private access).";
+      
+      document.querySelectorAll('.rds-standard-only').forEach(el => {
+        el.style.display = isStandard ? 'block' : 'none';
+      });
+      updateRdsSummary();
+    });
+  });
+
+  // Engine Type selection card clicks
+  const engineCards = document.querySelectorAll('#rds-engine-buttons-group .db-engine-card');
+  engineCards.forEach(card => {
+    card.addEventListener('click', () => {
+      engineCards.forEach(c => c.classList.remove('active'));
+      card.classList.add('active');
+      const selectedEngine = card.dataset.engine;
+      document.getElementById('rds-engine').value = selectedEngine;
+      
+      populateEngineVersionsAndClasses(selectedEngine);
+      updateRdsSummary();
+    });
+  });
+
+  // Change listeners for summary update
+  const formIds = [
+    'rds-identifier', 'rds-version', 'rds-class', 'rds-storage-type',
+    'rds-storage', 'rds-dbname', 'rds-username', 'rds-password',
+    'rds-multi-az', 'rds-public', 'rds-region', 'rds-profile'
+  ];
+  formIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('change', updateRdsSummary);
+      if (el.tagName === 'INPUT') el.addEventListener('input', updateRdsSummary);
+    }
+  });
+
+  document.getElementById('rds-identifier').addEventListener('input', () => {
+    document.getElementById('err-rds-identifier').style.display = 'none';
+    updateRdsSummary();
+  });
+
+  // Wire action button
+  document.getElementById('btn-rds-action').addEventListener('click', () => {
+    const activeTab = document.querySelector('#svc-panel-rds .ec2-tab.active').dataset.tab;
+    if (activeTab === 'rds-preview') {
+      createRds();
+    } else {
+      if (validateRdsForm()) {
+        document.querySelector('#svc-panel-rds [data-tab="rds-preview"]').click();
+      }
+    }
+  });
+
+  // Initialize defaults
+  populateEngineVersionsAndClasses('mysql');
+  updateRdsSummary();
+}
+
+function populateEngineVersionsAndClasses(engine) {
+  const config = RDS_ENGINES_CONFIG[engine];
+  if (!config) return;
+
+  // Populate Versions Dropdown
+  const versionSelect = document.getElementById('rds-version');
+  versionSelect.innerHTML = config.versions.map(v => 
+    `<option value="${v.value}">${v.label}</option>`
+  ).join('');
+  versionSelect.value = config.defaultVersion;
+
+  // Populate DB Instance Classes Dropdown
+  const classSelect = document.getElementById('rds-class');
+  classSelect.innerHTML = `
+    <option value="db.t3.micro" ${config.classes.includes('db.t3.micro') ? '' : 'disabled'}>db.t3.micro (2 vCPU, 1 GB RAM)</option>
+    <option value="db.t3.small" ${config.classes.includes('db.t3.small') ? '' : 'disabled'}>db.t3.small (2 vCPU, 2 GB RAM)</option>
+    <option value="db.t3.medium" ${config.classes.includes('db.t3.medium') ? '' : 'disabled'}>db.t3.medium (2 vCPU, 4 GB RAM)</option>
+    <option value="db.m6g.large" ${config.classes.includes('db.m6g.large') ? '' : 'disabled'}>db.m6g.large (2 vCPU, 8 GB RAM)</option>
+  `;
+  classSelect.value = config.defaultClass;
+
+  // Update default username
+  document.getElementById('rds-username').value = config.defaultUsername;
+}
+
+function updateRdsSummary() {
+  const isStandard = document.querySelector('input[name="rds-creation-method"]:checked').value === 'standard';
+  const engine = document.getElementById('rds-engine').value;
+  const config = RDS_ENGINES_CONFIG[engine] || {};
+
+  const dbIdentifier = document.getElementById('rds-identifier').value.trim() || '—';
+  const engineVersion = isStandard ? document.getElementById('rds-version').value : config.defaultVersion;
+  const instanceClass = isStandard ? document.getElementById('rds-class').value : config.defaultClass;
+  const storageSize = isStandard ? (document.getElementById('rds-storage').value || '20') : '20';
+  const publiclyAccessible = isStandard ? document.getElementById('rds-public').checked : false;
+
+  document.getElementById('rds-summary-identifier').textContent = dbIdentifier;
+  document.getElementById('rds-summary-engine').textContent = engine === 'sqlserver-ex' ? 'SQL Server (Express)' : engine === 'oracle-se2' ? 'Oracle (SE2)' : engine.toUpperCase();
+  document.getElementById('rds-summary-version').textContent = engineVersion || '—';
+  document.getElementById('rds-summary-class').textContent = instanceClass;
+  document.getElementById('rds-summary-storage').textContent = `${storageSize} GB (${isStandard ? document.getElementById('rds-storage-type').value.toUpperCase() : 'GP2'})`;
+  document.getElementById('rds-summary-access').textContent = publiclyAccessible ? 'Publicly Accessible' : 'Private';
+}
+
+function validateRdsForm() {
+  const dbIdentifier = document.getElementById('rds-identifier').value.trim();
+  const errEl = document.getElementById('err-rds-identifier');
+  errEl.style.display = 'none';
+
+  if (!dbIdentifier) {
+    errEl.textContent = 'DB instance identifier is required';
+    errEl.style.display = 'block';
+    return false;
+  }
+  if (!/^[a-z][a-z0-9-]*$/.test(dbIdentifier)) {
+    errEl.textContent = 'Must start with a letter and contain only lowercase letters, numbers, and hyphens';
+    errEl.style.display = 'block';
+    return false;
+  }
+  
+  const password = document.getElementById('rds-password').value;
+  if (!password) {
+    alert('Master password is required');
+    return false;
+  }
+  if (password.length < 8) {
+    alert('Master password must be at least 8 characters long');
+    return false;
+  }
+
+  const isStandard = document.querySelector('input[name="rds-creation-method"]:checked').value === 'standard';
+  if (isStandard) {
+    const storage = parseInt(document.getElementById('rds-storage').value, 10);
+    if (isNaN(storage) || storage < 20) {
+      alert('Allocated storage must be a minimum of 20 GB');
+      return false;
+    }
+  }
+
+  return true;
+}
+
+async function fetchRdsPreview() {
+  if (!validateRdsForm()) return;
+  const isStandard = document.querySelector('input[name="rds-creation-method"]:checked').value === 'standard';
+  const engine = document.getElementById('rds-engine').value;
+  const config = RDS_ENGINES_CONFIG[engine] || {};
+
+  const dbIdentifier = document.getElementById('rds-identifier').value.trim();
+  const engineVersion = isStandard ? document.getElementById('rds-version').value : config.defaultVersion;
+  const instanceClass = isStandard ? document.getElementById('rds-class').value : config.defaultClass;
+  const allocatedStorage = isStandard ? parseInt(document.getElementById('rds-storage').value, 10) : 20;
+  const storageType = isStandard ? document.getElementById('rds-storage-type').value : 'gp2';
+  const username = document.getElementById('rds-username').value;
+  const password = document.getElementById('rds-password').value;
+  const dbName = isStandard ? document.getElementById('rds-dbname').value : '';
+  const multiAz = isStandard ? document.getElementById('rds-multi-az').checked : false;
+  const publiclyAccessible = isStandard ? document.getElementById('rds-public').checked : false;
+  
+  const region = document.getElementById('rds-region').value;
+
+  const mainTfBlock = document.getElementById('rds-preview-main-tf');
+  const tfvarsBlock = document.getElementById('rds-preview-tfvars');
+  mainTfBlock.textContent = 'Generating preview...';
+  tfvarsBlock.textContent = 'Generating preview...';
+
+  try {
+    const res = await fetch('/api/rds/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dbIdentifier, engine, engineVersion, instanceClass, allocatedStorage, storageType, username, password, dbName, multiAz, publiclyAccessible, region })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Preview generation failed');
+    mainTfBlock.textContent = data.mainTf;
+    tfvarsBlock.textContent = data.tfVarsJson;
+  } catch (err) {
+    mainTfBlock.textContent = `Error: ${err.message}`;
+    tfvarsBlock.textContent = `Error: ${err.message}`;
+  }
+}
+
+async function createRds() {
+  if (!validateRdsForm()) return;
+  const isStandard = document.querySelector('input[name="rds-creation-method"]:checked').value === 'standard';
+  const engine = document.getElementById('rds-engine').value;
+  const config = RDS_ENGINES_CONFIG[engine] || {};
+
+  const dbIdentifier = document.getElementById('rds-identifier').value.trim();
+  const engineVersion = isStandard ? document.getElementById('rds-version').value : config.defaultVersion;
+  const instanceClass = isStandard ? document.getElementById('rds-class').value : config.defaultClass;
+  const allocatedStorage = isStandard ? parseInt(document.getElementById('rds-storage').value, 10) : 20;
+  const storageType = isStandard ? document.getElementById('rds-storage-type').value : 'gp2';
+  const username = document.getElementById('rds-username').value;
+  const password = document.getElementById('rds-password').value;
+  const dbName = isStandard ? document.getElementById('rds-dbname').value : '';
+  const multiAz = isStandard ? document.getElementById('rds-multi-az').checked : false;
+  const publiclyAccessible = isStandard ? document.getElementById('rds-public').checked : false;
+  
+  const region = document.getElementById('rds-region').value;
+  const awsProfile = document.getElementById('rds-profile').value;
+
+  const btn = document.getElementById('btn-rds-action');
+  const btnText = document.getElementById('btn-rds-text');
+  btn.disabled = true;
+  btnText.innerHTML = `<svg class="spinning" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> Creating Database…`;
+  
+  startLogStream(dbIdentifier);
+
+  try {
+    const res = await fetch('/api/rds/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dbIdentifier, engine, engineVersion, instanceClass, allocatedStorage, storageType, username, password, dbName, multiAz, publiclyAccessible, region, awsProfile })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'RDS creation failed');
+    document.querySelector('#svc-panel-rds [data-tab="rds-list"]').click();
+    fetchRds();
+  } catch (err) {
+    appendLogLine(`[ERROR] RDS Database Create Error: ${err.message}`);
+  } finally {
+    btn.disabled = false;
+    btnText.textContent = '💾 Create RDS Database';
+  }
+}
+
+async function fetchRds() {
+  try {
+    const res = await fetch('/api/rds');
+    activeRds = await res.json();
+    renderRdsList();
+    updateHeaderStatus();
+  } catch (err) {
+    console.error('Error fetching RDS instances:', err);
+  }
+}
+
+function renderRdsList() {
+  const container = document.getElementById('rds-resources-list');
+  if (activeRds.length === 0) {
+    container.innerHTML = '<div class="empty-state-msg">No RDS databases found.</div>';
+    return;
+  }
+  container.innerHTML = '';
+  activeRds.forEach(rds => {
+    const card = document.createElement('div');
+    card.className = 'deployment-card resource-card-rds';
+    const badgeClass = `status-badge ${rds.status === 'active' ? 'active' : rds.status === 'creating' ? 'creating' : rds.status === 'destroying' ? 'destroying' : 'failed'}`;
+    const engineDisplay = rds.engine === 'sqlserver-ex' ? 'SQL Server' : rds.engine === 'oracle-se2' ? 'Oracle' : rds.engine.toUpperCase();
+    
+    card.innerHTML = `
+      <div class="deployment-header">
+        <span class="deployment-name">${rds.name}</span>
+        <span class="${badgeClass}">${rds.status}</span>
+      </div>
+      <div class="deployment-details-grid">
+        <span class="detail-lbl">Engine</span><span class="detail-val">${engineDisplay} (${rds.engineVersion})</span>
+        <span class="detail-lbl">Class</span><span class="detail-val">${rds.instanceClass}</span>
+        <span class="detail-lbl">Storage</span><span class="detail-val">${rds.allocatedStorage} GB (${rds.storageType.toUpperCase()})</span>
+        <span class="detail-lbl">Endpoint</span><span class="detail-val" style="word-break:break-all;font-family:monospace;font-size:11px;">${rds.endpoint || 'N/A'}</span>
+        <span class="detail-lbl">Region</span><span class="detail-val">${rds.region}</span>
+        <span class="detail-lbl">Profile</span><span class="detail-val">${rds.awsProfile}</span>
+      </div>
+      <div class="deployment-actions-bar">
+        <button type="button" class="ec2-btn-outline" onclick="startLogStream('${rds.name}')">View Logs</button>
+        ${rds.status !== 'destroying' ? `<button type="button" class="ec2-btn-danger" onclick="triggerRdsDestroy('${rds.name}')" ${hasPermission('rds', 'execute') ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;" title="No execute permission"'}>Destroy</button>` : ''}
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+async function triggerRdsDestroy(name) {
+  if (!hasPermission('rds', 'execute')) {
+    alert('Permission Denied: You do not have execute permission for RDS.');
+    return;
+  }
+  if (!confirm(`Are you sure you want to destroy RDS instance "${name}"? This cannot be undone.`)) return;
+  startLogStream(name);
+  try {
+    const res = await fetch('/api/rds/destroy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Destroy request failed');
+    fetchRds();
+  } catch (err) {
+    appendLogLine(`[ERROR] RDS Destroy Error: ${err.message}`);
+  }
 }
