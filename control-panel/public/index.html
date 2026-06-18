@@ -99,8 +99,19 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f78166" stroke-width="2" aria-hidden="true">
             <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
           </svg>
-          <span class="ec2-brand-title">AWS Cloud Control Panel</span>
+          <span class="ec2-brand-title" id="portal-brand-title">AWS Cloud Control Panel</span>
           <span class="ec2-version-badge">v2.0</span>
+        </div>
+        <div class="cloud-provider-switcher">
+          <button type="button" class="provider-btn active" data-provider="aws">
+            <span class="provider-icon">☁️</span> AWS
+          </button>
+          <button type="button" class="provider-btn" data-provider="azure">
+            <span class="provider-icon">🔷</span> Azure
+          </button>
+          <button type="button" class="provider-btn" data-provider="gcp">
+            <span class="provider-icon">🟡</span> GCP
+          </button>
         </div>
         <div style="display:flex;align-items:center;gap:16px;">
           <button type="button" id="btn-theme-toggle-portal" class="portal-theme-toggle-btn" title="Toggle Light/Dark Theme">🌙</button>
@@ -224,11 +235,23 @@
                   <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-billing-write"></td>
                   <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-billing-execute"></td>
                 </tr>
-                <tr>
+                <tr style="border-bottom:1px solid #21262d;">
                   <td style="padding:10px 4px; font-weight:500;">RDS</td>
                   <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-rds-read"></td>
                   <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-rds-write"></td>
                   <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-rds-execute"></td>
+                </tr>
+                <tr style="border-bottom:1px solid #21262d;">
+                  <td style="padding:10px 4px; font-weight:500;">Azure</td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-azure-read"></td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-azure-write"></td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-azure-execute"></td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 4px; font-weight:500;">GCP</td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-gcp-read"></td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-gcp-write"></td>
+                  <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="edit-perm-gcp-execute"></td>
                 </tr>
               </tbody>
             </table>
@@ -241,8 +264,10 @@
         </div>
       </div>
 
-    <!-- Service Switcher Nav -->
-    <nav class="service-nav" aria-label="AWS Service Selector">
+    <!-- AWS Provider Panel -->
+    <div id="aws-provider-panel" class="provider-panel active">
+      <!-- Service Switcher Nav -->
+      <nav class="service-nav" aria-label="AWS Service Selector">
       <button type="button" class="svc-btn active" data-service="ec2" id="svc-btn-ec2">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
         EC2 Instances
@@ -1123,7 +1148,15 @@
               <!-- Engine Type selection card -->
               <div class="options-card" style="margin-bottom:18px;">
                 <p class="options-card-title">Database Engine Type</p>
-                <div style="display:grid; grid-template-columns: repeat(5, 1fr); gap:10px; margin-top:8px;" id="rds-engine-buttons-group">
+                <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; margin-top:8px;" id="rds-engine-buttons-group">
+                  <div class="db-engine-card" data-engine="aurora-mysql">
+                    <span style="font-size:20px;">✨🐬</span>
+                    <span style="font-size:11px; font-weight:600; margin-top:4px;">Aurora MySQL</span>
+                  </div>
+                  <div class="db-engine-card" data-engine="aurora-postgresql">
+                    <span style="font-size:20px;">✨🐘</span>
+                    <span style="font-size:11px; font-weight:600; margin-top:4px;">Aurora Postgres</span>
+                  </div>
                   <div class="db-engine-card active" data-engine="mysql">
                     <span style="font-size:20px;">🐬</span>
                     <span style="font-size:11px; font-weight:600; margin-top:4px;">MySQL</span>
@@ -1136,13 +1169,17 @@
                     <span style="font-size:20px;">🦭</span>
                     <span style="font-size:11px; font-weight:600; margin-top:4px;">MariaDB</span>
                   </div>
+                  <div class="db-engine-card" data-engine="oracle-se2">
+                    <span style="font-size:20px;">🔴</span>
+                    <span style="font-size:11px; font-weight:600; margin-top:4px;">Oracle</span>
+                  </div>
                   <div class="db-engine-card" data-engine="sqlserver-ex">
                     <span style="font-size:20px;">💼</span>
                     <span style="font-size:11px; font-weight:600; margin-top:4px;">SQL Server</span>
                   </div>
-                  <div class="db-engine-card" data-engine="oracle-se2">
-                    <span style="font-size:20px;">🔴</span>
-                    <span style="font-size:11px; font-weight:600; margin-top:4px;">Oracle</span>
+                  <div class="db-engine-card" data-engine="db2-se">
+                    <span style="font-size:20px;">🗄️</span>
+                    <span style="font-size:11px; font-weight:600; margin-top:4px;">IBM Db2</span>
                   </div>
                 </div>
                 <input type="hidden" id="rds-engine" value="mysql">
@@ -1299,8 +1336,6 @@
             </button>
           </div>
         </div>
-
-        </div><!-- end svc-panel-ecs -->
 
         <!-- ===== AWS BILLING PANEL ===== -->
         <div class="service-panel" id="svc-panel-billing">
@@ -1559,11 +1594,23 @@
                         <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-billing-write"></td>
                         <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-billing-execute"></td>
                       </tr>
-                      <tr>
+                      <tr style="border-bottom:1px solid #21262d;">
                         <td style="padding:10px 4px; font-weight:500;">RDS</td>
                         <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-rds-read" checked></td>
                         <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-rds-write"></td>
                         <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-rds-execute"></td>
+                      </tr>
+                      <tr style="border-bottom:1px solid #21262d;">
+                        <td style="padding:10px 4px; font-weight:500;">Azure</td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-azure-read" checked></td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-azure-write"></td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-azure-execute"></td>
+                      </tr>
+                      <tr>
+                        <td style="padding:10px 4px; font-weight:500;">GCP</td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-gcp-read" checked></td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-gcp-write"></td>
+                        <td style="text-align:center; padding:10px 4px;"><input type="checkbox" id="perm-gcp-execute"></td>
                       </tr>
                     </tbody>
                   </table>
@@ -1656,6 +1703,648 @@
         </div>
       </div>
     </div>
+  </div><!-- end aws-provider-panel -->
+
+  <!-- Azure Provider Panel -->
+  <div id="azure-provider-panel" class="provider-panel">
+    <!-- Azure Service Selector -->
+    <nav class="service-nav" aria-label="Azure Service Selector">
+      <button type="button" class="svc-btn active" data-service="azure-vm" id="svc-btn-azure-vm">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        Virtual Machines
+      </button>
+      <button type="button" class="svc-btn" data-service="azure-vnet" id="svc-btn-azure-vnet">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 0 0 1-4 10 15.3 0 0 1-4-10 15.3 0 0 1 4-10z"/></svg>
+        Virtual Networks
+      </button>
+      <button type="button" class="svc-btn" data-service="azure-blob" id="svc-btn-azure-blob">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>
+        Storage Accounts
+      </button>
+      <button type="button" class="svc-btn" data-service="azure-sql" id="svc-btn-azure-sql">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-2.239 10-5V5c0-2.761-4.477-5-10-5S2 2.239 2 5v12c0 2.761 4.477 5 10 5Z"/><path d="M22 5c0 2.761-4.477 5-10 5S2 7.761 2 5"/><path d="M22 11c0 2.761-4.477 5-10 5S2 13.761 2 11"/></svg>
+        SQL Databases
+      </button>
+    </nav>
+
+    <div class="ec2-main-grid">
+      <!-- LEFT COLUMN -->
+      <div class="ec2-left-col">
+        
+        <!-- ===== AZURE VM PANEL ===== -->
+        <div class="service-panel active" id="svc-panel-azure-vm">
+          <div class="ec2-tabs-bar">
+            <button type="button" class="ec2-tab active" data-tab="azure-vm-basic">Basic</button>
+            <button type="button" class="ec2-tab" data-tab="azure-vm-advanced">Advanced</button>
+            <button type="button" class="ec2-tab" data-tab="azure-vm-preview">Code Preview</button>
+            <button type="button" class="ec2-tab" data-tab="azure-vm-deployments">Deployments</button>
+          </div>
+          <div class="ec2-tab-contents-container">
+            <!-- Basic Tab -->
+            <div class="ec2-tab-content active" id="tab-content-azure-vm-basic">
+              <div class="ec2-form-group">
+                <label class="ec2-label">Azure Account/Profile</label>
+                <div style="display:flex;gap:8px;">
+                  <select id="azure-vm-profile" class="ec2-select" style="flex:1;">
+                    <option value="default">default</option>
+                  </select>
+                  <button type="button" class="ec2-btn-primary" id="azure-vm-btn-toggle-add-profile" style="width:auto;padding:0 14px;font-size:16px;line-height:1;background:#0078d4;color:#fff;border-color:#0078d4;">+</button>
+                </div>
+              </div>
+
+              <div id="azure-vm-add-profile-container" style="display:none;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:14px;margin-bottom:18px;">
+                <h4 style="margin:0 0 12px;font-size:12px;text-transform:uppercase;color:#8b949e;letter-spacing:0.05em;font-family:'Inter',sans-serif;">Add Azure Profile</h4>
+                <div style="display:flex;flex-direction:column;gap:12px;">
+                  <div>
+                    <label class="ec2-label" style="font-size:10px;">Profile Name</label>
+                    <input type="text" id="azure-vm-new-profile-name" class="ec2-input" placeholder="e.g. prod-subscription">
+                    <p class="field-err" id="azure-vm-err-new-profile-name" style="display:none;"></p>
+                  </div>
+                  <div>
+                    <label class="ec2-label" style="font-size:10px;">Subscription ID</label>
+                    <input type="text" id="azure-vm-new-profile-subscription" class="ec2-input" placeholder="00000000-0000-0000-0000-000000000000">
+                  </div>
+                  <div>
+                    <label class="ec2-label" style="font-size:10px;">Tenant ID</label>
+                    <input type="text" id="azure-vm-new-profile-tenant" class="ec2-input" placeholder="00000000-0000-0000-0000-000000000000">
+                  </div>
+                  <div>
+                    <label class="ec2-label" style="font-size:10px;">Client ID (App ID)</label>
+                    <input type="text" id="azure-vm-new-profile-client" class="ec2-input" placeholder="00000000-0000-0000-0000-000000000000">
+                  </div>
+                  <div>
+                    <label class="ec2-label" style="font-size:10px;">Client Secret</label>
+                    <input type="password" id="azure-vm-new-profile-secret" class="ec2-input" placeholder="Client Secret Key...">
+                  </div>
+                  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px;">
+                    <button type="button" class="ec2-btn-primary" id="azure-vm-btn-save-profile" style="font-size:11px;padding:6px 12px;background:#0078d4;color:#fff;border-color:#0078d4;">Save Profile</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="ec2-form-group">
+                <label class="ec2-label">VM Name</label>
+                <input type="text" id="azure-vm-name" class="ec2-input" placeholder="my-azure-vm" value="my-azure-vm">
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                <div class="ec2-form-group">
+                  <label class="ec2-label">VM Size</label>
+                  <select id="azure-vm-size" class="ec2-select">
+                    <option value="Standard_B1s">Standard_B1s (1 vCPU, 1 GB RAM)</option>
+                    <option value="Standard_B2s" selected>Standard_B2s (2 vCPU, 4 GB RAM)</option>
+                    <option value="Standard_D2s_v3">Standard_D2s_v3 (2 vCPU, 8 GB RAM)</option>
+                  </select>
+                </div>
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Region</label>
+                  <select id="azure-vm-region" class="ec2-select">
+                    <option value="eastus" selected>East US</option>
+                    <option value="westus2">West US 2</option>
+                    <option value="northeurope">North Europe</option>
+                    <option value="westeurope">West Europe</option>
+                  </select>
+                </div>
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Admin Username</label>
+                  <input type="text" id="azure-vm-username" class="ec2-input" value="azureuser">
+                </div>
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Admin Password</label>
+                  <input type="password" id="azure-vm-password" class="ec2-input" value="AzureSecurePass123!">
+                </div>
+              </div>
+              <div class="summary-card" style="margin-top:14px; border-color:#0078d4;">
+                <p class="summary-card-title" style="color:#0078d4;">Azure VM Summary</p>
+                <div style="display:flex; flex-direction:column; gap:6px; font-size:12px;">
+                  <div style="display:flex; justify-content:space-between;"><span style="color:#8b949e;">Name</span><span style="color:#e2e8f0; font-weight:500;" id="azure-vm-summary-name">my-azure-vm</span></div>
+                  <div style="display:flex; justify-content:space-between;"><span style="color:#8b949e;">Size</span><span style="color:#e2e8f0; font-weight:500;" id="azure-vm-summary-size">Standard_B2s</span></div>
+                  <div style="display:flex; justify-content:space-between;"><span style="color:#8b949e;">Location</span><span style="color:#e2e8f0; font-weight:500;" id="azure-vm-summary-region">East US</span></div>
+                </div>
+              </div>
+            </div>
+            <!-- Advanced Tab -->
+            <div class="ec2-tab-content" id="tab-content-azure-vm-advanced">
+              <div class="ec2-form-group">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                  <label class="ec2-label" style="margin:0;">Startup Script (Custom Data)</label>
+                  <button type="button" id="azure-vm-btn-toggle-userdata" style="background:none;border:none;color:#58a6ff;font-size:11px;cursor:pointer;padding:0;font-family:inherit;">Show</button>
+                </div>
+                
+                <div id="azure-vm-userdata-controls" style="display:none;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+                  <select id="azure-vm-userdata-type" class="ec2-select" style="margin:0;max-width:160px;height:32px;padding:4px 8px;font-size:12px;">
+                    <option value="bash">Bash Script (Linux)</option>
+                    <option value="powershell">PowerShell Script (Windows)</option>
+                    <option value="cloud-init">Cloud-Init YAML</option>
+                  </select>
+                  <select id="azure-vm-saved-scripts-select" class="ec2-select" style="margin:0;max-width:180px;height:32px;padding:4px 8px;font-size:12px;">
+                    <option value="">-- Load Saved Script --</option>
+                  </select>
+                  <button type="button" id="azure-vm-btn-add-script" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;cursor:pointer;font-family:inherit;">➕ Add Script</button>
+                  <button type="button" id="azure-vm-btn-save-script" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;cursor:pointer;font-family:inherit;">💾 Save Current</button>
+                  <button type="button" id="azure-vm-btn-rename-script" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;cursor:pointer;font-family:inherit;display:none;">✏️ Rename</button>
+                  <button type="button" id="azure-vm-btn-delete-script" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid rgba(247,129,102,0.3);border-radius:6px;color:#f78166;cursor:pointer;font-family:inherit;display:none;">Delete</button>
+                  <button type="button" id="azure-vm-btn-copy-userdata" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;cursor:pointer;font-family:inherit;">📋 Copy</button>
+                  <button type="button" id="azure-vm-btn-reset-userdata" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid rgba(247,129,102,0.3);border-radius:6px;color:#f78166;cursor:pointer;font-family:inherit;">Reset to Default</button>
+                </div>
+
+                <textarea id="azure-vm-user-data" class="ec2-input" placeholder="#!/bin/bash&#10;apt-get update" style="display:none;min-height:160px;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.5;"></textarea>
+                <div id="azure-vm-userdata-summary" style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 14px;font-size:12px;color:#8b949e;">No user data configured</div>
+              </div>
+            </div>
+            <!-- Code Preview Tab -->
+            <div class="ec2-tab-content" id="tab-content-azure-vm-preview">
+              <h3 class="section-heading">Generated Azure VM Terraform</h3>
+              <pre id="azure-vm-preview-main-tf" class="code-preview-block">Click preview to generate...</pre>
+              <pre id="azure-vm-preview-tfvars" class="code-preview-block" style="max-height:120px;">Click preview to generate...</pre>
+            </div>
+            <!-- Deployments Tab -->
+            <div class="ec2-tab-content" id="tab-content-azure-vm-deployments">
+              <h3 class="section-heading">Active Azure VMs</h3>
+              <div id="azure-vm-resources-list" style="display:flex; flex-direction:column; gap:14px;">
+                <div class="empty-state-msg">No Azure Virtual Machines found.</div>
+              </div>
+            </div>
+          </div>
+          <div class="ec2-deploy-btn-container" id="azure-vm-deploy-btn-wrapper">
+            <button type="button" class="ec2-btn-primary" id="btn-azure-vm-action" style="width:100%; background:linear-gradient(135deg,#0078d4,#005a9e);">
+              <span id="btn-azure-vm-text">🔷&nbsp; Preview VM Configuration</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ===== AZURE VNET PANEL ===== -->
+        <div class="service-panel" id="svc-panel-azure-vnet">
+          <div class="ec2-tabs-bar">
+            <button type="button" class="ec2-tab active" data-tab="azure-vnet-basic">Config</button>
+            <button type="button" class="ec2-tab" data-tab="azure-vnet-preview">Code Preview</button>
+            <button type="button" class="ec2-tab" data-tab="azure-vnet-list">Active VNets</button>
+          </div>
+          <div class="ec2-tab-contents-container">
+            <div class="ec2-tab-content active" id="tab-content-azure-vnet-basic">
+              <div class="ec2-form-group">
+                <label class="ec2-label">VNet Name</label>
+                <input type="text" id="azure-vnet-name" class="ec2-input" placeholder="my-azure-vnet" value="my-azure-vnet">
+              </div>
+              <div class="ec2-form-group">
+                <label class="ec2-label">Address Space (CIDR)</label>
+                <input type="text" id="azure-vnet-cidr" class="ec2-input" value="10.0.0.0/16">
+              </div>
+              <div class="ec2-form-group">
+                <label class="ec2-label">Region</label>
+                <select id="azure-vnet-region" class="ec2-select">
+                  <option value="eastus" selected>East US</option>
+                  <option value="westus2">West US 2</option>
+                  <option value="northeurope">North Europe</option>
+                </select>
+              </div>
+            </div>
+            <div class="ec2-tab-content" id="tab-content-azure-vnet-preview">
+              <pre id="azure-vnet-preview-main-tf" class="code-preview-block">Click preview to generate...</pre>
+            </div>
+            <div class="ec2-tab-content" id="tab-content-azure-vnet-list">
+              <div id="azure-vnet-resources-list" style="display:flex; flex-direction:column; gap:14px;">
+                <div class="empty-state-msg">No VNets found.</div>
+              </div>
+            </div>
+          </div>
+          <div class="ec2-deploy-btn-container" id="azure-vnet-deploy-btn-wrapper">
+            <button type="button" class="ec2-btn-primary" id="btn-azure-vnet-action" style="width:100%; background:linear-gradient(135deg,#0078d4,#005a9e);">
+              <span id="btn-azure-vnet-text">🔷&nbsp; Preview VNet Configuration</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ===== AZURE BLOB STORAGE PANEL ===== -->
+        <div class="service-panel" id="svc-panel-azure-blob">
+          <div class="ec2-tabs-bar">
+            <button type="button" class="ec2-tab active" data-tab="azure-blob-basic">Config</button>
+            <button type="button" class="ec2-tab" data-tab="azure-blob-preview">Code Preview</button>
+            <button type="button" class="ec2-tab" data-tab="azure-blob-list">Active Accounts</button>
+          </div>
+          <div class="ec2-tab-contents-container">
+            <div class="ec2-tab-content active" id="tab-content-azure-blob-basic">
+              <div class="ec2-form-group">
+                <label class="ec2-label">Storage Account Name</label>
+                <input type="text" id="azure-blob-name" class="ec2-input" placeholder="mystorageaccount" value="mystorageaccount">
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Replication</label>
+                  <select id="azure-blob-replication" class="ec2-select">
+                    <option value="LRS" selected>Locally Redundant (LRS)</option>
+                    <option value="GRS">Geo-Redundant (GRS)</option>
+                  </select>
+                </div>
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Region</label>
+                  <select id="azure-blob-region" class="ec2-select">
+                    <option value="eastus" selected>East US</option>
+                    <option value="westus2">West US 2</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="ec2-tab-content" id="tab-content-azure-blob-preview">
+              <pre id="azure-blob-preview-main-tf" class="code-preview-block">Click preview to generate...</pre>
+            </div>
+            <div class="ec2-tab-content" id="tab-content-azure-blob-list">
+              <div id="azure-blob-resources-list" style="display:flex; flex-direction:column; gap:14px;">
+                <div class="empty-state-msg">No storage accounts found.</div>
+              </div>
+            </div>
+          </div>
+          <div class="ec2-deploy-btn-container" id="azure-blob-deploy-btn-wrapper">
+            <button type="button" class="ec2-btn-primary" id="btn-azure-blob-action" style="width:100%; background:linear-gradient(135deg,#0078d4,#005a9e);">
+              <span id="btn-azure-blob-text">🔷&nbsp; Preview Storage Configuration</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ===== AZURE SQL DATABASE PANEL ===== -->
+        <div class="service-panel" id="svc-panel-azure-sql">
+          <div class="ec2-tabs-bar">
+            <button type="button" class="ec2-tab active" data-tab="azure-sql-basic">Config</button>
+            <button type="button" class="ec2-tab" data-tab="azure-sql-preview">Code Preview</button>
+            <button type="button" class="ec2-tab" data-tab="azure-sql-list">SQL Databases</button>
+          </div>
+          <div class="ec2-tab-contents-container">
+            <div class="ec2-tab-content active" id="tab-content-azure-sql-basic">
+              <div class="ec2-form-group">
+                <label class="ec2-label">SQL Server Name</label>
+                <input type="text" id="azure-sql-server-name" class="ec2-input" placeholder="my-sql-server" value="my-sql-server">
+              </div>
+              <div class="ec2-form-group">
+                <label class="ec2-label">Database Name</label>
+                <input type="text" id="azure-sql-db-name" class="ec2-input" placeholder="mysqldb" value="mysqldb">
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Admin Login</label>
+                  <input type="text" id="azure-sql-username" class="ec2-input" value="sqladmin">
+                </div>
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Admin Password</label>
+                  <input type="password" id="azure-sql-password" class="ec2-input" value="AzureSecureSqlPass123!">
+                </div>
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Edition / SKU</label>
+                  <select id="azure-sql-sku" class="ec2-select">
+                    <option value="Basic" selected>Basic (S0)</option>
+                    <option value="Standard">Standard (S1)</option>
+                  </select>
+                </div>
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Region</label>
+                  <select id="azure-sql-region" class="ec2-select">
+                    <option value="eastus" selected>East US</option>
+                    <option value="westus2">West US 2</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="ec2-tab-content" id="tab-content-azure-sql-preview">
+              <pre id="azure-sql-preview-main-tf" class="code-preview-block">Click preview to generate...</pre>
+            </div>
+            <div class="ec2-tab-content" id="tab-content-azure-sql-list">
+              <div id="azure-sql-resources-list" style="display:flex; flex-direction:column; gap:14px;">
+                <div class="empty-state-msg">No SQL databases found.</div>
+              </div>
+            </div>
+          </div>
+          <div class="ec2-deploy-btn-container" id="azure-sql-deploy-btn-wrapper">
+            <button type="button" class="ec2-btn-primary" id="btn-azure-sql-action" style="width:100%; background:linear-gradient(135deg,#0078d4,#005a9e);">
+              <span id="btn-azure-sql-text">🔷&nbsp; Preview Database Configuration</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="ec2-right-col">
+        <div class="ec2-logs-header" style="padding:0;border-bottom:1px solid #30363d;display:flex;align-items:center;justify-content:space-between;height:45px;flex-shrink:0;background:#0d1117;">
+          <div style="display:flex;align-items:center;height:100%;padding-left:20px;">
+            <button type="button" class="ec2-tab active" id="tab-azure-logs-terraform" style="background:none;border:none;color:#58a6ff;padding:8px 16px;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;cursor:pointer;border-bottom:2px solid #58a6ff;transition:all 0.15s;height:100%;">Azure Terraform Logs</button>
+            <button type="button" class="ec2-tab" id="tab-azure-logs-startup" style="background:none;border:none;color:#8b949e;padding:8px 16px;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;height:100%;">Azure Startup Logs</button>
+          </div>
+          <button type="button" id="btn-azure-clear-logs" style="background:none;border:1px solid #30363d;border-radius:4px;color:#8b949e;font-size:11px;padding:4px 10px;cursor:pointer;font-family:inherit;margin-right:20px;">Clear</button>
+        </div>
+        <div class="ec2-log-terminal" id="azure-log-terminal-container">
+          <div class="log-line" style="color:#484f58;">— Select an Azure service, configure, and click Provision to begin —</div>
+        </div>
+        <div class="ec2-log-terminal" id="azure-startup-terminal-container" style="display:none;">
+          <div class="log-line" style="color:#484f58;">— Select an active deployment and click "Startup Logs" to monitor execution —</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GCP Provider Panel -->
+  <div id="gcp-provider-panel" class="provider-panel">
+    <nav class="service-nav" aria-label="GCP Service Selector">
+      <button type="button" class="svc-btn active" data-service="gcp-vm" id="svc-btn-gcp-vm">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        Compute VMs
+      </button>
+      <button type="button" class="svc-btn" data-service="gcp-vpc" id="svc-btn-gcp-vpc">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 0 0 1-4 10 15.3 0 0 1-4-10 15.3 0 0 1 4-10z"/></svg>
+        VPC Networks
+      </button>
+      <button type="button" class="svc-btn" data-service="gcp-gcs" id="svc-btn-gcp-gcs">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg>
+        Storage Buckets
+      </button>
+      <button type="button" class="svc-btn" data-service="gcp-sql" id="svc-btn-gcp-sql">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-2.239 10-5V5c0-2.761-4.477-5-10-5S2 2.239 2 5v12c0 2.761 4.477 5 10 5Z"/><path d="M22 5c0 2.761-4.477 5-10 5S2 7.761 2 5"/><path d="M22 11c0 2.761-4.477 5-10 5S2 13.761 2 11"/></svg>
+        Cloud SQL
+      </button>
+    </nav>
+    <div class="ec2-main-grid">
+      <div class="ec2-left-col">
+        <div class="service-panel active" id="svc-panel-gcp-vm">
+          <div class="ec2-tabs-bar">
+            <button type="button" class="ec2-tab active" data-tab="gcp-vm-basic">Basic</button>
+            <button type="button" class="ec2-tab" data-tab="gcp-vm-advanced">Advanced</button>
+            <button type="button" class="ec2-tab" data-tab="gcp-vm-preview">Code Preview</button>
+            <button type="button" class="ec2-tab" data-tab="gcp-vm-deployments">Deployments</button>
+          </div>
+          <div class="ec2-tab-contents-container">
+            <div class="ec2-tab-content active" id="tab-content-gcp-vm-basic">
+              <div class="ec2-form-group">
+                <label class="ec2-label">GCP Account/Profile</label>
+                <div style="display:flex;gap:8px;">
+                  <select id="gcp-vm-profile" class="ec2-select" style="flex:1;">
+                    <option value="default">default</option>
+                  </select>
+                  <button type="button" class="ec2-btn-primary" id="gcp-vm-btn-toggle-add-profile" style="width:auto;padding:0 14px;font-size:16px;line-height:1;background:#ffcc00;color:#0d1117;border-color:#ffcc00;">+</button>
+                </div>
+              </div>
+
+              <div id="gcp-vm-add-profile-container" style="display:none;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:14px;margin-bottom:18px;">
+                <h4 style="margin:0 0 12px;font-size:12px;text-transform:uppercase;color:#8b949e;letter-spacing:0.05em;font-family:'Inter',sans-serif;">Add GCP Profile</h4>
+                <div style="display:flex;flex-direction:column;gap:12px;">
+                  <div>
+                    <label class="ec2-label" style="font-size:10px;">Profile Name</label>
+                    <input type="text" id="gcp-vm-new-profile-name" class="ec2-input" placeholder="e.g. dev-gcp">
+                    <p class="field-err" id="gcp-vm-err-new-profile-name" style="display:none;"></p>
+                  </div>
+                  <div>
+                    <label class="ec2-label" style="font-size:10px;">Project ID</label>
+                    <input type="text" id="gcp-vm-new-profile-project" class="ec2-input" placeholder="e.g. my-project-id">
+                  </div>
+                  <div>
+                    <label class="ec2-label" style="font-size:10px;">Service Account Key (JSON)</label>
+                    <textarea id="gcp-vm-new-profile-key" class="ec2-input" placeholder='{ "type": "service_account", ... }' style="min-height:80px;font-family:monospace;font-size:11px;"></textarea>
+                  </div>
+                  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px;">
+                    <button type="button" class="ec2-btn-primary" id="gcp-vm-btn-save-profile" style="font-size:11px;padding:6px 12px;background:#ffcc00;color:#0d1117;border-color:#ffcc00;">Save Profile</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="ec2-form-group">
+                <label class="ec2-label">Instance Name</label>
+                <input type="text" id="gcp-vm-name" class="ec2-input" placeholder="my-gcp-vm" value="my-gcp-vm">
+              </div>
+              <div class="ec2-form-group">
+                <label class="ec2-label">GCP Project ID</label>
+                <input type="text" id="gcp-vm-project" class="ec2-input" placeholder="my-gcp-project-123" value="my-gcp-project-123">
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Machine Type</label>
+                  <select id="gcp-vm-size" class="ec2-select">
+                    <option value="e2-micro" selected>e2-micro (2 vCPU, 1 GB RAM)</option>
+                    <option value="e2-small">e2-small (2 vCPU, 2 GB RAM)</option>
+                    <option value="e2-medium">e2-medium (2 vCPU, 4 GB RAM)</option>
+                  </select>
+                </div>
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Region / Zone</label>
+                  <select id="gcp-vm-region" class="ec2-select">
+                    <option value="us-central1|us-central1-a" selected>us-central1-a (Iowa)</option>
+                    <option value="us-east1|us-east1-b">us-east1-b (S. Carolina)</option>
+                    <option value="europe-west1|europe-west1-b">europe-west1-b (Belgium)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <!-- Advanced Tab -->
+            <div class="ec2-tab-content" id="tab-content-gcp-vm-advanced">
+              <div class="ec2-form-group">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                  <label class="ec2-label" style="margin:0;">Startup Script (Metadata)</label>
+                  <button type="button" id="gcp-vm-btn-toggle-userdata" style="background:none;border:none;color:#58a6ff;font-size:11px;cursor:pointer;padding:0;font-family:inherit;">Show</button>
+                </div>
+                
+                <div id="gcp-vm-userdata-controls" style="display:none;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+                  <select id="gcp-vm-userdata-type" class="ec2-select" style="margin:0;max-width:160px;height:32px;padding:4px 8px;font-size:12px;">
+                    <option value="bash">Bash Script (Linux)</option>
+                    <option value="powershell">PowerShell Script (Windows)</option>
+                    <option value="cloud-init">Cloud-Init YAML</option>
+                  </select>
+                  <select id="gcp-vm-saved-scripts-select" class="ec2-select" style="margin:0;max-width:180px;height:32px;padding:4px 8px;font-size:12px;">
+                    <option value="">-- Load Saved Script --</option>
+                  </select>
+                  <button type="button" id="gcp-vm-btn-add-script" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;cursor:pointer;font-family:inherit;">➕ Add Script</button>
+                  <button type="button" id="gcp-vm-btn-save-script" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;cursor:pointer;font-family:inherit;">💾 Save Current</button>
+                  <button type="button" id="gcp-vm-btn-rename-script" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;cursor:pointer;font-family:inherit;display:none;">✏️ Rename</button>
+                  <button type="button" id="gcp-vm-btn-delete-script" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid rgba(247,129,102,0.3);border-radius:6px;color:#f78166;cursor:pointer;font-family:inherit;display:none;">Delete</button>
+                  <button type="button" id="gcp-vm-btn-copy-userdata" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;cursor:pointer;font-family:inherit;">📋 Copy</button>
+                  <button type="button" id="gcp-vm-btn-reset-userdata" class="ec2-btn-outline" style="padding:4px 10px;font-size:11px;height:32px;margin:0;background:none;border:1px solid rgba(247,129,102,0.3);border-radius:6px;color:#f78166;cursor:pointer;font-family:inherit;">Reset to Default</button>
+                </div>
+
+                <textarea id="gcp-vm-user-data" class="ec2-input" placeholder="#!/bin/bash&#10;apt-get update" style="display:none;min-height:160px;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.5;"></textarea>
+                <div id="gcp-vm-userdata-summary" style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 14px;font-size:12px;color:#8b949e;">No user data configured</div>
+              </div>
+            </div>
+            <div class="ec2-tab-content" id="tab-content-gcp-vm-preview">
+              <pre id="gcp-vm-preview-main-tf" class="code-preview-block">Click preview to generate...</pre>
+              <pre id="gcp-vm-preview-tfvars" class="code-preview-block" style="max-height:120px;">Click preview to generate...</pre>
+            </div>
+            <div class="ec2-tab-content" id="tab-content-gcp-vm-deployments">
+              <div id="gcp-vm-resources-list" style="display:flex; flex-direction:column; gap:14px;">
+                <div class="empty-state-msg">No Google Compute VMs found.</div>
+              </div>
+            </div>
+          </div>
+          <div class="ec2-deploy-btn-container" id="gcp-vm-deploy-btn-wrapper">
+            <button type="button" class="ec2-btn-primary" id="btn-gcp-vm-action" style="width:100%; background:linear-gradient(135deg,#ffcc00,#e0b300); color:#0d1117;">
+              <span id="btn-gcp-vm-text">🟡&nbsp; Preview VM Configuration</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="service-panel" id="svc-panel-gcp-vpc">
+          <div class="ec2-tabs-bar">
+            <button type="button" class="ec2-tab active" data-tab="gcp-vpc-basic">Config</button>
+            <button type="button" class="ec2-tab" data-tab="gcp-vpc-preview">Code Preview</button>
+            <button type="button" class="ec2-tab" data-tab="gcp-vpc-list">Active Networks</button>
+          </div>
+          <div class="ec2-tab-contents-container">
+            <div class="ec2-tab-content active" id="tab-content-gcp-vpc-basic">
+              <div class="ec2-form-group">
+                <label class="ec2-label">Network Name</label>
+                <input type="text" id="gcp-vpc-name" class="ec2-input" placeholder="my-gcp-vpc" value="my-gcp-vpc">
+              </div>
+              <div class="ec2-form-group">
+                <label class="ec2-label">GCP Project ID</label>
+                <input type="text" id="gcp-vpc-project" class="ec2-input" value="my-gcp-project-123">
+              </div>
+              <div class="ec2-form-group">
+                <label class="ec2-label">Region</label>
+                <select id="gcp-vpc-region" class="ec2-select">
+                  <option value="us-central1" selected>us-central1 (Iowa)</option>
+                  <option value="us-east1">us-east1 (S. Carolina)</option>
+                </select>
+              </div>
+            </div>
+            <div class="ec2-tab-content" id="tab-content-gcp-vpc-preview">
+              <pre id="gcp-vpc-preview-main-tf" class="code-preview-block">Click preview to generate...</pre>
+            </div>
+            <div class="ec2-tab-content" id="tab-content-gcp-vpc-list">
+              <div id="gcp-vpc-resources-list" style="display:flex; flex-direction:column; gap:14px;">
+                <div class="empty-state-msg">No networks found.</div>
+              </div>
+            </div>
+          </div>
+          <div class="ec2-deploy-btn-container" id="gcp-vpc-deploy-btn-wrapper">
+            <button type="button" class="ec2-btn-primary" id="btn-gcp-vpc-action" style="width:100%; background:linear-gradient(135deg,#ffcc00,#e0b300); color:#0d1117;">
+              <span id="btn-gcp-vpc-text">🟡&nbsp; Preview Network Configuration</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="service-panel" id="svc-panel-gcp-gcs">
+          <div class="ec2-tabs-bar">
+            <button type="button" class="ec2-tab active" data-tab="gcp-gcs-basic">Config</button>
+            <button type="button" class="ec2-tab" data-tab="gcp-gcs-preview">Code Preview</button>
+            <button type="button" class="ec2-tab" data-tab="gcp-gcs-list">Active Buckets</button>
+          </div>
+          <div class="ec2-tab-contents-container">
+            <div class="ec2-tab-content active" id="tab-content-gcp-gcs-basic">
+              <div class="ec2-form-group">
+                <label class="ec2-label">Bucket Name</label>
+                <input type="text" id="gcp-gcs-name" class="ec2-input" placeholder="my-gcs-bucket-unique" value="my-gcs-bucket-unique">
+              </div>
+              <div class="ec2-form-group">
+                <label class="ec2-label">GCP Project ID</label>
+                <input type="text" id="gcp-gcs-project" class="ec2-input" value="my-gcp-project-123">
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Storage Class</label>
+                  <select id="gcp-gcs-class" class="ec2-select">
+                    <option value="STANDARD" selected>STANDARD</option>
+                    <option value="NEARLINE">NEARLINE</option>
+                    <option value="COLDLINE">COLDLINE</option>
+                  </select>
+                </div>
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Location</label>
+                  <select id="gcp-gcs-location" class="ec2-select">
+                    <option value="US" selected>Multi-Region US</option>
+                    <option value="EU">Multi-Region EU</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="ec2-tab-content" id="tab-content-gcp-gcs-preview">
+              <pre id="gcp-gcs-preview-main-tf" class="code-preview-block">Click preview to generate...</pre>
+            </div>
+            <div class="ec2-tab-content" id="tab-content-gcp-gcs-list">
+              <div id="gcp-gcs-resources-list" style="display:flex; flex-direction:column; gap:14px;">
+                <div class="empty-state-msg">No buckets found.</div>
+              </div>
+            </div>
+          </div>
+          <div class="ec2-deploy-btn-container" id="gcp-gcs-deploy-btn-wrapper">
+            <button type="button" class="ec2-btn-primary" id="btn-gcp-gcs-action" style="width:100%; background:linear-gradient(135deg,#ffcc00,#e0b300); color:#0d1117;">
+              <span id="btn-gcp-gcs-text">🟡&nbsp; Preview Bucket Configuration</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="service-panel" id="svc-panel-gcp-sql">
+          <div class="ec2-tabs-bar">
+            <button type="button" class="ec2-tab active" data-tab="gcp-sql-basic">Config</button>
+            <button type="button" class="ec2-tab" data-tab="gcp-sql-preview">Code Preview</button>
+            <button type="button" class="ec2-tab" data-tab="gcp-sql-list">SQL Instances</button>
+          </div>
+          <div class="ec2-tab-contents-container">
+            <div class="ec2-tab-content active" id="tab-content-gcp-sql-basic">
+              <div class="ec2-form-group">
+                <label class="ec2-label">Database Instance Name</label>
+                <input type="text" id="gcp-sql-name" class="ec2-input" placeholder="my-gcp-sql" value="my-gcp-sql">
+              </div>
+              <div class="ec2-form-group">
+                <label class="ec2-label">GCP Project ID</label>
+                <input type="text" id="gcp-sql-project" class="ec2-input" value="my-gcp-project-123">
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Database Engine</label>
+                  <select id="gcp-sql-engine" class="ec2-select">
+                    <option value="MYSQL_8_0" selected>MySQL 8.0</option>
+                    <option value="POSTGRES_15">PostgreSQL 15</option>
+                  </select>
+                </div>
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Root Password</label>
+                  <input type="password" id="gcp-sql-password" class="ec2-input" value="GcpSecureSqlPass123!">
+                </div>
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Tier / Sizing</label>
+                  <select id="gcp-sql-tier" class="ec2-select">
+                    <option value="db-f1-micro" selected>db-f1-micro (Shared CPU)</option>
+                    <option value="db-g1-small">db-g1-small (Shared CPU)</option>
+                  </select>
+                </div>
+                <div class="ec2-form-group">
+                  <label class="ec2-label">Region</label>
+                  <select id="gcp-sql-region" class="ec2-select">
+                    <option value="us-central1" selected>us-central1 (Iowa)</option>
+                    <option value="us-east1">us-east1 (S. Carolina)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="ec2-tab-content" id="tab-content-gcp-sql-preview">
+              <pre id="gcp-sql-preview-main-tf" class="code-preview-block">Click preview to generate...</pre>
+            </div>
+            <div class="ec2-tab-content" id="tab-content-gcp-sql-list">
+              <div id="gcp-sql-resources-list" style="display:flex; flex-direction:column; gap:14px;">
+                <div class="empty-state-msg">No SQL databases found.</div>
+              </div>
+            </div>
+          </div>
+          <div class="ec2-deploy-btn-container" id="gcp-sql-deploy-btn-wrapper">
+            <button type="button" class="ec2-btn-primary" id="btn-gcp-sql-action" style="width:100%; background:linear-gradient(135deg,#ffcc00,#e0b300); color:#0d1117;">
+              <span id="btn-gcp-sql-text">🟡&nbsp; Preview Database Configuration</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="ec2-right-col">
+        <div class="ec2-logs-header" style="padding:0;border-bottom:1px solid #30363d;display:flex;align-items:center;justify-content:space-between;height:45px;flex-shrink:0;background:#0d1117;">
+          <div style="display:flex;align-items:center;height:100%;padding-left:20px;">
+            <button type="button" class="ec2-tab active" id="tab-gcp-logs-terraform" style="background:none;border:none;color:#58a6ff;padding:8px 16px;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;cursor:pointer;border-bottom:2px solid #58a6ff;transition:all 0.15s;height:100%;">GCP Terraform Logs</button>
+            <button type="button" class="ec2-tab" id="tab-gcp-logs-startup" style="background:none;border:none;color:#8b949e;padding:8px 16px;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;height:100%;">GCP Startup Logs</button>
+          </div>
+          <button type="button" id="btn-gcp-clear-logs" style="background:none;border:1px solid #30363d;border-radius:4px;color:#8b949e;font-size:11px;padding:4px 10px;cursor:pointer;font-family:inherit;margin-right:20px;">Clear</button>
+        </div>
+        <div class="ec2-log-terminal" id="gcp-log-terminal-container">
+          <div class="log-line" style="color:#484f58;">— Select a GCP service, configure, and click Provision to begin —</div>
+        </div>
+        <div class="ec2-log-terminal" id="gcp-startup-terminal-container" style="display:none;">
+          <div class="log-line" style="color:#484f58;">— Select an active deployment and click "Startup Logs" to monitor execution —</div>
+        </div>
+      </div>
+    </div>
+  </div>
   </div>
 
   <script src="app.js?v=2.1"></script>

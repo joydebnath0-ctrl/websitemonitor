@@ -94,6 +94,10 @@ const INSTANCE_TYPES = [
 ];
 
 const OS_IMAGES = [
+  { value: "ami-ubuntu-26-x86", label: "Ubuntu Server 26.04 LTS (x86_64)", tags: ["Free Tier"] },
+  { value: "ami-ubuntu-26-arm", label: "Ubuntu Server 26.04 LTS (Arm64)",  tags: ["Free Tier"] },
+  { value: "ami-ubuntu-24-x86", label: "Ubuntu Server 24.04 LTS (x86_64)", tags: ["Free Tier"] },
+  { value: "ami-ubuntu-24-arm", label: "Ubuntu Server 24.04 LTS (Arm64)",  tags: ["Free Tier"] },
   { value: "ami-ubuntu-22",     label: "Ubuntu 22.04 LTS",     tags: ["Recommended"] },
   { value: "ami-ubuntu-20",     label: "Ubuntu 20.04 LTS",     tags: [] },
   { value: "ami-amazon-linux-2",label: "Amazon Linux 2023",    tags: [] },
@@ -140,6 +144,10 @@ runcmd:
 };
 
 const OS_AMI_MAP = {
+  "ami-ubuntu-26-x86": { "us-east-1":"ami-0aba19e56f3eaec05","us-east-2":"ami-0aba19e56f3eaec05","us-west-1":"ami-0aba19e56f3eaec05","us-west-2":"ami-0aba19e56f3eaec05","eu-west-1":"ami-0aba19e56f3eaec05","eu-central-1":"ami-0aba19e56f3eaec05","ap-south-1":"ami-0aba19e56f3eaec05","ap-southeast-1":"ami-0aba19e56f3eaec05","ap-northeast-1":"ami-0aba19e56f3eaec05" },
+  "ami-ubuntu-26-arm": { "us-east-1":"ami-0c38f63b13d1556ea","us-east-2":"ami-0c38f63b13d1556ea","us-west-1":"ami-0c38f63b13d1556ea","us-west-2":"ami-0c38f63b13d1556ea","eu-west-1":"ami-0c38f63b13d1556ea","eu-central-1":"ami-0c38f63b13d1556ea","ap-south-1":"ami-0c38f63b13d1556ea","ap-southeast-1":"ami-0c38f63b13d1556ea","ap-northeast-1":"ami-0c38f63b13d1556ea" },
+  "ami-ubuntu-24-x86": { "us-east-1":"ami-05bfa4a7765f38076","us-east-2":"ami-05bfa4a7765f38076","us-west-1":"ami-05bfa4a7765f38076","us-west-2":"ami-05bfa4a7765f38076","eu-west-1":"ami-05bfa4a7765f38076","eu-central-1":"ami-05bfa4a7765f38076","ap-south-1":"ami-05bfa4a7765f38076","ap-southeast-1":"ami-05bfa4a7765f38076","ap-northeast-1":"ami-05bfa4a7765f38076" },
+  "ami-ubuntu-24-arm": { "us-east-1":"ami-00b88a12ff7b4882c","us-east-2":"ami-00b88a12ff7b4882c","us-west-1":"ami-00b88a12ff7b4882c","us-west-2":"ami-00b88a12ff7b4882c","eu-west-1":"ami-00b88a12ff7b4882c","eu-central-1":"ami-00b88a12ff7b4882c","ap-south-1":"ami-00b88a12ff7b4882c","ap-southeast-1":"ami-00b88a12ff7b4882c","ap-northeast-1":"ami-00b88a12ff7b4882c" },
   "ami-ubuntu-22":      { "us-east-1":"ami-0c7217cdde317cfec","us-east-2":"ami-05fb0b8c1424f266b","us-west-1":"ami-0ec6087c2fa028c2a","us-west-2":"ami-03f12c7a6f2b1d7d0","eu-west-1":"ami-0d940f23d527c3ab1","eu-central-1":"ami-0084a47cc718ce3ba","ap-south-1":"ami-007020fd9c84e18c7","ap-southeast-1":"ami-06c56143c12aa97de","ap-northeast-1":"ami-0d9793cbbda373493" },
   "ami-ubuntu-20":      { "us-east-1":"ami-0261755bbcb8c4a84","us-east-2":"ami-043e0a7e189874d6f","us-west-1":"ami-0485b018598ecc57b","us-west-2":"ami-0a36eb3f9d402c723","eu-west-1":"ami-09e2d3e168887ee2d","eu-central-1":"ami-0d527b8f28d768820","ap-south-1":"ami-0851b76e8b1bce90b","ap-southeast-1":"ami-0e2e255f0a631f41d","ap-northeast-1":"ami-01d017b2046ff9187" },
   "ami-amazon-linux-2": { "us-east-1":"ami-0aa7d40eeae50c9a9","us-east-2":"ami-0d406e26e5ad857fc","us-west-1":"ami-0da34fa616428c05c","us-west-2":"ami-0f3769c3a8c454e60","eu-west-1":"ami-02fd09b5523267571","eu-central-1":"ami-09ad69fa8d011c750","ap-south-1":"ami-02b49a24cfb95941c","ap-southeast-1":"ami-07c87c0ecb43e8d2e","ap-northeast-1":"ami-0062ddc2bb74b6845" },
@@ -202,6 +210,384 @@ function initServiceNav() {
       if (svc === 'billing') fetchBilling();
     });
   });
+}
+
+function setupUserdataControls(prefix) {
+  const isEc2 = prefix === 'ec2';
+  const getEl = (suffix) => document.getElementById(isEc2 ? suffix : `${prefix}-${suffix}`);
+
+  const btnToggleUserdata = getEl('btn-toggle-userdata');
+  const userdataTextarea = getEl('user-data');
+  const userdataSummary = getEl('userdata-summary');
+  const userdataControls = getEl('userdata-controls');
+  const userdataTypeSelect = getEl('userdata-type');
+  const btnCopyUserdata = getEl('btn-copy-userdata');
+  const btnResetUserdata = getEl('btn-reset-userdata');
+  const savedScriptsSelect = getEl('saved-scripts-select');
+  const btnAddScript = getEl('btn-add-script');
+  const btnSaveScript = getEl('btn-save-script');
+  const btnRenameScript = getEl('btn-rename-script');
+  const btnDeleteScript = getEl('btn-delete-script');
+
+  if (userdataTextarea && !userdataTextarea.value.trim()) {
+    userdataTextarea.value = USERDATA_TEMPLATES.bash;
+  }
+
+  if (btnToggleUserdata && userdataTextarea && userdataSummary) {
+    btnToggleUserdata.addEventListener('click', () => {
+      const hidden = userdataTextarea.style.display === 'none';
+      userdataTextarea.style.display = hidden ? 'block' : 'none';
+      if (userdataControls) userdataControls.style.display = hidden ? 'flex' : 'none';
+      userdataSummary.style.display = hidden ? 'none' : 'block';
+      btnToggleUserdata.textContent = hidden ? 'Hide' : 'Show';
+      if (!hidden) {
+        const lines = userdataTextarea.value.split('\n').filter(l => l.trim()).length;
+        userdataSummary.textContent = lines > 0 ? `${lines} lines of user data` : 'No user data configured';
+      }
+    });
+  }
+
+  if (userdataTextarea) {
+    userdataTextarea.addEventListener('input', () => {
+      const lines = userdataTextarea.value.split('\n').filter(l => l.trim()).length;
+      if (userdataSummary) {
+        userdataSummary.textContent = lines > 0 ? `${lines} lines of user data` : 'No user data configured';
+      }
+    });
+  }
+
+  if (userdataTypeSelect && userdataTextarea) {
+    userdataTypeSelect.addEventListener('change', () => {
+      const type = userdataTypeSelect.value;
+      if (USERDATA_TEMPLATES[type]) {
+        const currentVal = userdataTextarea.value.trim();
+        const templates = Object.values(USERDATA_TEMPLATES).map(t => t.trim());
+        if (!currentVal || templates.includes(currentVal)) {
+          userdataTextarea.value = USERDATA_TEMPLATES[type];
+          userdataTextarea.dispatchEvent(new Event('input'));
+        }
+      }
+    });
+  }
+
+  if (btnCopyUserdata && userdataTextarea) {
+    btnCopyUserdata.addEventListener('click', () => {
+      navigator.clipboard.writeText(userdataTextarea.value).then(() => {
+        const originalText = btnCopyUserdata.textContent;
+        btnCopyUserdata.textContent = 'Copied! ✓';
+        btnCopyUserdata.style.borderColor = '#2ea44f';
+        btnCopyUserdata.style.color = '#2ea44f';
+        setTimeout(() => {
+          btnCopyUserdata.textContent = originalText;
+          btnCopyUserdata.style.borderColor = '#30363d';
+          btnCopyUserdata.style.color = '#c9d1d9';
+        }, 2000);
+      }).catch(err => {
+        alert('Failed to copy: ' + err);
+      });
+    });
+  }
+
+  if (btnResetUserdata && userdataTextarea && userdataTypeSelect) {
+    btnResetUserdata.addEventListener('click', () => {
+      const type = userdataTypeSelect.value;
+      if (USERDATA_TEMPLATES[type] && confirm('Are you sure you want to reset the script to the default template?')) {
+        userdataTextarea.value = USERDATA_TEMPLATES[type];
+        userdataTextarea.dispatchEvent(new Event('input'));
+      }
+    });
+  }
+
+  if (savedScriptsSelect) {
+    savedScriptsSelect.addEventListener('change', () => {
+      const selectedId = savedScriptsSelect.value;
+      if (!selectedId) {
+        if (btnDeleteScript) btnDeleteScript.style.display = 'none';
+        if (btnRenameScript) btnRenameScript.style.display = 'none';
+        return;
+      }
+      const script = savedScripts.find(s => s.id === selectedId);
+      if (script) {
+        userdataTextarea.value = script.content;
+        userdataTypeSelect.value = script.type;
+        if (userdataTextarea.style.display === 'none' && btnToggleUserdata) {
+          btnToggleUserdata.click();
+        }
+        userdataTextarea.dispatchEvent(new Event('input'));
+        if (btnDeleteScript) btnDeleteScript.style.display = 'inline-block';
+        if (btnRenameScript) btnRenameScript.style.display = 'inline-block';
+      }
+    });
+  }
+
+  if (btnAddScript && userdataTextarea && userdataTypeSelect && savedScriptsSelect) {
+    btnAddScript.addEventListener('click', () => {
+      savedScriptsSelect.value = '';
+      const type = userdataTypeSelect.value;
+      userdataTextarea.value = USERDATA_TEMPLATES[type] || '';
+      userdataTextarea.dispatchEvent(new Event('input'));
+      if (btnDeleteScript) btnDeleteScript.style.display = 'none';
+      if (btnRenameScript) btnRenameScript.style.display = 'none';
+      userdataTextarea.focus();
+    });
+  }
+
+  if (btnSaveScript && userdataTextarea && userdataTypeSelect && savedScriptsSelect) {
+    btnSaveScript.addEventListener('click', async () => {
+      const selectedId = savedScriptsSelect.value;
+      const currentScript = selectedId ? savedScripts.find(s => s.id === selectedId) : null;
+      const defaultName = currentScript ? currentScript.name : '';
+      const name = prompt('Enter a name to save this script:', defaultName);
+      if (name === null) return;
+      const trimmedName = name.trim();
+      if (!trimmedName) {
+        alert('Please enter a name for the script.');
+        return;
+      }
+      const content = userdataTextarea.value;
+      const type = userdataTypeSelect.value;
+      try {
+        const res = await fetch('/api/scripts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: trimmedName, type, content })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to save script');
+        alert('Script saved successfully!');
+        await fetchSavedScripts();
+        
+        // Auto-select
+        const saved = savedScripts.find(s => s.name.toLowerCase() === trimmedName.toLowerCase());
+        if (saved) {
+          savedScriptsSelect.value = saved.id;
+          savedScriptsSelect.dispatchEvent(new Event('change'));
+        }
+      } catch (err) {
+        alert('Error saving script: ' + err.message);
+      }
+    });
+  }
+
+  if (btnRenameScript && savedScriptsSelect) {
+    btnRenameScript.addEventListener('click', async () => {
+      const selectedId = savedScriptsSelect.value;
+      if (!selectedId) return;
+      const script = savedScripts.find(s => s.id === selectedId);
+      if (!script) return;
+      const newName = prompt(`Enter a new name for the script "${script.name}":`, script.name);
+      if (newName === null) return;
+      const trimmedName = newName.trim();
+      if (!trimmedName) {
+        alert('Please enter a name for the script.');
+        return;
+      }
+      if (trimmedName === script.name) return;
+      try {
+        const res = await fetch(`/api/scripts/${selectedId}/rename`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: trimmedName })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to rename script');
+        alert('Script renamed successfully!');
+        await fetchSavedScripts();
+        savedScriptsSelect.value = selectedId;
+        savedScriptsSelect.dispatchEvent(new Event('change'));
+      } catch (err) {
+        alert('Error renaming script: ' + err.message);
+      }
+    });
+  }
+
+  if (btnDeleteScript && savedScriptsSelect) {
+    btnDeleteScript.addEventListener('click', async () => {
+      const selectedId = savedScriptsSelect.value;
+      if (!selectedId) return;
+      const script = savedScripts.find(s => s.id === selectedId);
+      if (!script) return;
+      if (!confirm(`Are you sure you want to delete script "${script.name}"?`)) return;
+      try {
+        const res = await fetch(`/api/scripts/${selectedId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to delete script');
+        alert('Script deleted successfully!');
+        if (btnDeleteScript) btnDeleteScript.style.display = 'none';
+        if (btnRenameScript) btnRenameScript.style.display = 'none';
+        await fetchSavedScripts();
+      } catch (err) {
+        alert('Error deleting script: ' + err.message);
+      }
+    });
+  }
+}
+
+function setupProfileControls(prefix) {
+  const isAzure = prefix === 'azure-vm';
+  const getEl = (suffix) => document.getElementById(`${prefix}-${suffix}`);
+
+  const btnToggleAdd = getEl('btn-toggle-add-profile');
+  const addContainer = getEl('add-profile-container');
+  const btnSave = getEl('btn-save-profile');
+  const profileSelect = getEl('profile');
+
+  if (btnToggleAdd && addContainer) {
+    btnToggleAdd.addEventListener('click', () => {
+      const open = addContainer.style.display === 'none';
+      addContainer.style.display = open ? 'block' : 'none';
+      btnToggleAdd.textContent = open ? '−' : '+';
+    });
+  }
+
+  const fetchProfiles = async () => {
+    try {
+      const res = await fetch(`/api/${isAzure ? 'azure' : 'gcp'}-profiles`);
+      const list = await res.json();
+      if (profileSelect) {
+        profileSelect.innerHTML = '<option value="default">default</option>';
+        list.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p;
+          opt.textContent = p;
+          profileSelect.appendChild(opt);
+        });
+      }
+    } catch (err) {
+      console.error(`Error loading profiles for ${prefix}:`, err);
+    }
+  };
+
+  if (btnSave) {
+    btnSave.addEventListener('click', async () => {
+      const profileNameInput = getEl('new-profile-name');
+      const profileName = profileNameInput.value.trim();
+      const errField = getEl('err-new-profile-name');
+      if (errField) errField.style.display = 'none';
+
+      if (!profileName) {
+        alert('Profile Name is required.');
+        return;
+      }
+      if (!/^[a-zA-Z0-9-]+$/.test(profileName)) {
+        if (errField) {
+          errField.textContent = 'Profile name must be alphanumeric and dashes only';
+          errField.style.display = 'block';
+        } else {
+          alert('Profile name must be alphanumeric and dashes only');
+        }
+        return;
+      }
+
+      let payload = { profileName };
+      if (isAzure) {
+        const subscriptionId = getEl('new-profile-subscription').value.trim();
+        const tenantId = getEl('new-profile-tenant').value.trim();
+        const clientId = getEl('new-profile-client').value.trim();
+        const clientSecret = getEl('new-profile-secret').value.trim();
+
+        if (!subscriptionId || !tenantId || !clientId || !clientSecret) {
+          alert('All Azure profile fields are required.');
+          return;
+        }
+        payload = { profileName, subscriptionId, tenantId, clientId, clientSecret };
+      } else {
+        const projectId = getEl('new-profile-project').value.trim();
+        const credentialsJson = getEl('new-profile-key').value.trim();
+
+        if (!projectId || !credentialsJson) {
+          alert('All GCP profile fields are required.');
+          return;
+        }
+        try {
+          JSON.parse(credentialsJson);
+        } catch (e) {
+          alert('Service Account Key must be valid JSON.');
+          return;
+        }
+        payload = { profileName, projectId, credentialsJson };
+      }
+
+      try {
+        const res = await fetch(`/api/${isAzure ? 'azure' : 'gcp'}-profiles`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to save profile');
+        alert('Profile saved successfully!');
+        
+        profileNameInput.value = '';
+        if (isAzure) {
+          getEl('new-profile-subscription').value = '';
+          getEl('new-profile-tenant').value = '';
+          getEl('new-profile-client').value = '';
+          getEl('new-profile-secret').value = '';
+        } else {
+          getEl('new-profile-project').value = '';
+          getEl('new-profile-key').value = '';
+        }
+        if (addContainer) addContainer.style.display = 'none';
+        if (btnToggleAdd) btnToggleAdd.textContent = '+';
+
+        await fetchProfiles();
+        if (profileSelect) profileSelect.value = profileName;
+      } catch (err) {
+        alert('Error saving profile: ' + err.message);
+      }
+    });
+  }
+
+  fetchProfiles();
+}
+
+function setupLogsTabControls(provider) {
+  const isAws = provider === 'aws';
+  const tabTerraform = isAws ? document.getElementById('tab-logs-terraform') : document.getElementById(`tab-${provider}-logs-terraform`);
+  const tabStartup = isAws ? document.getElementById('tab-logs-startup') : document.getElementById(`tab-${provider}-logs-startup`);
+  const logTerminal = isAws ? document.getElementById('log-terminal-container') : document.getElementById(`${provider}-log-terminal-container`);
+  const startupTerminal = isAws ? document.getElementById('startup-terminal-container') : document.getElementById(`${provider}-startup-terminal-container`);
+  const clearBtn = isAws ? document.getElementById('btn-clear-logs') : document.getElementById(`btn-${provider}-clear-logs`);
+
+  if (tabTerraform && tabStartup && logTerminal && startupTerminal) {
+    tabTerraform.addEventListener('click', () => {
+      tabTerraform.classList.add('active');
+      tabTerraform.style.color = '#58a6ff';
+      tabTerraform.style.borderBottomColor = '#58a6ff';
+
+      tabStartup.classList.remove('active');
+      tabStartup.style.color = '#8b949e';
+      tabStartup.style.borderBottomColor = 'transparent';
+
+      logTerminal.style.display = 'block';
+      startupTerminal.style.display = 'none';
+    });
+
+    tabStartup.addEventListener('click', () => {
+      tabStartup.classList.add('active');
+      tabStartup.style.color = '#58a6ff';
+      tabStartup.style.borderBottomColor = '#58a6ff';
+
+      tabTerraform.classList.remove('active');
+      tabTerraform.style.color = '#8b949e';
+      tabTerraform.style.borderBottomColor = 'transparent';
+
+      startupTerminal.style.display = 'block';
+      logTerminal.style.display = 'none';
+    });
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      const isStartupActive = tabStartup && tabStartup.classList.contains('active');
+      if (isStartupActive) {
+        if (startupTerminal) startupTerminal.innerHTML = '<div class="log-line" style="color:#484f58;">Terminal cleared.</div>';
+      } else {
+        if (logTerminal) logTerminal.innerHTML = '<div class="log-line" style="color:#484f58;">Terminal cleared.</div>';
+      }
+    });
+  }
 }
 
 // ===== EC2 UI =====
@@ -345,83 +731,6 @@ function initEC2UI() {
   const ec2AssociateEip = document.getElementById('ec2-associate-eip');
   if (ec2AssociateEip) ec2AssociateEip.addEventListener('change', updateEC2Summary);
 
-  const btnToggleUserdata = document.getElementById('btn-toggle-userdata');
-  const userdataTextarea = document.getElementById('user-data');
-  const userdataSummary = document.getElementById('userdata-summary');
-  const userdataControls = document.getElementById('userdata-controls');
-  const userdataTypeSelect = document.getElementById('userdata-type');
-  const btnCopyUserdata = document.getElementById('btn-copy-userdata');
-  const btnResetUserdata = document.getElementById('btn-reset-userdata');
-
-  // Set initial default script value if empty
-  if (userdataTextarea && !userdataTextarea.value.trim()) {
-    userdataTextarea.value = USERDATA_TEMPLATES.bash;
-  }
-
-  if (btnToggleUserdata && userdataTextarea && userdataSummary) {
-    btnToggleUserdata.addEventListener('click', () => {
-      const hidden = userdataTextarea.style.display === 'none';
-      userdataTextarea.style.display = hidden ? 'block' : 'none';
-      if (userdataControls) userdataControls.style.display = hidden ? 'flex' : 'none';
-      userdataSummary.style.display = hidden ? 'none' : 'block';
-      btnToggleUserdata.textContent = hidden ? 'Hide' : 'Show';
-      if (!hidden) {
-        const lines = userdataTextarea.value.split('\n').filter(l => l.trim()).length;
-        userdataSummary.textContent = lines > 0 ? `${lines} lines of user data` : 'No user data configured';
-      }
-    });
-  }
-
-  if (userdataTextarea) {
-    userdataTextarea.addEventListener('input', () => {
-      const lines = userdataTextarea.value.split('\n').filter(l => l.trim()).length;
-      userdataSummary.textContent = lines > 0 ? `${lines} lines of user data` : 'No user data configured';
-    });
-  }
-
-  if (userdataTypeSelect && userdataTextarea) {
-    userdataTypeSelect.addEventListener('change', () => {
-      const type = userdataTypeSelect.value;
-      if (USERDATA_TEMPLATES[type]) {
-        // Only override if textarea is empty or has another template
-        const currentVal = userdataTextarea.value.trim();
-        const templates = Object.values(USERDATA_TEMPLATES).map(t => t.trim());
-        if (!currentVal || templates.includes(currentVal)) {
-          userdataTextarea.value = USERDATA_TEMPLATES[type];
-          userdataTextarea.dispatchEvent(new Event('input'));
-        }
-      }
-    });
-  }
-
-  if (btnCopyUserdata && userdataTextarea) {
-    btnCopyUserdata.addEventListener('click', () => {
-      navigator.clipboard.writeText(userdataTextarea.value).then(() => {
-        const originalText = btnCopyUserdata.textContent;
-        btnCopyUserdata.textContent = 'Copied! ✓';
-        btnCopyUserdata.style.borderColor = '#2ea44f';
-        btnCopyUserdata.style.color = '#2ea44f';
-        setTimeout(() => {
-          btnCopyUserdata.textContent = originalText;
-          btnCopyUserdata.style.borderColor = '#30363d';
-          btnCopyUserdata.style.color = '#c9d1d9';
-        }, 2000);
-      }).catch(err => {
-        alert('Failed to copy: ' + err);
-      });
-    });
-  }
-
-  if (btnResetUserdata && userdataTextarea && userdataTypeSelect) {
-    btnResetUserdata.addEventListener('click', () => {
-      const type = userdataTypeSelect.value;
-      if (USERDATA_TEMPLATES[type] && confirm('Are you sure you want to reset the script to the default template?')) {
-        userdataTextarea.value = USERDATA_TEMPLATES[type];
-        userdataTextarea.dispatchEvent(new Event('input'));
-      }
-    });
-  }
-
   const tabLogsTerraform = document.getElementById('tab-logs-terraform');
   const tabLogsStartup = document.getElementById('tab-logs-startup');
   const logTerminal = document.getElementById('log-terminal-container');
@@ -477,152 +786,7 @@ function initEC2UI() {
 
   updateEC2Summary();
 
-  const savedScriptsSelect = document.getElementById('saved-scripts-select');
-  const btnAddScript = document.getElementById('btn-add-script');
-  const btnSaveScript = document.getElementById('btn-save-script');
-  const btnRenameScript = document.getElementById('btn-rename-script');
-  const btnDeleteScript = document.getElementById('btn-delete-script');
-
-  if (btnAddScript && userdataTextarea && userdataTypeSelect && savedScriptsSelect && btnDeleteScript) {
-    btnAddScript.addEventListener('click', () => {
-      // Deselect dropdown
-      savedScriptsSelect.value = '';
-      
-      // Reset textarea content to standard template for current type
-      const type = userdataTypeSelect.value;
-      userdataTextarea.value = USERDATA_TEMPLATES[type] || '';
-      userdataTextarea.dispatchEvent(new Event('input'));
-      
-      // Hide delete and rename buttons since we are in draft mode
-      btnDeleteScript.style.display = 'none';
-      if (btnRenameScript) btnRenameScript.style.display = 'none';
-      
-      // Focus script textarea
-      userdataTextarea.focus();
-    });
-  }
-
-  if (savedScriptsSelect && userdataTextarea && userdataTypeSelect && btnDeleteScript) {
-    savedScriptsSelect.addEventListener('change', () => {
-      const selectedId = savedScriptsSelect.value;
-      if (!selectedId) {
-        btnDeleteScript.style.display = 'none';
-        if (btnRenameScript) btnRenameScript.style.display = 'none';
-        return;
-      }
-      const script = savedScripts.find(s => s.id === selectedId);
-      if (script) {
-        userdataTextarea.value = script.content;
-        userdataTypeSelect.value = script.type;
-        if (userdataTextarea.style.display === 'none') {
-          btnToggleUserdata.click();
-        }
-        userdataTextarea.dispatchEvent(new Event('input'));
-        btnDeleteScript.style.display = 'inline-block';
-        if (btnRenameScript) btnRenameScript.style.display = 'inline-block';
-      }
-    });
-  }
-
-  if (btnSaveScript && userdataTextarea && userdataTypeSelect) {
-    btnSaveScript.addEventListener('click', async () => {
-      const selectedId = savedScriptsSelect.value;
-      const currentScript = selectedId ? savedScripts.find(s => s.id === selectedId) : null;
-      const defaultName = currentScript ? currentScript.name : '';
-      
-      const name = prompt('Enter a name to save this script:', defaultName);
-      if (name === null) return; // User clicked Cancel
-      
-      const trimmedName = name.trim();
-      if (!trimmedName) {
-        alert('Please enter a name for the script.');
-        return;
-      }
-      
-      const content = userdataTextarea.value;
-      const type = userdataTypeSelect.value;
-      
-      try {
-        const res = await fetch('/api/scripts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: trimmedName, type, content })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to save script');
-        alert('Script saved successfully!');
-        await fetchSavedScripts();
-        
-        // Auto-select the saved script in the dropdown
-        const saved = savedScripts.find(s => s.name.toLowerCase() === trimmedName.toLowerCase());
-        if (saved) {
-          savedScriptsSelect.value = saved.id;
-          savedScriptsSelect.dispatchEvent(new Event('change'));
-        }
-      } catch (err) {
-        alert('Error saving script: ' + err.message);
-      }
-    });
-  }
-
-  if (btnRenameScript && savedScriptsSelect) {
-    btnRenameScript.addEventListener('click', async () => {
-      const selectedId = savedScriptsSelect.value;
-      if (!selectedId) return;
-      const script = savedScripts.find(s => s.id === selectedId);
-      if (!script) return;
-      
-      const newName = prompt(`Enter a new name for the script "${script.name}":`, script.name);
-      if (newName === null) return; // User clicked Cancel
-      
-      const trimmedName = newName.trim();
-      if (!trimmedName) {
-        alert('Please enter a name for the script.');
-        return;
-      }
-      if (trimmedName === script.name) return; // Name didn't change
-      
-      try {
-        const res = await fetch(`/api/scripts/${selectedId}/rename`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: trimmedName })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to rename script');
-        alert('Script renamed successfully!');
-        await fetchSavedScripts();
-        
-        // Ensure the renamed script is selected in the dropdown
-        savedScriptsSelect.value = selectedId;
-        savedScriptsSelect.dispatchEvent(new Event('change'));
-      } catch (err) {
-        alert('Error renaming script: ' + err.message);
-      }
-    });
-  }
-
-  if (btnDeleteScript && savedScriptsSelect) {
-    btnDeleteScript.addEventListener('click', async () => {
-      const selectedId = savedScriptsSelect.value;
-      if (!selectedId) return;
-      const script = savedScripts.find(s => s.id === selectedId);
-      if (!script) return;
-      if (!confirm(`Are you sure you want to delete script "${script.name}"?`)) return;
-      try {
-        const res = await fetch(`/api/scripts/${selectedId}`, { method: 'DELETE' });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to delete script');
-        alert('Script deleted successfully!');
-        btnDeleteScript.style.display = 'none';
-        if (btnRenameScript) btnRenameScript.style.display = 'none';
-        await fetchSavedScripts();
-      } catch (err) {
-        alert('Error deleting script: ' + err.message);
-      }
-    });
-  }
-
+  setupUserdataControls('ec2');
   fetchSavedScripts();
 }
 
@@ -1416,21 +1580,26 @@ function renderDeploymentsList() {
         <button type="button" class="ec2-btn-outline" onclick="startLogStream('${dep.name}')">View Logs</button>
         ${dep.status === 'active' ? `<button type="button" class="ec2-btn-outline" onclick="startStartupLogStream('${dep.name}')">Startup Logs</button>` : ''}
         ${dep.status !== 'destroying' ? `<button type="button" class="ec2-btn-danger" onclick="triggerEC2Destroy('${dep.name}')" ${hasPermission('ec2', 'execute') ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;" title="No execute permission"'}>Destroy</button>` : ''}
+        ${dep.status === 'destroy-failed' || dep.status === 'failed' ? `<button type="button" class="ec2-btn-outline" style="border-color:#da3637;color:#f85149;" onclick="triggerEC2Destroy('${dep.name}', true)">Force Delete</button>` : ''}
       </div>`;
     container.appendChild(card);
   });
 }
 
-async function triggerEC2Destroy(name) {
+async function triggerEC2Destroy(name, force = false) {
   if (!hasPermission('ec2', 'execute')) {
     alert('Permission Denied: You do not have execute permission for EC2.');
     return;
   }
-  if (!confirm(`Are you sure you want to permanently delete instance "${name}"? This cannot be undone.`)) return;
+  const promptText = force
+    ? `Are you sure you want to FORCE delete instance "${name}" locally? This will remove all local files and configuration database entries, bypassing the AWS cloud connection. Real cloud resources will NOT be deleted.`
+    : `Are you sure you want to permanently delete instance "${name}"? This cannot be undone.`;
+
+  if (!confirm(promptText)) return;
   document.querySelector('#svc-panel-ec2 [data-tab="ec2-deployments"]').click();
   startLogStream(name);
   try {
-    const res = await fetch('/api/destroy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+    const res = await fetch('/api/destroy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, force }) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Destroy failed');
     fetchDeployments();
@@ -2284,7 +2453,7 @@ function initializeDashboard(user) {
 
   // Gate service sidebar navigation buttons by permissions
   const perms = user.permissions || {};
-  const services = ['ec2', 'vpc', 's3', 'cf', 'ecs', 'rds', 'billing'];
+  const services = ['ec2', 'vpc', 's3', 'cf', 'ecs', 'rds', 'billing', 'azure', 'gcp'];
   let defaultService = null;
   
   services.forEach(svc => {
@@ -2375,6 +2544,53 @@ function initializeDashboard(user) {
   initBillingUI();
   if (user.isAdmin || (perms['billing'] && perms['billing'].includes('read'))) {
     fetchBilling();
+  }
+
+  // Init Multi-Cloud Switcher & Panels
+  initProviderSwitcher();
+  initAzureUI();
+  initGcpUI();
+
+  // Gate deploy buttons for Azure & GCP based on write permissions
+  if (!hasPermission('azure', 'write')) {
+    ['btn-azure-vm-action', 'btn-azure-vnet-action', 'btn-azure-blob-action', 'btn-azure-sql-action'].forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) {
+        btn.disabled = true;
+        btn.style.opacity = '0.4';
+        btn.style.cursor = 'not-allowed';
+        btn.title = `You do not have write permission for AZURE.`;
+      }
+    });
+  }
+  if (!hasPermission('gcp', 'write')) {
+    ['btn-gcp-vm-action', 'btn-gcp-vpc-action', 'btn-gcp-gcs-action', 'btn-gcp-sql-action'].forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) {
+        btn.disabled = true;
+        btn.style.opacity = '0.4';
+        btn.style.cursor = 'not-allowed';
+        btn.title = `You do not have write permission for GCP.`;
+      }
+    });
+  }
+
+  // Hide switcher buttons if no read permissions
+  const hasAzure = user.isAdmin || (perms['azure'] && perms['azure'].includes('read'));
+  const hasGcp = user.isAdmin || (perms['gcp'] && perms['gcp'].includes('read'));
+  const azureBtn = document.querySelector('.provider-btn[data-provider="azure"]');
+  const gcpBtn = document.querySelector('.provider-btn[data-provider="gcp"]');
+  if (azureBtn) azureBtn.style.display = hasAzure ? 'inline-flex' : 'none';
+  if (gcpBtn) gcpBtn.style.display = hasGcp ? 'inline-flex' : 'none';
+
+  // Start polling Azure/GCP lists if read permissions are present
+  if (user.isAdmin || (perms['azure'] && perms['azure'].includes('read'))) {
+    fetchAzureResources();
+    setInterval(fetchAzureResources, 10000);
+  }
+  if (user.isAdmin || (perms['gcp'] && perms['gcp'].includes('read'))) {
+    fetchGcpResources();
+    setInterval(fetchGcpResources, 10000);
   }
 
   // Init password change modal (available to all authenticated users)
@@ -2483,7 +2699,7 @@ function initUsersUI() {
           if (adminChk.checked) {
             permSection.style.display = 'none';
             // Clear checked inputs
-            ['ec2', 'vpc', 's3', 'cf', 'ecs', 'billing'].forEach(svc => {
+            ['ec2', 'vpc', 's3', 'cf', 'ecs', 'rds', 'billing', 'azure', 'gcp'].forEach(svc => {
               ['read', 'write', 'execute'].forEach(p => {
                 const el = document.getElementById(`perm-${svc}-${p}`);
                 if (el) el.checked = false;
@@ -2492,7 +2708,7 @@ function initUsersUI() {
           } else {
             permSection.style.display = 'block';
             // Reset checkboxes explicitly to only read checked
-            ['ec2', 'vpc', 's3', 'cf', 'ecs', 'billing'].forEach(svc => {
+            ['ec2', 'vpc', 's3', 'cf', 'ecs', 'rds', 'billing', 'azure', 'gcp'].forEach(svc => {
               ['read', 'write', 'execute'].forEach(p => {
                 const el = document.getElementById(`perm-${svc}-${p}`);
                 if (el) el.checked = (p === 'read');
@@ -2701,7 +2917,9 @@ async function handleCreateUser(e) {
     cf: getCheckedPerms('cf'),
     ecs: getCheckedPerms('ecs'),
     rds: getCheckedPerms('rds'),
-    billing: getCheckedPerms('billing')
+    billing: getCheckedPerms('billing'),
+    azure: getCheckedPerms('azure'),
+    gcp: getCheckedPerms('gcp')
   };
 
   try {
@@ -2724,7 +2942,7 @@ async function handleCreateUser(e) {
     const permSection = document.getElementById('permissions-section');
     if (permSection) permSection.style.display = 'block';
     // Reset checkboxes explicitly
-    ['ec2', 'vpc', 's3', 'cf', 'ecs', 'billing'].forEach(svc => {
+    ['ec2', 'vpc', 's3', 'cf', 'ecs', 'rds', 'billing', 'azure', 'gcp'].forEach(svc => {
       ['read', 'write', 'execute'].forEach(p => {
         const el = document.getElementById(`perm-${svc}-${p}`);
         if (el) el.checked = (p === 'read');
@@ -2870,7 +3088,7 @@ function openPermsModal(email, name) {
   const perms = user ? user.permissions || {} : {};
   
   // Pre-fill checkboxes
-  ['ec2', 'vpc', 's3', 'cf', 'ecs', 'billing'].forEach(svc => {
+  ['ec2', 'vpc', 's3', 'cf', 'ecs', 'rds', 'billing', 'azure', 'gcp'].forEach(svc => {
     ['read', 'write', 'execute'].forEach(p => {
       const el = document.getElementById(`edit-perm-${svc}-${p}`);
       if (el) {
@@ -2919,7 +3137,9 @@ function initPermsModal() {
       cf: getCheckedPerms('cf'),
       ecs: getCheckedPerms('ecs'),
       rds: getCheckedPerms('rds'),
-      billing: getCheckedPerms('billing')
+      billing: getCheckedPerms('billing'),
+      azure: getCheckedPerms('azure'),
+      gcp: getCheckedPerms('gcp')
     };
 
     submitBtn.disabled = true;
@@ -3773,7 +3993,40 @@ function formatDailyDate(dateStr) {
 
 let activeRds = [];
 
+function getEngineDisplayName(engine) {
+  if (engine === 'aurora-mysql') return 'Aurora MySQL';
+  if (engine === 'aurora-postgresql') return 'Aurora PostgreSQL';
+  if (engine === 'db2-se') return 'IBM Db2';
+  if (engine === 'sqlserver-ex') return 'SQL Server (Express)';
+  if (engine === 'oracle-se2') return 'Oracle (SE2)';
+  if (engine === 'mysql') return 'MySQL';
+  if (engine === 'postgres') return 'PostgreSQL';
+  if (engine === 'mariadb') return 'MariaDB';
+  return (engine || '').toUpperCase();
+}
+
 const RDS_ENGINES_CONFIG = {
+  'aurora-mysql': {
+    versions: [
+      { value: '8.0.mysql_aurora.3.05.2', label: '8.0 (Recommended)' },
+      { value: '5.7.mysql_aurora.2.11.2', label: '5.7' }
+    ],
+    defaultVersion: '8.0.mysql_aurora.3.05.2',
+    defaultClass: 'db.t3.medium',
+    classes: ['db.t3.medium', 'db.m6g.large'],
+    defaultUsername: 'admin'
+  },
+  'aurora-postgresql': {
+    versions: [
+      { value: '15.4', label: '15.4 (Recommended)' },
+      { value: '14.9', label: '14.9' },
+      { value: '13.12', label: '13.12' }
+    ],
+    defaultVersion: '15.4',
+    defaultClass: 'db.t3.medium',
+    classes: ['db.t3.medium', 'db.m6g.large'],
+    defaultUsername: 'postgres'
+  },
   mysql: {
     versions: [
       { value: '8.0.35', label: '8.0.35 (Recommended)' },
@@ -3826,6 +4079,15 @@ const RDS_ENGINES_CONFIG = {
     defaultClass: 'db.t3.small',
     classes: ['db.t3.small', 'db.t3.medium', 'db.m6g.large'],
     defaultUsername: 'admin'
+  },
+  'db2-se': {
+    versions: [
+      { value: '11.5.9.0', label: '11.5.9.0 (Recommended)' }
+    ],
+    defaultVersion: '11.5.9.0',
+    defaultClass: 'db.m6g.large',
+    classes: ['db.m6g.large', 'db.t3.medium'],
+    defaultUsername: 'db2admin'
   }
 };
 
@@ -3960,7 +4222,7 @@ function updateRdsSummary() {
   const publiclyAccessible = isStandard ? document.getElementById('rds-public').checked : false;
 
   document.getElementById('rds-summary-identifier').textContent = dbIdentifier;
-  document.getElementById('rds-summary-engine').textContent = engine === 'sqlserver-ex' ? 'SQL Server (Express)' : engine === 'oracle-se2' ? 'Oracle (SE2)' : engine.toUpperCase();
+  document.getElementById('rds-summary-engine').textContent = getEngineDisplayName(engine);
   document.getElementById('rds-summary-version').textContent = engineVersion || '—';
   document.getElementById('rds-summary-class').textContent = instanceClass;
   document.getElementById('rds-summary-storage').textContent = `${storageSize} GB (${isStandard ? document.getElementById('rds-storage-type').value.toUpperCase() : 'GP2'})`;
@@ -4112,7 +4374,7 @@ function renderRdsList() {
     const card = document.createElement('div');
     card.className = 'deployment-card resource-card-rds';
     const badgeClass = `status-badge ${rds.status === 'active' ? 'active' : rds.status === 'creating' ? 'creating' : rds.status === 'destroying' ? 'destroying' : 'failed'}`;
-    const engineDisplay = rds.engine === 'sqlserver-ex' ? 'SQL Server' : rds.engine === 'oracle-se2' ? 'Oracle' : rds.engine.toUpperCase();
+    const engineDisplay = getEngineDisplayName(rds.engine);
     
     card.innerHTML = `
       <div class="deployment-header">
@@ -4156,3 +4418,1107 @@ async function triggerRdsDestroy(name) {
     appendLogLine(`[ERROR] RDS Destroy Error: ${err.message}`);
   }
 }
+
+// ===== AZURE & GCP MULTI-CLOUD FRONTEND INTEGRATION =====
+
+function initProviderSwitcher() {
+  const providerBtns = document.querySelectorAll('.provider-btn');
+  const providerPanels = document.querySelectorAll('.provider-panel');
+  const titleEl = document.querySelector('.ec2-brand-title');
+
+  providerBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const provider = btn.dataset.provider;
+      
+      providerBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      providerPanels.forEach(p => {
+        p.classList.toggle('active', p.id === `${provider}-provider-panel`);
+      });
+
+      document.body.classList.remove('aws-theme', 'azure-theme', 'gcp-theme');
+      document.body.classList.add(`${provider}-theme`);
+
+      if (titleEl) {
+        if (provider === 'aws') {
+          titleEl.textContent = 'AWS Cloud Control Panel';
+        } else if (provider === 'azure') {
+          titleEl.textContent = 'Azure Control Panel';
+        } else if (provider === 'gcp') {
+          titleEl.textContent = 'GCP Control Panel';
+        }
+      }
+
+      if (provider === 'azure') {
+        fetchAzureResources();
+      } else if (provider === 'gcp') {
+        fetchGcpResources();
+      }
+    });
+  });
+}
+
+let activeAzureVms = [];
+let activeAzureVnets = [];
+let activeAzureBlobs = [];
+let activeAzureSqls = [];
+
+let activeGcpVms = [];
+let activeGcpVpcs = [];
+let activeGcpGcs = [];
+let activeGcpSqls = [];
+
+async function fetchAzureResources() {
+  try {
+    const vmRes = await fetch('/api/azure/vm');
+    activeAzureVms = await vmRes.json();
+    renderAzureVms();
+
+    const vnetRes = await fetch('/api/azure/vnet');
+    activeAzureVnets = await vnetRes.json();
+    renderAzureVnets();
+
+    const blobRes = await fetch('/api/azure/blob');
+    activeAzureBlobs = await blobRes.json();
+    renderAzureBlobs();
+
+    const sqlRes = await fetch('/api/azure/sql');
+    activeAzureSqls = await sqlRes.json();
+    renderAzureSqls();
+  } catch (err) {
+    console.error('Error fetching Azure resources:', err);
+  }
+}
+
+async function fetchGcpResources() {
+  try {
+    const vmRes = await fetch('/api/gcp/vm');
+    activeGcpVms = await vmRes.json();
+    renderGcpVms();
+
+    const vpcRes = await fetch('/api/gcp/vpc');
+    activeGcpVpcs = await vpcRes.json();
+    renderGcpVpcs();
+
+    const gcsRes = await fetch('/api/gcp/gcs');
+    activeGcpGcs = await gcsRes.json();
+    renderGcpGcs();
+
+    const sqlRes = await fetch('/api/gcp/sql');
+    activeGcpSqls = await sqlRes.json();
+    renderGcpSqls();
+  } catch (err) {
+    console.error('Error fetching GCP resources:', err);
+  }
+}
+
+let azureStartupEventSource = null;
+function startAzureStartupLogStream(name) {
+  const tabLogsStartup = document.getElementById('tab-azure-logs-startup');
+  if (tabLogsStartup) tabLogsStartup.click();
+
+  if (azureStartupEventSource) azureStartupEventSource.close();
+  const terminal = document.getElementById('azure-startup-terminal-container');
+  if (terminal) terminal.innerHTML = `<div class="log-line log-line-info">=== Connecting to startup script log stream for "${name}" ===</div>`;
+  const token = localStorage.getItem('auth_token') || '';
+  azureStartupEventSource = new EventSource(`/api/azure/deployments/${encodeURIComponent(name)}/startup-logs?token=${encodeURIComponent(token)}`);
+  azureStartupEventSource.onmessage = event => {
+    const data = JSON.parse(event.data);
+    appendAzureStartupLogLine(data.text);
+  };
+  azureStartupEventSource.onerror = () => {
+    appendAzureStartupLogLine('=== Log stream disconnected ===');
+    azureStartupEventSource.close();
+  };
+}
+
+function appendAzureStartupLogLine(text) {
+  const terminal = document.getElementById('azure-startup-terminal-container');
+  if (!terminal) return;
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.textContent = text;
+  terminal.appendChild(line);
+  terminal.scrollTop = terminal.scrollHeight;
+}
+
+let gcpStartupEventSource = null;
+function startGcpStartupLogStream(name) {
+  const tabLogsStartup = document.getElementById('tab-gcp-logs-startup');
+  if (tabLogsStartup) tabLogsStartup.click();
+
+  if (gcpStartupEventSource) gcpStartupEventSource.close();
+  const terminal = document.getElementById('gcp-startup-terminal-container');
+  if (terminal) terminal.innerHTML = `<div class="log-line log-line-info">=== Connecting to startup script log stream for "${name}" ===</div>`;
+  const token = localStorage.getItem('auth_token') || '';
+  gcpStartupEventSource = new EventSource(`/api/gcp/deployments/${encodeURIComponent(name)}/startup-logs?token=${encodeURIComponent(token)}`);
+  gcpStartupEventSource.onmessage = event => {
+    const data = JSON.parse(event.data);
+    appendGcpStartupLogLine(data.text);
+  };
+  gcpStartupEventSource.onerror = () => {
+    appendGcpStartupLogLine('=== Log stream disconnected ===');
+    gcpStartupEventSource.close();
+  };
+}
+
+function appendGcpStartupLogLine(text) {
+  const terminal = document.getElementById('gcp-startup-terminal-container');
+  if (!terminal) return;
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.textContent = text;
+  terminal.appendChild(line);
+  terminal.scrollTop = terminal.scrollHeight;
+}
+
+function startAzureLogStream(name) {
+  if (eventSource) eventSource.close();
+  currentLogTarget = name;
+  const terminal = document.getElementById('azure-log-terminal-container');
+  if (terminal) terminal.innerHTML = `<div class="log-line log-line-info">=== Connecting to Azure log stream for "${name}" ===</div>`;
+  eventSource = new EventSource(`/api/stream-logs?name=${encodeURIComponent(name)}`);
+  eventSource.onmessage = event => {
+    const data = JSON.parse(event.data);
+    appendAzureLogLine(data.text);
+  };
+  eventSource.onerror = () => {
+    appendAzureLogLine('=== Log stream disconnected ===');
+    eventSource.close();
+    
+    const targetName = currentLogTarget;
+    fetchAzureResources().then(() => {
+      if (targetName) {
+        const match = activeAzureVms.find(v => v.name === targetName);
+        if (match && match.status === 'active') {
+          setTimeout(() => {
+            startAzureStartupLogStream(targetName);
+          }, 500);
+        }
+      }
+    });
+  };
+}
+
+function appendAzureLogLine(text) {
+  const terminal = document.getElementById('azure-log-terminal-container');
+  if (!terminal) return;
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.textContent = text;
+  terminal.appendChild(line);
+  terminal.scrollTop = terminal.scrollHeight;
+}
+
+function startGcpLogStream(name) {
+  if (eventSource) eventSource.close();
+  currentLogTarget = name;
+  const terminal = document.getElementById('gcp-log-terminal-container');
+  if (terminal) terminal.innerHTML = `<div class="log-line log-line-info">=== Connecting to GCP log stream for "${name}" ===</div>`;
+  eventSource = new EventSource(`/api/stream-logs?name=${encodeURIComponent(name)}`);
+  eventSource.onmessage = event => {
+    const data = JSON.parse(event.data);
+    appendGcpLogLine(data.text);
+  };
+  eventSource.onerror = () => {
+    appendGcpLogLine('=== Log stream disconnected ===');
+    eventSource.close();
+    
+    const targetName = currentLogTarget;
+    fetchGcpResources().then(() => {
+      if (targetName) {
+        const match = activeGcpVms.find(v => v.name === targetName);
+        if (match && match.status === 'active') {
+          setTimeout(() => {
+            startGcpStartupLogStream(targetName);
+          }, 500);
+        }
+      }
+    });
+  };
+}
+
+function appendGcpLogLine(text) {
+  const terminal = document.getElementById('gcp-log-terminal-container');
+  if (!terminal) return;
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.textContent = text;
+  terminal.appendChild(line);
+  terminal.scrollTop = terminal.scrollHeight;
+}
+
+function renderAzureVms() {
+  const container = document.getElementById('azure-vm-resources-list');
+  if (!container) return;
+  if (activeAzureVms.length === 0) {
+    container.innerHTML = '<div class="empty-state-msg">No Azure Virtual Machines found.</div>';
+    return;
+  }
+  container.innerHTML = '';
+  activeAzureVms.forEach(vm => {
+    const card = document.createElement('div');
+    card.className = 'deployment-card';
+    card.style.borderLeft = '4px solid #0078d4';
+    const badgeClass = `status-badge ${vm.status === 'active' ? 'active' : vm.status === 'creating' ? 'creating' : vm.status === 'destroying' ? 'destroying' : 'failed'}`;
+    card.innerHTML = `
+      <div class="deployment-header">
+        <span class="deployment-name">${vm.name}</span>
+        <span class="${badgeClass}">${vm.status}</span>
+      </div>
+      <div class="deployment-details-grid">
+        <span class="detail-lbl">Size</span><span class="detail-val">${vm.size}</span>
+        <span class="detail-lbl">Location</span><span class="detail-val">${vm.region}</span>
+        <span class="detail-lbl">Username</span><span class="detail-val">${vm.adminUsername}</span>
+        <span class="detail-lbl">Public IP</span><span class="detail-val">${vm.publicIp || 'N/A'}</span>
+        <span class="detail-lbl">Created At</span><span class="detail-val">${new Date(vm.createdAt).toLocaleString()}</span>
+      </div>
+      <div class="deployment-actions-bar">
+        <button type="button" class="ec2-btn-outline" onclick="startAzureLogStream('${vm.name}')">View Logs</button>
+        ${vm.status === 'active' ? `<button type="button" class="ec2-btn-outline" onclick="startAzureStartupLogStream('${vm.name}')">Startup Logs</button>` : ''}
+        ${vm.status !== 'destroying' ? `<button type="button" class="ec2-btn-danger" onclick="triggerAzureVmDestroy('${vm.name}')" ${hasPermission('azure', 'execute') ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;" title="No execute permission"'}>Destroy</button>` : ''}
+        ${vm.status === 'destroy-failed' || vm.status === 'failed' ? `<button type="button" class="ec2-btn-outline" style="border-color:#da3637;color:#f85149;" onclick="triggerAzureVmDestroy('${vm.name}', true)">Force Delete</button>` : ''}
+      </div>`;
+    container.appendChild(card);
+  });
+}
+
+function renderAzureVnets() {
+  const container = document.getElementById('azure-vnet-resources-list');
+  if (!container) return;
+  if (activeAzureVnets.length === 0) {
+    container.innerHTML = '<div class="empty-state-msg">No VNets found.</div>';
+    return;
+  }
+  container.innerHTML = '';
+  activeAzureVnets.forEach(vnet => {
+    const card = document.createElement('div');
+    card.className = 'deployment-card';
+    card.style.borderLeft = '4px solid #0078d4';
+    const badgeClass = `status-badge ${vnet.status === 'active' ? 'active' : vnet.status === 'creating' ? 'creating' : vnet.status === 'destroying' ? 'destroying' : 'failed'}`;
+    card.innerHTML = `
+      <div class="deployment-header">
+        <span class="deployment-name">${vnet.name}</span>
+        <span class="${badgeClass}">${vnet.status}</span>
+      </div>
+      <div class="deployment-details-grid">
+        <span class="detail-lbl">Address Space</span><span class="detail-val">${vnet.cidr}</span>
+        <span class="detail-lbl">Location</span><span class="detail-val">${vnet.region}</span>
+        <span class="detail-lbl">VNet ID</span><span class="detail-val" style="font-size:10px;word-break:break-all;">${vnet.vnetId || 'N/A'}</span>
+        <span class="detail-lbl">Created At</span><span class="detail-val">${new Date(vnet.createdAt).toLocaleString()}</span>
+      </div>
+      <div class="deployment-actions-bar">
+        <button type="button" class="ec2-btn-outline" onclick="startAzureLogStream('${vnet.name}')">View Logs</button>
+        ${vnet.status !== 'destroying' ? `<button type="button" class="ec2-btn-danger" onclick="triggerAzureVnetDestroy('${vnet.name}')" ${hasPermission('azure', 'execute') ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;" title="No execute permission"'}>Destroy</button>` : ''}
+      </div>`;
+    container.appendChild(card);
+  });
+}
+
+function renderAzureBlobs() {
+  const container = document.getElementById('azure-blob-resources-list');
+  if (!container) return;
+  if (activeAzureBlobs.length === 0) {
+    container.innerHTML = '<div class="empty-state-msg">No storage accounts found.</div>';
+    return;
+  }
+  container.innerHTML = '';
+  activeAzureBlobs.forEach(blob => {
+    const card = document.createElement('div');
+    card.className = 'deployment-card';
+    card.style.borderLeft = '4px solid #0078d4';
+    const badgeClass = `status-badge ${blob.status === 'active' ? 'active' : blob.status === 'creating' ? 'creating' : blob.status === 'destroying' ? 'destroying' : 'failed'}`;
+    card.innerHTML = `
+      <div class="deployment-header">
+        <span class="deployment-name">${blob.name}</span>
+        <span class="${badgeClass}">${blob.status}</span>
+      </div>
+      <div class="deployment-details-grid">
+        <span class="detail-lbl">Replication</span><span class="detail-val">${blob.replication}</span>
+        <span class="detail-lbl">Location</span><span class="detail-val">${blob.region}</span>
+        <span class="detail-lbl">Blob Endpoint</span><span class="detail-val" style="font-size:10px;word-break:break-all;">${blob.primaryBlobEndpoint || 'N/A'}</span>
+        <span class="detail-lbl">Created At</span><span class="detail-val">${new Date(blob.createdAt).toLocaleString()}</span>
+      </div>
+      <div class="deployment-actions-bar">
+        <button type="button" class="ec2-btn-outline" onclick="startAzureLogStream('${blob.name}')">View Logs</button>
+        ${blob.status !== 'destroying' ? `<button type="button" class="ec2-btn-danger" onclick="triggerAzureBlobDestroy('${blob.name}')" ${hasPermission('azure', 'execute') ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;" title="No execute permission"'}>Destroy</button>` : ''}
+      </div>`;
+    container.appendChild(card);
+  });
+}
+
+function renderAzureSqls() {
+  const container = document.getElementById('azure-sql-resources-list');
+  if (!container) return;
+  if (activeAzureSqls.length === 0) {
+    container.innerHTML = '<div class="empty-state-msg">No SQL databases found.</div>';
+    return;
+  }
+  container.innerHTML = '';
+  activeAzureSqls.forEach(sql => {
+    const card = document.createElement('div');
+    card.className = 'deployment-card';
+    card.style.borderLeft = '4px solid #0078d4';
+    const badgeClass = `status-badge ${sql.status === 'active' ? 'active' : sql.status === 'creating' ? 'creating' : sql.status === 'destroying' ? 'destroying' : 'failed'}`;
+    card.innerHTML = `
+      <div class="deployment-header">
+        <span class="deployment-name">${sql.serverName} / ${sql.dbName}</span>
+        <span class="${badgeClass}">${sql.status}</span>
+      </div>
+      <div class="deployment-details-grid">
+        <span class="detail-lbl">Admin Login</span><span class="detail-val">${sql.adminUsername}</span>
+        <span class="detail-lbl">Edition / SKU</span><span class="detail-val">${sql.sku}</span>
+        <span class="detail-lbl">Location</span><span class="detail-val">${sql.region}</span>
+        <span class="detail-lbl">Server FQDN</span><span class="detail-val" style="font-size:10px;word-break:break-all;">${sql.sqlServerFqdn || 'N/A'}</span>
+        <span class="detail-lbl">Created At</span><span class="detail-val">${new Date(sql.createdAt).toLocaleString()}</span>
+      </div>
+      <div class="deployment-actions-bar">
+        <button type="button" class="ec2-btn-outline" onclick="startAzureLogStream('${sql.name}')">View Logs</button>
+        ${sql.status !== 'destroying' ? `<button type="button" class="ec2-btn-danger" onclick="triggerAzureSqlDestroy('${sql.name}')" ${hasPermission('azure', 'execute') ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;" title="No execute permission"'}>Destroy</button>` : ''}
+      </div>`;
+    container.appendChild(card);
+  });
+}
+
+function renderGcpVms() {
+  const container = document.getElementById('gcp-vm-resources-list');
+  if (!container) return;
+  if (activeGcpVms.length === 0) {
+    container.innerHTML = '<div class="empty-state-msg">No Google Compute VMs found.</div>';
+    return;
+  }
+  container.innerHTML = '';
+  activeGcpVms.forEach(vm => {
+    const card = document.createElement('div');
+    card.className = 'deployment-card';
+    card.style.borderLeft = '4px solid #ffcc00';
+    const badgeClass = `status-badge ${vm.status === 'active' ? 'active' : vm.status === 'creating' ? 'creating' : vm.status === 'destroying' ? 'destroying' : 'failed'}`;
+    card.innerHTML = `
+      <div class="deployment-header">
+        <span class="deployment-name">${vm.name}</span>
+        <span class="${badgeClass}">${vm.status}</span>
+      </div>
+      <div class="deployment-details-grid">
+        <span class="detail-lbl">Machine Type</span><span class="detail-val">${vm.machineType}</span>
+        <span class="detail-lbl">Project ID</span><span class="detail-val">${vm.project}</span>
+        <span class="detail-lbl">Zone</span><span class="detail-val">${vm.zone}</span>
+        <span class="detail-lbl">Public IP</span><span class="detail-val">${vm.publicIp || 'N/A'}</span>
+        <span class="detail-lbl">Created At</span><span class="detail-val">${new Date(vm.createdAt).toLocaleString()}</span>
+      </div>
+      <div class="deployment-actions-bar">
+        <button type="button" class="ec2-btn-outline" onclick="startGcpLogStream('${vm.name}')">View Logs</button>
+        ${vm.status === 'active' ? `<button type="button" class="ec2-btn-outline" onclick="startGcpStartupLogStream('${vm.name}')">Startup Logs</button>` : ''}
+        ${vm.status !== 'destroying' ? `<button type="button" class="ec2-btn-danger" onclick="triggerGcpVmDestroy('${vm.name}')" ${hasPermission('gcp', 'execute') ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;" title="No execute permission"'}>Destroy</button>` : ''}
+        ${vm.status === 'destroy-failed' || vm.status === 'failed' ? `<button type="button" class="ec2-btn-outline" style="border-color:#da3637;color:#f85149;" onclick="triggerGcpVmDestroy('${vm.name}', true)">Force Delete</button>` : ''}
+      </div>`;
+    container.appendChild(card);
+  });
+}
+
+function renderGcpVpcs() {
+  const container = document.getElementById('gcp-vpc-resources-list');
+  if (!container) return;
+  if (activeGcpVpcs.length === 0) {
+    container.innerHTML = '<div class="empty-state-msg">No networks found.</div>';
+    return;
+  }
+  container.innerHTML = '';
+  activeGcpVpcs.forEach(vpc => {
+    const card = document.createElement('div');
+    card.className = 'deployment-card';
+    card.style.borderLeft = '4px solid #ffcc00';
+    const badgeClass = `status-badge ${vpc.status === 'active' ? 'active' : vpc.status === 'creating' ? 'creating' : vpc.status === 'destroying' ? 'destroying' : 'failed'}`;
+    card.innerHTML = `
+      <div class="deployment-header">
+        <span class="deployment-name">${vpc.name}</span>
+        <span class="${badgeClass}">${vpc.status}</span>
+      </div>
+      <div class="deployment-details-grid">
+        <span class="detail-lbl">Project ID</span><span class="detail-val">${vpc.project}</span>
+        <span class="detail-lbl">Region</span><span class="detail-val">${vpc.region}</span>
+        <span class="detail-lbl">VPC ID</span><span class="detail-val" style="font-size:10px;word-break:break-all;">${vpc.vpcId || 'N/A'}</span>
+        <span class="detail-lbl">Created At</span><span class="detail-val">${new Date(vpc.createdAt).toLocaleString()}</span>
+      </div>
+      <div class="deployment-actions-bar">
+        <button type="button" class="ec2-btn-outline" onclick="startGcpLogStream('${vpc.name}')">View Logs</button>
+        ${vpc.status !== 'destroying' ? `<button type="button" class="ec2-btn-danger" onclick="triggerGcpVpcDestroy('${vpc.name}')" ${hasPermission('gcp', 'execute') ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;" title="No execute permission"'}>Destroy</button>` : ''}
+      </div>`;
+    container.appendChild(card);
+  });
+}
+
+function renderGcpGcs() {
+  const container = document.getElementById('gcp-gcs-resources-list');
+  if (!container) return;
+  if (activeGcpGcs.length === 0) {
+    container.innerHTML = '<div class="empty-state-msg">No buckets found.</div>';
+    return;
+  }
+  container.innerHTML = '';
+  activeGcpGcs.forEach(bucket => {
+    const card = document.createElement('div');
+    card.className = 'deployment-card';
+    card.style.borderLeft = '4px solid #ffcc00';
+    const badgeClass = `status-badge ${bucket.status === 'active' ? 'active' : bucket.status === 'creating' ? 'creating' : bucket.status === 'destroying' ? 'destroying' : 'failed'}`;
+    card.innerHTML = `
+      <div class="deployment-header">
+        <span class="deployment-name">${bucket.name}</span>
+        <span class="${badgeClass}">${bucket.status}</span>
+      </div>
+      <div class="deployment-details-grid">
+        <span class="detail-lbl">Project ID</span><span class="detail-val">${bucket.project}</span>
+        <span class="detail-lbl">Storage Class</span><span class="detail-val">${bucket.storageClass}</span>
+        <span class="detail-lbl">Location</span><span class="detail-val">${bucket.location}</span>
+        <span class="detail-lbl">Bucket URL</span><span class="detail-val" style="font-size:10px;word-break:break-all;">${bucket.bucketUrl || 'N/A'}</span>
+        <span class="detail-lbl">Created At</span><span class="detail-val">${new Date(bucket.createdAt).toLocaleString()}</span>
+      </div>
+      <div class="deployment-actions-bar">
+        <button type="button" class="ec2-btn-outline" onclick="startGcpLogStream('${bucket.name}')">View Logs</button>
+        ${bucket.status !== 'destroying' ? `<button type="button" class="ec2-btn-danger" onclick="triggerGcpGcsDestroy('${bucket.name}')" ${hasPermission('gcp', 'execute') ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;" title="No execute permission"'}>Destroy</button>` : ''}
+      </div>`;
+    container.appendChild(card);
+  });
+}
+
+function renderGcpSqls() {
+  const container = document.getElementById('gcp-sql-resources-list');
+  if (!container) return;
+  if (activeGcpSqls.length === 0) {
+    container.innerHTML = '<div class="empty-state-msg">No SQL databases found.</div>';
+    return;
+  }
+  container.innerHTML = '';
+  activeGcpSqls.forEach(sql => {
+    const card = document.createElement('div');
+    card.className = 'deployment-card';
+    card.style.borderLeft = '4px solid #ffcc00';
+    const badgeClass = `status-badge ${sql.status === 'active' ? 'active' : sql.status === 'creating' ? 'creating' : sql.status === 'destroying' ? 'destroying' : 'failed'}`;
+    card.innerHTML = `
+      <div class="deployment-header">
+        <span class="deployment-name">${sql.name}</span>
+        <span class="${badgeClass}">${sql.status}</span>
+      </div>
+      <div class="deployment-details-grid">
+        <span class="detail-lbl">Project ID</span><span class="detail-val">${sql.project}</span>
+        <span class="detail-lbl">Engine</span><span class="detail-val">${sql.databaseVersion}</span>
+        <span class="detail-lbl">Tier</span><span class="detail-val">${sql.tier}</span>
+        <span class="detail-lbl">Region</span><span class="detail-val">${sql.region}</span>
+        <span class="detail-lbl">Connection</span><span class="detail-val" style="font-size:10px;word-break:break-all;">${sql.connectionName || 'N/A'}</span>
+        <span class="detail-lbl">Created At</span><span class="detail-val">${new Date(sql.createdAt).toLocaleString()}</span>
+      </div>
+      <div class="deployment-actions-bar">
+        <button type="button" class="ec2-btn-outline" onclick="startGcpLogStream('${sql.name}')">View Logs</button>
+        ${sql.status !== 'destroying' ? `<button type="button" class="ec2-btn-danger" onclick="triggerGcpSqlDestroy('${sql.name}')" ${hasPermission('gcp', 'execute') ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;" title="No execute permission"'}>Destroy</button>` : ''}
+      </div>`;
+    container.appendChild(card);
+  });
+}
+
+async function triggerAzureVmDestroy(name, force = false) {
+  if (!hasPermission('azure', 'execute')) return alert('Permission Denied.');
+  const promptText = force
+    ? `Are you sure you want to FORCE delete Azure VM "${name}" locally? This will remove all local files and configuration database entries, bypassing the Azure connection. Real cloud resources will NOT be deleted.`
+    : `Destroy VM "${name}"?`;
+  if (!confirm(promptText)) return;
+  document.querySelector('#azure-provider-panel [data-tab="azure-vm-deployments"]').click();
+  startAzureLogStream(name);
+  try {
+    const res = await fetch('/api/azure/vm/destroy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, force }) });
+    if (!res.ok) throw new Error((await res.json()).error);
+    fetchAzureResources();
+  } catch (err) { alert(err.message); }
+}
+
+async function triggerAzureVnetDestroy(name) {
+  if (!hasPermission('azure', 'execute')) return alert('Permission Denied.');
+  if (!confirm(`Destroy VNet "${name}"?`)) return;
+  document.querySelector('#azure-provider-panel [data-tab="azure-vnet-list"]').click();
+  startAzureLogStream(name);
+  try {
+    const res = await fetch('/api/azure/vnet/destroy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+    if (!res.ok) throw new Error((await res.json()).error);
+    fetchAzureResources();
+  } catch (err) { alert(err.message); }
+}
+
+async function triggerAzureBlobDestroy(name) {
+  if (!hasPermission('azure', 'execute')) return alert('Permission Denied.');
+  if (!confirm(`Destroy Storage Account "${name}"?`)) return;
+  document.querySelector('#azure-provider-panel [data-tab="azure-blob-list"]').click();
+  startAzureLogStream(name);
+  try {
+    const res = await fetch('/api/azure/blob/destroy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+    if (!res.ok) throw new Error((await res.json()).error);
+    fetchAzureResources();
+  } catch (err) { alert(err.message); }
+}
+
+async function triggerAzureSqlDestroy(name) {
+  if (!hasPermission('azure', 'execute')) return alert('Permission Denied.');
+  if (!confirm(`Destroy SQL Server "${name}"?`)) return;
+  document.querySelector('#azure-provider-panel [data-tab="azure-sql-list"]').click();
+  startAzureLogStream(name);
+  try {
+    const res = await fetch('/api/azure/sql/destroy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+    if (!res.ok) throw new Error((await res.json()).error);
+    fetchAzureResources();
+  } catch (err) { alert(err.message); }
+}
+
+async function triggerGcpVmDestroy(name, force = false) {
+  if (!hasPermission('gcp', 'execute')) return alert('Permission Denied.');
+  const promptText = force
+    ? `Are you sure you want to FORCE delete GCP VM "${name}" locally? This will remove all local files and configuration database entries, bypassing the GCP connection. Real cloud resources will NOT be deleted.`
+    : `Destroy GCP VM "${name}"?`;
+  if (!confirm(promptText)) return;
+  document.querySelector('#gcp-provider-panel [data-tab="gcp-vm-deployments"]').click();
+  startGcpLogStream(name);
+  try {
+    const res = await fetch('/api/gcp/vm/destroy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, force }) });
+    if (!res.ok) throw new Error((await res.json()).error);
+    fetchGcpResources();
+  } catch (err) { alert(err.message); }
+}
+
+async function triggerGcpVpcDestroy(name) {
+  if (!hasPermission('gcp', 'execute')) return alert('Permission Denied.');
+  if (!confirm(`Destroy GCP VPC "${name}"?`)) return;
+  document.querySelector('#gcp-provider-panel [data-tab="gcp-vpc-list"]').click();
+  startGcpLogStream(name);
+  try {
+    const res = await fetch('/api/gcp/vpc/destroy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+    if (!res.ok) throw new Error((await res.json()).error);
+    fetchGcpResources();
+  } catch (err) { alert(err.message); }
+}
+
+async function triggerGcpGcsDestroy(name) {
+  if (!hasPermission('gcp', 'execute')) return alert('Permission Denied.');
+  if (!confirm(`Destroy GCP Bucket "${name}"?`)) return;
+  document.querySelector('#gcp-provider-panel [data-tab="gcp-gcs-list"]').click();
+  startGcpLogStream(name);
+  try {
+    const res = await fetch('/api/gcp/gcs/destroy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+    if (!res.ok) throw new Error((await res.json()).error);
+    fetchGcpResources();
+  } catch (err) { alert(err.message); }
+}
+
+async function triggerGcpSqlDestroy(name) {
+  if (!hasPermission('gcp', 'execute')) return alert('Permission Denied.');
+  if (!confirm(`Destroy Cloud SQL Instance "${name}"?`)) return;
+  document.querySelector('#gcp-provider-panel [data-tab="gcp-sql-list"]').click();
+  startGcpLogStream(name);
+  try {
+    const res = await fetch('/api/gcp/sql/destroy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+    if (!res.ok) throw new Error((await res.json()).error);
+    fetchGcpResources();
+  } catch (err) { alert(err.message); }
+}
+
+function initAzureUI() {
+  const azureBtns = document.querySelectorAll('#azure-provider-panel .svc-btn');
+  const azurePanels = document.querySelectorAll('#azure-provider-panel .service-panel');
+  azureBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const svc = btn.dataset.service;
+      azureBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      azurePanels.forEach(p => p.classList.remove('active'));
+      document.getElementById(`svc-panel-${svc}`).classList.add('active');
+    });
+  });
+
+  setupAzureTabs('azure-vm', fetchAzureVmPreview);
+  setupUserdataControls('azure-vm');
+  setupProfileControls('azure-vm');
+  setupAzureTabs('azure-vnet', fetchAzureVnetPreview);
+  setupAzureTabs('azure-blob', fetchAzureBlobPreview);
+  setupAzureTabs('azure-sql', fetchAzureSqlPreview);
+  setupLogsTabControls('azure');
+
+  const vmName = document.getElementById('azure-vm-name');
+  if (vmName) vmName.addEventListener('input', updateAzureVmSummary);
+  const vmSize = document.getElementById('azure-vm-size');
+  if (vmSize) vmSize.addEventListener('change', updateAzureVmSummary);
+  const vmRegion = document.getElementById('azure-vm-region');
+  if (vmRegion) vmRegion.addEventListener('change', updateAzureVmSummary);
+
+  document.getElementById('btn-azure-vm-action').addEventListener('click', () => handleAzureAction('azure-vm', fetchAzureVmPreview, deployAzureVm));
+  document.getElementById('btn-azure-vnet-action').addEventListener('click', () => handleAzureAction('azure-vnet', fetchAzureVnetPreview, deployAzureVnet));
+  document.getElementById('btn-azure-blob-action').addEventListener('click', () => handleAzureAction('azure-blob', fetchAzureBlobPreview, deployAzureBlob));
+  document.getElementById('btn-azure-sql-action').addEventListener('click', () => handleAzureAction('azure-sql', fetchAzureSqlPreview, deployAzureSql));
+}
+
+function setupAzureTabs(panelSvc, previewFn) {
+  const tabs = document.querySelectorAll(`#svc-panel-${panelSvc} .ec2-tab`);
+  const contents = document.querySelectorAll(`#svc-panel-${panelSvc} .ec2-tab-content`);
+  const btnWrapper = document.getElementById(`${panelSvc}-deploy-btn-wrapper`);
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const targetTab = tab.dataset.tab;
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      contents.forEach(c => c.classList.toggle('active', c.id === `tab-content-${targetTab}`));
+      
+      const btnText = document.getElementById(`btn-${panelSvc}-text`);
+      if (targetTab.endsWith('-deployments') || targetTab.endsWith('-list')) {
+        if (btnWrapper) btnWrapper.style.display = 'none';
+      } else {
+        if (btnWrapper) btnWrapper.style.display = 'block';
+        if (targetTab.endsWith('-preview')) {
+          if (btnText) btnText.innerHTML = '🚀 Deploy Configuration';
+          previewFn();
+        } else {
+          const friendlyNames = {
+            'azure-vm': '🔷&nbsp; Preview VM Configuration',
+            'azure-vnet': '🔷&nbsp; Preview VNet Configuration',
+            'azure-blob': '🔷&nbsp; Preview Storage Configuration',
+            'azure-sql': '🔷&nbsp; Preview Database Configuration'
+          };
+          if (btnText) btnText.innerHTML = friendlyNames[panelSvc];
+        }
+      }
+    });
+  });
+}
+
+function handleAzureAction(panelSvc, previewFn, deployFn) {
+  const activeTab = document.querySelector(`#svc-panel-${panelSvc} .ec2-tab.active`);
+  const targetTab = activeTab ? activeTab.dataset.tab : '';
+  if (targetTab.endsWith('-preview')) {
+    deployFn();
+  } else {
+    const previewTab = document.querySelector(`#svc-panel-${panelSvc} .ec2-tab[data-tab="${panelSvc}-preview"]`);
+    if (previewTab) previewTab.click();
+  }
+}
+
+function updateAzureVmSummary() {
+  const name = document.getElementById('azure-vm-name').value;
+  const size = document.getElementById('azure-vm-size').value;
+  const regionSelect = document.getElementById('azure-vm-region');
+  const regionLabel = regionSelect.options[regionSelect.selectedIndex].textContent;
+
+  document.getElementById('azure-vm-summary-name').textContent = name;
+  document.getElementById('azure-vm-summary-size').textContent = size;
+  document.getElementById('azure-vm-summary-region').textContent = regionLabel;
+}
+
+async function fetchAzureVmPreview() {
+  const name = document.getElementById('azure-vm-name').value;
+  const size = document.getElementById('azure-vm-size').value;
+  const region = document.getElementById('azure-vm-region').value;
+  const adminUsername = document.getElementById('azure-vm-username').value;
+  const adminPassword = document.getElementById('azure-vm-password').value;
+  const userData = document.getElementById('azure-vm-user-data').value;
+  const azureProfile = document.getElementById('azure-vm-profile') ? document.getElementById('azure-vm-profile').value : 'default';
+
+  try {
+    const res = await fetch('/api/azure/vm/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, size, region, adminUsername, adminPassword, userData, azureProfile })
+    });
+    const data = await res.json();
+    document.getElementById('azure-vm-preview-main-tf').textContent = data.mainTf;
+    document.getElementById('azure-vm-preview-tfvars').textContent = data.tfvars;
+  } catch (err) {
+    document.getElementById('azure-vm-preview-main-tf').textContent = 'Error: ' + err.message;
+  }
+}
+
+async function deployAzureVm() {
+  const name = document.getElementById('azure-vm-name').value;
+  const size = document.getElementById('azure-vm-size').value;
+  const region = document.getElementById('azure-vm-region').value;
+  const adminUsername = document.getElementById('azure-vm-username').value;
+  const adminPassword = document.getElementById('azure-vm-password').value;
+  const userData = document.getElementById('azure-vm-user-data').value;
+  const azureProfile = document.getElementById('azure-vm-profile') ? document.getElementById('azure-vm-profile').value : 'default';
+
+  document.querySelector('#azure-provider-panel [data-tab="azure-vm-deployments"]').click();
+  startAzureLogStream(name);
+
+  try {
+    const res = await fetch('/api/azure/vm/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, size, region, adminUsername, adminPassword, userData, azureProfile })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    fetchAzureResources();
+  } catch (err) {
+    appendAzureLogLine('[ERROR] Deploy Error: ' + err.message);
+  }
+}
+
+async function fetchAzureVnetPreview() {
+  const name = document.getElementById('azure-vnet-name').value;
+  const region = document.getElementById('azure-vnet-region').value;
+  const cidr = document.getElementById('azure-vnet-cidr').value;
+  try {
+    const res = await fetch('/api/azure/vnet/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, region, cidr })
+    });
+    const data = await res.json();
+    document.getElementById('azure-vnet-preview-main-tf').textContent = data.mainTf;
+  } catch (err) {
+    document.getElementById('azure-vnet-preview-main-tf').textContent = 'Error: ' + err.message;
+  }
+}
+
+async function deployAzureVnet() {
+  const name = document.getElementById('azure-vnet-name').value;
+  const region = document.getElementById('azure-vnet-region').value;
+  const cidr = document.getElementById('azure-vnet-cidr').value;
+
+  document.querySelector('#azure-provider-panel [data-tab="azure-vnet-list"]').click();
+  startAzureLogStream(name);
+
+  try {
+    const res = await fetch('/api/azure/vnet/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, region, cidr })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    fetchAzureResources();
+  } catch (err) {
+    appendAzureLogLine('[ERROR] Deploy Error: ' + err.message);
+  }
+}
+
+async function fetchAzureBlobPreview() {
+  const name = document.getElementById('azure-blob-name').value;
+  const region = document.getElementById('azure-blob-region').value;
+  const replication = document.getElementById('azure-blob-replication').value;
+  try {
+    const res = await fetch('/api/azure/blob/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, region, replication })
+    });
+    const data = await res.json();
+    document.getElementById('azure-blob-preview-main-tf').textContent = data.mainTf;
+  } catch (err) {
+    document.getElementById('azure-blob-preview-main-tf').textContent = 'Error: ' + err.message;
+  }
+}
+
+async function deployAzureBlob() {
+  const name = document.getElementById('azure-blob-name').value;
+  const region = document.getElementById('azure-blob-region').value;
+  const replication = document.getElementById('azure-blob-replication').value;
+
+  document.querySelector('#azure-provider-panel [data-tab="azure-blob-list"]').click();
+  startAzureLogStream(name);
+
+  try {
+    const res = await fetch('/api/azure/blob/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, region, replication })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    fetchAzureResources();
+  } catch (err) {
+    appendAzureLogLine('[ERROR] Deploy Error: ' + err.message);
+  }
+}
+
+async function fetchAzureSqlPreview() {
+  const serverName = document.getElementById('azure-sql-server-name').value;
+  const dbName = document.getElementById('azure-sql-db-name').value;
+  const adminUsername = document.getElementById('azure-sql-username').value;
+  const adminPassword = document.getElementById('azure-sql-password').value;
+  const sku = document.getElementById('azure-sql-sku').value;
+  const region = document.getElementById('azure-sql-region').value;
+  try {
+    const res = await fetch('/api/azure/sql/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ serverName, dbName, adminUsername, adminPassword, sku, region })
+    });
+    const data = await res.json();
+    document.getElementById('azure-sql-preview-main-tf').textContent = data.mainTf;
+  } catch (err) {
+    document.getElementById('azure-sql-preview-main-tf').textContent = 'Error: ' + err.message;
+  }
+}
+
+async function deployAzureSql() {
+  const serverName = document.getElementById('azure-sql-server-name').value;
+  const dbName = document.getElementById('azure-sql-db-name').value;
+  const adminUsername = document.getElementById('azure-sql-username').value;
+  const adminPassword = document.getElementById('azure-sql-password').value;
+  const sku = document.getElementById('azure-sql-sku').value;
+  const region = document.getElementById('azure-sql-region').value;
+
+  document.querySelector('#azure-provider-panel [data-tab="azure-sql-list"]').click();
+  startAzureLogStream(serverName);
+
+  try {
+    const res = await fetch('/api/azure/sql/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ serverName, dbName, adminUsername, adminPassword, sku, region })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    fetchAzureResources();
+  } catch (err) {
+    appendAzureLogLine('[ERROR] Deploy Error: ' + err.message);
+  }
+}
+
+function initGcpUI() {
+  const gcpBtns = document.querySelectorAll('#gcp-provider-panel .svc-btn');
+  const gcpPanels = document.querySelectorAll('#gcp-provider-panel .service-panel');
+  gcpBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const svc = btn.dataset.service;
+      gcpBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      gcpPanels.forEach(p => p.classList.remove('active'));
+      document.getElementById(`svc-panel-${svc}`).classList.add('active');
+    });
+  });
+
+  setupGcpTabs('gcp-vm', fetchGcpVmPreview);
+  setupUserdataControls('gcp-vm');
+  setupProfileControls('gcp-vm');
+  setupGcpTabs('gcp-vpc', fetchGcpVpcPreview);
+  setupGcpTabs('gcp-gcs', fetchGcpGcsPreview);
+  setupGcpTabs('gcp-sql', fetchGcpSqlPreview);
+  setupLogsTabControls('gcp');
+
+  document.getElementById('btn-gcp-vm-action').addEventListener('click', () => handleGcpAction('gcp-vm', fetchGcpVmPreview, deployGcpVm));
+  document.getElementById('btn-gcp-vpc-action').addEventListener('click', () => handleGcpAction('gcp-vpc', fetchGcpVpcPreview, deployGcpVpc));
+  document.getElementById('btn-gcp-gcs-action').addEventListener('click', () => handleGcpAction('gcp-gcs', fetchGcpGcsPreview, deployGcpGcs));
+  document.getElementById('btn-gcp-sql-action').addEventListener('click', () => handleGcpAction('gcp-sql', fetchGcpSqlPreview, deployGcpSql));
+}
+
+function setupGcpTabs(panelSvc, previewFn) {
+  const tabs = document.querySelectorAll(`#svc-panel-${panelSvc} .ec2-tab`);
+  const contents = document.querySelectorAll(`#svc-panel-${panelSvc} .ec2-tab-content`);
+  const btnWrapper = document.getElementById(`${panelSvc}-deploy-btn-wrapper`);
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const targetTab = tab.dataset.tab;
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      contents.forEach(c => c.classList.toggle('active', c.id === `tab-content-${targetTab}`));
+      
+      const btnText = document.getElementById(`btn-${panelSvc}-text`);
+      if (targetTab.endsWith('-deployments') || targetTab.endsWith('-list')) {
+        if (btnWrapper) btnWrapper.style.display = 'none';
+      } else {
+        if (btnWrapper) btnWrapper.style.display = 'block';
+        if (targetTab.endsWith('-preview')) {
+          if (btnText) btnText.innerHTML = '🚀 Deploy Configuration';
+          previewFn();
+        } else {
+          const friendlyNames = {
+            'gcp-vm': '🟡&nbsp; Preview VM Configuration',
+            'gcp-vpc': '🟡&nbsp; Preview Network Configuration',
+            'gcp-gcs': '🟡&nbsp; Preview Bucket Configuration',
+            'gcp-sql': '🟡&nbsp; Preview Database Configuration'
+          };
+          if (btnText) btnText.innerHTML = friendlyNames[panelSvc];
+        }
+      }
+    });
+  });
+}
+
+function handleGcpAction(panelSvc, previewFn, deployFn) {
+  const activeTab = document.querySelector(`#svc-panel-${panelSvc} .ec2-tab.active`);
+  const targetTab = activeTab ? activeTab.dataset.tab : '';
+  if (targetTab.endsWith('-preview')) {
+    deployFn();
+  } else {
+    const previewTab = document.querySelector(`#svc-panel-${panelSvc} .ec2-tab[data-tab="${panelSvc}-preview"]`);
+    if (previewTab) previewTab.click();
+  }
+}
+
+async function fetchGcpVmPreview() {
+  const name = document.getElementById('gcp-vm-name').value;
+  const project = document.getElementById('gcp-vm-project').value;
+  const machineType = document.getElementById('gcp-vm-size').value;
+  const region = document.getElementById('gcp-vm-region').value;
+  const userData = document.getElementById('gcp-vm-user-data').value;
+  const gcpProfile = document.getElementById('gcp-vm-profile') ? document.getElementById('gcp-vm-profile').value : 'default';
+  try {
+    const res = await fetch('/api/gcp/vm/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, project, machineType, region, userData, gcpProfile })
+    });
+    const data = await res.json();
+    document.getElementById('gcp-vm-preview-main-tf').textContent = data.mainTf;
+    document.getElementById('gcp-vm-preview-tfvars').textContent = data.tfvars;
+  } catch (err) {
+    document.getElementById('gcp-vm-preview-main-tf').textContent = 'Error: ' + err.message;
+  }
+}
+
+async function deployGcpVm() {
+  const name = document.getElementById('gcp-vm-name').value;
+  const project = document.getElementById('gcp-vm-project').value;
+  const machineType = document.getElementById('gcp-vm-size').value;
+  const region = document.getElementById('gcp-vm-region').value;
+  const userData = document.getElementById('gcp-vm-user-data').value;
+  const gcpProfile = document.getElementById('gcp-vm-profile') ? document.getElementById('gcp-vm-profile').value : 'default';
+
+  document.querySelector('#gcp-provider-panel [data-tab="gcp-vm-deployments"]').click();
+  startGcpLogStream(name);
+
+  try {
+    const res = await fetch('/api/gcp/vm/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, project, machineType, region, userData, gcpProfile })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    fetchGcpResources();
+  } catch (err) {
+    appendGcpLogLine('[ERROR] Deploy Error: ' + err.message);
+  }
+}
+
+async function fetchGcpVpcPreview() {
+  const name = document.getElementById('gcp-vpc-name').value;
+  const project = document.getElementById('gcp-vpc-project').value;
+  const region = document.getElementById('gcp-vpc-region').value;
+  try {
+    const res = await fetch('/api/gcp/vpc/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, project, region })
+    });
+    const data = await res.json();
+    document.getElementById('gcp-vpc-preview-main-tf').textContent = data.mainTf;
+  } catch (err) {
+    document.getElementById('gcp-vpc-preview-main-tf').textContent = 'Error: ' + err.message;
+  }
+}
+
+async function deployGcpVpc() {
+  const name = document.getElementById('gcp-vpc-name').value;
+  const project = document.getElementById('gcp-vpc-project').value;
+  const region = document.getElementById('gcp-vpc-region').value;
+
+  document.querySelector('#gcp-provider-panel [data-tab="gcp-vpc-list"]').click();
+  startGcpLogStream(name);
+
+  try {
+    const res = await fetch('/api/gcp/vpc/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, project, region })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    fetchGcpResources();
+  } catch (err) {
+    appendGcpLogLine('[ERROR] Deploy Error: ' + err.message);
+  }
+}
+
+async function fetchGcpGcsPreview() {
+  const name = document.getElementById('gcp-gcs-name').value;
+  const project = document.getElementById('gcp-gcs-project').value;
+  const location = document.getElementById('gcp-gcs-location').value;
+  const storageClass = document.getElementById('gcp-gcs-class').value;
+  try {
+    const res = await fetch('/api/gcp/gcs/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, project, location, storageClass })
+    });
+    const data = await res.json();
+    document.getElementById('gcp-gcs-preview-main-tf').textContent = data.mainTf;
+  } catch (err) {
+    document.getElementById('gcp-gcs-preview-main-tf').textContent = 'Error: ' + err.message;
+  }
+}
+
+async function deployGcpGcs() {
+  const name = document.getElementById('gcp-gcs-name').value;
+  const project = document.getElementById('gcp-gcs-project').value;
+  const location = document.getElementById('gcp-gcs-location').value;
+  const storageClass = document.getElementById('gcp-gcs-class').value;
+
+  document.querySelector('#gcp-provider-panel [data-tab="gcp-gcs-list"]').click();
+  startGcpLogStream(name);
+
+  try {
+    const res = await fetch('/api/gcp/gcs/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, project, location, storageClass })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    fetchGcpResources();
+  } catch (err) {
+    appendGcpLogLine('[ERROR] Deploy Error: ' + err.message);
+  }
+}
+
+async function fetchGcpSqlPreview() {
+  const name = document.getElementById('gcp-sql-name').value;
+  const project = document.getElementById('gcp-sql-project').value;
+  const databaseVersion = document.getElementById('gcp-sql-engine').value;
+  const rootPassword = document.getElementById('gcp-sql-password').value;
+  const tier = document.getElementById('gcp-sql-tier').value;
+  const region = document.getElementById('gcp-sql-region').value;
+  try {
+    const res = await fetch('/api/gcp/sql/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, project, databaseVersion, rootPassword, tier, region })
+    });
+    const data = await res.json();
+    document.getElementById('gcp-sql-preview-main-tf').textContent = data.mainTf;
+  } catch (err) {
+    document.getElementById('gcp-sql-preview-main-tf').textContent = 'Error: ' + err.message;
+  }
+}
+
+async function deployGcpSql() {
+  const name = document.getElementById('gcp-sql-name').value;
+  const project = document.getElementById('gcp-sql-project').value;
+  const databaseVersion = document.getElementById('gcp-sql-engine').value;
+  const rootPassword = document.getElementById('gcp-sql-password').value;
+  const tier = document.getElementById('gcp-sql-tier').value;
+  const region = document.getElementById('gcp-sql-region').value;
+
+  document.querySelector('#gcp-provider-panel [data-tab="gcp-sql-list"]').click();
+  startGcpLogStream(name);
+
+  try {
+    const res = await fetch('/api/gcp/sql/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, project, databaseVersion, rootPassword, tier, region })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    fetchGcpResources();
+  } catch (err) {
+    appendGcpLogLine('[ERROR] Deploy Error: ' + err.message);
+  }
+}
+

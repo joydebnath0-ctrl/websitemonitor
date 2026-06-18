@@ -2001,6 +2001,201 @@ body.light-theme .db-engine-card {
   color: #232f3e;
 }
 
+  background: #ffffff !important;
+  border-color: #d5dbdb !important;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15) !important;
+}
+
+body.light-theme #pwd-modal-title,
+body.light-theme #perms-modal-title {
+  color: #232f3e !important;
+}
+
+body.light-theme #pwd-modal-target-info,
+body.light-theme #perms-modal-target-info {
+  background: #f2f3f3 !important;
+  border-color: #d5dbdb !important;
+  color: #545b64 !important;
+}
+
+body.light-theme #perms-modal-overlay table,
+body.light-theme #perms-modal-overlay label,
+body.light-theme #perms-modal-overlay td {
+  color: #16191f !important;
+}
+
+body.light-theme #perms-modal-overlay > div > div,
+body.light-theme #perms-modal-overlay table tr {
+  background: #ffffff !important;
+  border-color: #d5dbdb !important;
+}
+
+body.light-theme #perms-modal-overlay table th {
+  color: #545b64 !important;
+  border-bottom-color: #d5dbdb !important;
+}
+
+body.light-theme #perms-modal-overlay table td {
+  border-bottom-color: #eaeded !important;
+}
+
+body.light-theme #permissions-section {
+  background: #ffffff !important;
+  border-color: #d5dbdb !important;
+}
+
+body.light-theme #permissions-section p {
+  color: #545b64 !important;
+}
+
+body.light-theme #permissions-section table {
+  color: #16191f !important;
+}
+
+body.light-theme #permissions-section table th {
+  color: #545b64 !important;
+  border-bottom-color: #d5dbdb !important;
+}
+
+body.light-theme #permissions-section table td {
+  border-bottom-color: #eaeded !important;
+}
+
+body.light-theme .summary-card-vpc {
+  background: #f0f7ff !important;
+  border-color: #cbd5e1 !important;
+}
+
+body.light-theme .summary-card-s3 {
+  background: #fefcf0 !important;
+  border-color: #fef3c7 !important;
+}
+
+body.light-theme .summary-card-cf,
+body.light-theme .cf-live-card {
+  background: #fdfafd !important;
+  border-color: #d1c4e9 !important;
+}
+
+body.light-theme .summary-card div,
+body.light-theme .cf-live-card div {
+  color: #545b64 !important;
+}
+
+body.light-theme .summary-card span,
+body.light-theme .cf-live-card span {
+  color: #16191f !important;
+}
+
+body.light-theme .ec2-logs-header {
+  background: #ffffff !important;
+  border-bottom: 1px solid #d5dbdb !important;
+}
+
+body.light-theme .ec2-logs-title {
+  color: #232f3e !important;
+}
+
+body.light-theme #btn-clear-logs {
+  border-color: #d5dbdb !important;
+  color: #545b64 !important;
+}
+
+body.light-theme #btn-clear-logs:hover {
+  background: #f2f3f3 !important;
+  color: #16191f !important;
+}
+
+body.light-theme #ssh-connect-banner,
+body.light-theme #vpc-created-banner,
+body.light-theme #s3-created-banner,
+body.light-theme #cf-created-banner {
+  background: #ffffff !important;
+  border-top: 1px solid #d5dbdb !important;
+}
+
+body.light-theme #ssh-connect-banner > div {
+  background: #f3faf5 !important;
+  border-color: #def7ec !important;
+}
+
+body.light-theme #ssh-connect-banner p {
+  color: #03543f !important;
+}
+
+body.light-theme #vpc-created-banner > div {
+  background: #f0f7ff !important;
+  border-color: #cbd5e1 !important;
+}
+
+body.light-theme #vpc-created-banner p {
+  color: #0066cc !important;
+}
+
+body.light-theme #s3-created-banner > div {
+  background: #fefcf0 !important;
+  border-color: #fef3c7 !important;
+}
+
+body.light-theme #s3-created-banner p {
+  color: #b58900 !important;
+}
+
+body.light-theme .toggle-slider {
+  background: #d5dbdb;
+}
+
+body.light-theme .toggle-slider::before {
+  background: #ffffff;
+}
+
+body.light-theme #eip-container {
+  background: #ffffff !important;
+  border-color: #d5dbdb !important;
+}
+
+body.light-theme #eip-container p {
+  color: #545b64 !important;
+}
+
+body.light-theme #eip-container p:first-of-type {
+  color: #232f3e !important;
+}
+
+/* Database Engine Selection Cards */
+.db-engine-card {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 12px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+  text-align: center;
+  user-select: none;
+}
+
+.db-engine-card:hover {
+  border-color: #8b949e;
+  background-color: #1f242c;
+}
+
+.db-engine-card.active {
+  border-color: #a371f7;
+  background-color: rgba(163, 113, 247, 0.1);
+  box-shadow: 0 0 0 1px #a371f7;
+}
+
+/* Light theme overrides for database cards */
+body.light-theme .db-engine-card {
+  background: #ffffff;
+  border-color: #d5dbdb;
+  color: #232f3e;
+}
+
 body.light-theme .db-engine-card:hover {
   border-color: #aab7b7;
   background-color: #f8f9fa;
@@ -2011,4 +2206,117 @@ body.light-theme .db-engine-card.active {
   background-color: rgba(124, 58, 237, 0.05);
   box-shadow: 0 0 0 1px #7c3aed;
   color: #232f3e;
+}
+
+/* Provider Switcher styles */
+.cloud-provider-switcher {
+  display: flex;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+  margin-left: 20px;
+}
+
+.provider-btn {
+  background: transparent;
+  border: none;
+  color: #8b949e;
+  padding: 6px 14px;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.provider-btn:hover {
+  color: #c9d1d9;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.provider-btn.active[data-provider="aws"] {
+  background: #f78166;
+  color: #0d1117;
+  font-weight: 600;
+}
+
+.provider-btn.active[data-provider="azure"] {
+  background: #0078d4;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.provider-btn.active[data-provider="gcp"] {
+  background: #ffcc00;
+  color: #0d1117;
+  font-weight: 600;
+}
+
+.provider-icon {
+  font-size: 13px;
+}
+
+/* Service Panel styling */
+.service-panel {
+  display: none;
+}
+
+.service-panel.active {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Provider Panel wrapper visibility */
+.provider-panel {
+  display: none;
+  height: 100%;
+  flex-direction: column;
+}
+
+.provider-panel.active {
+  display: flex;
+}
+
+/* Azure and GCP theme support */
+.azure-theme .ec2-brand-title {
+  color: #0078d4 !important;
+}
+.gcp-theme .ec2-brand-title {
+  color: #ffcc00 !important;
+}
+
+body.light-theme .cloud-provider-switcher {
+  background: #f6f8fa;
+  border-color: #d0d7de;
+}
+
+body.light-theme .provider-btn {
+  color: #57606a;
+}
+
+body.light-theme .provider-btn:hover {
+  color: #24292f;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+body.light-theme .provider-btn.active[data-provider="aws"] {
+  background: #f78166;
+  color: #ffffff;
+}
+
+body.light-theme .provider-btn.active[data-provider="azure"] {
+  background: #0078d4;
+  color: #ffffff;
+}
+
+body.light-theme .provider-btn.active[data-provider="gcp"] {
+  background: #ffcc00;
+  color: #24292f;
 }
