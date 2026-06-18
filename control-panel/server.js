@@ -990,18 +990,30 @@ variable "instance_count" {
   default = 1
 }
 
+resource "random_string" "sg_suffix" {
+  length  = 4
+  special = false
+  upper   = false
+}
+
+resource "random_string" "key_suffix" {
+  length  = 4
+  special = false
+  upper   = false
+}
+
 resource "tls_private_key" "key" {
   algorithm = "RSA"
   rsa_bits  = 4096
 }
 
 resource "aws_key_pair" "key" {
-  key_name   = var.key_name
+  key_name   = "\${var.key_name}-\${random_string.key_suffix.result}"
   public_key = tls_private_key.key.public_key_openssh
 }
 
 resource "aws_security_group" "sg" {
-  name        = "\${var.instance_name}-sg"
+  name        = "\${var.instance_name}-sg-\${random_string.sg_suffix.result}"
   description = "Security group for \${var.instance_name}"
   vpc_id      = var.vpc_id != "" ? var.vpc_id : null
 
