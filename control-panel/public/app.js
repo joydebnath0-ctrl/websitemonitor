@@ -995,7 +995,16 @@ function updateEC2Summary() {
   let resolvedAmi = 'ami-unknown';
   if (os === 'custom') resolvedAmi = document.getElementById('custom-ami-id').value.trim() || 'custom-input';
   else if (OS_AMI_MAP[os]) resolvedAmi = OS_AMI_MAP[os][region] || 'ami-not-available';
-  document.getElementById('os-ami-id-info').textContent = resolvedAmi;
+
+  // CPU Architecture Mismatch Check
+  const isArmAMI = os.includes('-arm');
+  const isArmInstance = type.startsWith('t4g') || type.includes('g.');
+  const osAmiInfoEl = document.getElementById('os-ami-id-info');
+  if (isArmAMI && !isArmInstance) {
+    osAmiInfoEl.innerHTML = `<span style="color:#ff7b72; font-weight:bold;">⚠️ CPU Mismatch: ${resolvedAmi} (Arm64) is incompatible with ${type} (x86_64). Please select an (x86_64) OS image.</span>`;
+  } else {
+    osAmiInfoEl.textContent = resolvedAmi;
+  }
   document.getElementById('summary-name').textContent = name || '—';
   document.getElementById('summary-profile').textContent = profile;
   document.getElementById('summary-region').textContent = region;
@@ -1216,6 +1225,17 @@ function validateEC2Form() {
   const diskErr = document.getElementById('err-disk-size');
   diskErr.style.display = 'none';
   if (isNaN(disk) || disk < 8 || disk > 16384) { diskErr.textContent = 'Disk size must be between 8 and 16384 GB'; diskErr.style.display = 'block'; valid = false; }
+
+  // Architecture validation check
+  const os = document.getElementById('os-image').value;
+  const type = document.getElementById('instance-type').value;
+  const isArmAMI = os.includes('-arm');
+  const isArmInstance = type.startsWith('t4g') || type.includes('g.');
+  if (isArmAMI && !isArmInstance) {
+    alert(`CPU Architecture Mismatch:\nThe selected OS Image is Arm64 but the selected Instance Type (${type}) is x86_64.\n\nPlease select an (x86_64) OS image or a compatible Arm64 instance type.`);
+    valid = false;
+    errorTab = 'ec2-basic';
+  }
   
   const keyNameInput = document.getElementById('ec2-key-name');
   const keyName = keyNameInput ? keyNameInput.value.trim() : '';
