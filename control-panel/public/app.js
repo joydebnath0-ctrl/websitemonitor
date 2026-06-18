@@ -49,7 +49,7 @@ const REGIONS = [
 const INSTANCE_TYPES = [
   // T3 Family
   { value: "t3.nano",     label: "t3.nano — 2 vCPU, 0.5 GB RAM",   price: "$0.0052/hr" },
-  { value: "t3.micro",    label: "t3.micro — 2 vCPU, 1 GB RAM",    price: "$0.0104/hr" },
+  { value: "t3.micro",    label: "t3.micro — 2 vCPU, 1 GB RAM [Free Tier eligible]",    price: "$0.0104/hr" },
   { value: "t3.small",    label: "t3.small — 2 vCPU, 2 GB RAM",    price: "$0.0208/hr" },
   { value: "t3.medium",   label: "t3.medium — 2 vCPU, 4 GB RAM",   price: "$0.0416/hr" },
   { value: "t3.large",    label: "t3.large — 2 vCPU, 8 GB RAM",    price: "$0.0832/hr" },
@@ -67,7 +67,7 @@ const INSTANCE_TYPES = [
 
   // T2 Family (Burstable)
   { value: "t2.nano",     label: "t2.nano — 1 vCPU, 0.5 GB RAM",   price: "$0.0058/hr" },
-  { value: "t2.micro",    label: "t2.micro — 1 vCPU, 1 GB RAM",    price: "$0.0116/hr" },
+  { value: "t2.micro",    label: "t2.micro — 1 vCPU, 1 GB RAM [Free Tier eligible]",    price: "$0.0116/hr" },
   { value: "t2.small",    label: "t2.small — 1 vCPU, 2 GB RAM",    price: "$0.023/hr" },
   { value: "t2.medium",   label: "t2.medium — 2 vCPU, 4 GB RAM",   price: "$0.0464/hr" },
   { value: "t2.large",    label: "t2.large — 2 vCPU, 8 GB RAM",    price: "$0.0928/hr" },
