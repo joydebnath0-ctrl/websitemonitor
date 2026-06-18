@@ -1580,7 +1580,7 @@ function renderDeploymentsList() {
         <button type="button" class="ec2-btn-outline" onclick="startLogStream('${dep.name}')">View Logs</button>
         ${dep.status === 'active' ? `<button type="button" class="ec2-btn-outline" onclick="startStartupLogStream('${dep.name}')">Startup Logs</button>` : ''}
         ${dep.status !== 'destroying' ? `<button type="button" class="ec2-btn-danger" onclick="triggerEC2Destroy('${dep.name}')" ${hasPermission('ec2', 'execute') ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;" title="No execute permission"'}>Destroy</button>` : ''}
-        ${dep.status === 'destroy-failed' || dep.status === 'failed' ? `<button type="button" class="ec2-btn-outline" style="border-color:#da3637;color:#f85149;" onclick="triggerEC2Destroy('${dep.name}', true)">Force Delete</button>` : ''}
+        ${dep.status !== 'active' ? `<button type="button" class="ec2-btn-outline" style="border-color:#da3637;color:#f85149;" onclick="triggerEC2Destroy('${dep.name}', true)">Force Delete</button>` : ''}
       </div>`;
     container.appendChild(card);
   });
@@ -4678,7 +4678,7 @@ function renderAzureVms() {
         <button type="button" class="ec2-btn-outline" onclick="startAzureLogStream('${vm.name}')">View Logs</button>
         ${vm.status === 'active' ? `<button type="button" class="ec2-btn-outline" onclick="startAzureStartupLogStream('${vm.name}')">Startup Logs</button>` : ''}
         ${vm.status !== 'destroying' ? `<button type="button" class="ec2-btn-danger" onclick="triggerAzureVmDestroy('${vm.name}')" ${hasPermission('azure', 'execute') ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;" title="No execute permission"'}>Destroy</button>` : ''}
-        ${vm.status === 'destroy-failed' || vm.status === 'failed' ? `<button type="button" class="ec2-btn-outline" style="border-color:#da3637;color:#f85149;" onclick="triggerAzureVmDestroy('${vm.name}', true)">Force Delete</button>` : ''}
+        ${vm.status !== 'active' ? `<button type="button" class="ec2-btn-outline" style="border-color:#da3637;color:#f85149;" onclick="triggerAzureVmDestroy('${vm.name}', true)">Force Delete</button>` : ''}
       </div>`;
     container.appendChild(card);
   });
@@ -4810,7 +4810,7 @@ function renderGcpVms() {
         <button type="button" class="ec2-btn-outline" onclick="startGcpLogStream('${vm.name}')">View Logs</button>
         ${vm.status === 'active' ? `<button type="button" class="ec2-btn-outline" onclick="startGcpStartupLogStream('${vm.name}')">Startup Logs</button>` : ''}
         ${vm.status !== 'destroying' ? `<button type="button" class="ec2-btn-danger" onclick="triggerGcpVmDestroy('${vm.name}')" ${hasPermission('gcp', 'execute') ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;" title="No execute permission"'}>Destroy</button>` : ''}
-        ${vm.status === 'destroy-failed' || vm.status === 'failed' ? `<button type="button" class="ec2-btn-outline" style="border-color:#da3637;color:#f85149;" onclick="triggerGcpVmDestroy('${vm.name}', true)">Force Delete</button>` : ''}
+        ${vm.status !== 'active' ? `<button type="button" class="ec2-btn-outline" style="border-color:#da3637;color:#f85149;" onclick="triggerGcpVmDestroy('${vm.name}', true)">Force Delete</button>` : ''}
       </div>`;
     container.appendChild(card);
   });
