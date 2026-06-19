@@ -5510,7 +5510,7 @@ function startMonitoring() {
   if (monitorInterval) clearInterval(monitorInterval);
   // Initial check after 5s startup delay
   setTimeout(() => runMonitorCheck().catch(() => {}), 5000);
-  monitorInterval = setInterval(() => runMonitorCheck().catch(() => {}), 60000);
+  monitorInterval = setInterval(() => runMonitorCheck().catch(() => {}), 30000);
 }
 startMonitoring();
 

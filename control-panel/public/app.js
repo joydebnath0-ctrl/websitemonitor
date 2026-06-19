@@ -5585,7 +5585,7 @@ function startMonitorAutoRefresh() {
     const panel = document.getElementById('svc-panel-monitoring');
     if (panel && panel.classList.contains('active')) fetchMonitoring();
     else stopMonitorAutoRefresh();
-  }, 60000);
+  }, 5000);
 }
 function stopMonitorAutoRefresh() {
   if (monitorAutoInterval) { clearInterval(monitorAutoInterval); monitorAutoInterval = null; }
