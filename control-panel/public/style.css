@@ -2320,3 +2320,209 @@ body.light-theme .provider-btn.active[data-provider="gcp"] {
   background: #ffcc00;
   color: #24292f;
 }
+
+/* ===== MONITORING SECTION ===== */
+
+/* Stat cards */
+.monitor-stat-card {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: border-color 0.2s;
+}
+.monitor-stat-card:hover { border-color: #8b949e; }
+.monitor-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  color: #f0f6fc;
+  line-height: 1;
+}
+.monitor-stat-label {
+  font-size: 11px;
+  color: #8b949e;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+
+/* Status badges */
+.monitor-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 20px;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.monitor-status-badge .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.monitor-status-up {
+  background: rgba(63, 185, 80, 0.12);
+  color: #3fb950;
+  border: 1px solid rgba(63, 185, 80, 0.3);
+}
+.monitor-status-up .dot {
+  background: #3fb950;
+  animation: monitor-pulse-up 1.8s ease-in-out infinite;
+}
+.monitor-status-down {
+  background: rgba(248, 81, 73, 0.12);
+  color: #f85149;
+  border: 1px solid rgba(248, 81, 73, 0.3);
+}
+.monitor-status-down .dot {
+  background: #f85149;
+  animation: monitor-pulse-down 1.2s ease-in-out infinite;
+}
+.monitor-status-unknown {
+  background: rgba(139, 148, 158, 0.12);
+  color: #8b949e;
+  border: 1px solid rgba(139, 148, 158, 0.2);
+}
+.monitor-status-unknown .dot { background: #8b949e; }
+
+@keyframes monitor-pulse-up {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.5); }
+  50%       { box-shadow: 0 0 0 4px rgba(63, 185, 80, 0); }
+}
+@keyframes monitor-pulse-down {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(248, 81, 73, 0.6); }
+  50%       { box-shadow: 0 0 0 5px rgba(248, 81, 73, 0); }
+}
+
+/* Monitor table */
+.monitor-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-family: 'Inter', sans-serif;
+}
+.monitor-table thead tr {
+  background: #0d1117;
+  border-bottom: 1px solid #30363d;
+}
+.monitor-table th {
+  padding: 10px 14px;
+  text-align: left;
+  color: #8b949e;
+  font-weight: 500;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.monitor-table td {
+  padding: 11px 14px;
+  color: #c9d1d9;
+  border-bottom: 1px solid #21262d;
+  vertical-align: middle;
+}
+.monitor-table tbody tr:last-child td { border-bottom: none; }
+.monitor-table tbody tr:hover { background: rgba(255,255,255,0.015); }
+.monitor-table .server-name {
+  font-weight: 600;
+  color: #f0f6fc;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.monitor-table .ip-mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #8b949e;
+}
+.monitor-table .resp-ms {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #d2a679;
+}
+.monitor-table .down-since {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #f85149;
+}
+.monitor-table .no-down-since {
+  color: #484f58;
+  font-size: 11px;
+}
+
+/* Cloud tag chips */
+.cloud-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 10px;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.cloud-tag-aws    { background: rgba(247,129,102,0.15); color: #f78166; border: 1px solid rgba(247,129,102,0.3); }
+.cloud-tag-azure  { background: rgba(0,120,212,0.15);   color: #60a5fa; border: 1px solid rgba(0,120,212,0.3); }
+.cloud-tag-gcp    { background: rgba(255,204,0,0.12);   color: #fbbf24; border: 1px solid rgba(255,204,0,0.3); }
+
+/* Incident log entries */
+.incident-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  border: 1px solid;
+  animation: incident-fade-in 0.3s ease;
+}
+.incident-entry.incident-down {
+  background: rgba(248, 81, 73, 0.07);
+  border-color: rgba(248, 81, 73, 0.2);
+}
+.incident-entry.incident-up {
+  background: rgba(63, 185, 80, 0.07);
+  border-color: rgba(63, 185, 80, 0.2);
+}
+.incident-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+.incident-body { flex: 1; }
+.incident-title { font-weight: 600; color: #f0f6fc; margin-bottom: 2px; }
+.incident-meta  { color: #8b949e; font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+.incident-time  { font-size: 11px; color: #8b949e; white-space: nowrap; flex-shrink: 0; }
+
+@keyframes incident-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Monitoring nav button active state */
+.svc-btn.active[data-service="monitoring"] {
+  color: #39d353;
+  background: rgba(57, 211, 83, 0.08);
+  border-color: rgba(57, 211, 83, 0.3);
+}
+body.light-theme .svc-btn.active[data-service="monitoring"] {
+  color: #1a7f37;
+  background: rgba(26, 127, 55, 0.08);
+  border-color: rgba(26, 127, 55, 0.3);
+}
+
+/* Light theme overrides for monitoring */
+body.light-theme .monitor-stat-card {
+  background: #ffffff;
+  border-color: #d5dbdb;
+}
+body.light-theme .monitor-stat-label { color: #545b64; }
+body.light-theme .monitor-table { color: #16191f; }
+body.light-theme .monitor-table thead tr { background: #f8f9fa; }
+body.light-theme .monitor-table th { color: #545b64; border-bottom-color: #d5dbdb; }
+body.light-theme .monitor-table td { border-bottom-color: #eaeded; color: #232f3e; }
+body.light-theme .monitor-table .server-name { color: #16191f; }

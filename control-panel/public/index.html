@@ -300,6 +300,10 @@
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         Users Management
       </button>
+      <button type="button" class="svc-btn" data-service="monitoring" id="svc-btn-monitoring">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Monitoring
+      </button>
     </nav>
 
     <!-- Main Grid -->
@@ -1623,6 +1627,82 @@
             </div>
           </div>
         </div><!-- end svc-panel-users -->
+
+        <!-- ===== MONITORING SERVICE PANEL ===== -->
+        <div class="service-panel" id="svc-panel-monitoring">
+          <div style="display:flex;flex-direction:column;height:100%;overflow-y:auto;">
+
+            <!-- Header Bar -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
+              <div>
+                <h3 class="section-heading" style="margin:0 0 4px;">Server Health Monitoring</h3>
+                <span id="monitor-last-checked" style="font-size:11px;color:#8b949e;">Last checked: Never</span>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#8b949e;cursor:pointer;">
+                  <input type="checkbox" id="monitor-auto-refresh" checked style="accent-color:#58a6ff;">
+                  Auto-refresh (60s)
+                </label>
+                <button type="button" id="btn-monitor-refresh" class="ec2-btn-secondary" style="width:auto;padding:6px 14px;font-size:11px;margin:0;display:flex;align-items:center;gap:5px;">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                  Check Now
+                </button>
+              </div>
+            </div>
+
+            <!-- Summary Stats -->
+            <div id="monitor-stats-row" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;">
+              <div class="monitor-stat-card">
+                <div class="monitor-stat-value" id="monitor-stat-total">—</div>
+                <div class="monitor-stat-label">Total Monitored</div>
+              </div>
+              <div class="monitor-stat-card" style="border-color:#238636;">
+                <div class="monitor-stat-value" id="monitor-stat-up" style="color:#3fb950;">—</div>
+                <div class="monitor-stat-label">Online</div>
+              </div>
+              <div class="monitor-stat-card" style="border-color:#da3633;">
+                <div class="monitor-stat-value" id="monitor-stat-down" style="color:#f85149;">—</div>
+                <div class="monitor-stat-label">Offline</div>
+              </div>
+              <div class="monitor-stat-card">
+                <div class="monitor-stat-value" id="monitor-stat-avg-resp" style="color:#d2a679;">—</div>
+                <div class="monitor-stat-label">Avg Response</div>
+              </div>
+            </div>
+
+            <!-- Monitoring Table -->
+            <h3 class="section-heading" style="margin-bottom:10px;">Active Server Status</h3>
+            <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;overflow:hidden;margin-bottom:20px;">
+              <table class="monitor-table">
+                <thead>
+                  <tr>
+                    <th>Server</th>
+                    <th>Cloud</th>
+                    <th>Public IP</th>
+                    <th>Status</th>
+                    <th>Response</th>
+                    <th>Last Checked</th>
+                    <th>Down Since</th>
+                  </tr>
+                </thead>
+                <tbody id="monitor-table-body">
+                  <tr>
+                    <td colspan="7" style="padding:28px;text-align:center;color:#8b949e;font-size:12px;">
+                      Click "Check Now" or wait for the first automatic check
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Incident Log -->
+            <h3 class="section-heading" style="margin-bottom:10px;">Incident History</h3>
+            <div id="monitor-incident-log" style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px;max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;">
+              <div style="font-size:12px;color:#8b949e;text-align:center;padding:12px 0;">No incidents recorded yet.</div>
+            </div>
+
+          </div>
+        </div><!-- end svc-panel-monitoring -->
 
       </div><!-- end ec2-left-col -->
 

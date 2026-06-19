@@ -208,6 +208,7 @@ function initServiceNav() {
       // Fetch users list when switching to User Management
       if (svc === 'users') fetchUsers();
       if (svc === 'billing') fetchBilling();
+      if (svc === 'monitoring') initMonitoringPanel();
     });
   });
 }
@@ -5542,3 +5543,139 @@ async function deployGcpSql() {
   }
 }
 
+
+
+// ============================================================
+// MONITORING PANEL
+// ============================================================
+let monitorAutoInterval = null;
+
+function initMonitoringPanel() {
+  fetchMonitoring();
+  const autoCheckbox = document.getElementById('monitor-auto-refresh');
+  const checkNowBtn  = document.getElementById('btn-monitor-refresh');
+
+  if (checkNowBtn && !checkNowBtn._monBound) {
+    checkNowBtn._monBound = true;
+    checkNowBtn.addEventListener('click', async () => {
+      checkNowBtn.disabled = true;
+      checkNowBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 0.8s linear infinite"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Checking...';
+      try {
+        await fetch('/api/monitoring/check-now', { method: 'POST' });
+        await fetchMonitoring();
+      } catch (e) {}
+      checkNowBtn.disabled = false;
+      checkNowBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Check Now';
+    });
+  }
+
+  if (autoCheckbox && !autoCheckbox._monBound) {
+    autoCheckbox._monBound = true;
+    autoCheckbox.addEventListener('change', () => {
+      if (autoCheckbox.checked) startMonitorAutoRefresh();
+      else stopMonitorAutoRefresh();
+    });
+  }
+  startMonitorAutoRefresh();
+}
+
+function startMonitorAutoRefresh() {
+  stopMonitorAutoRefresh();
+  monitorAutoInterval = setInterval(() => {
+    const panel = document.getElementById('svc-panel-monitoring');
+    if (panel && panel.classList.contains('active')) fetchMonitoring();
+    else stopMonitorAutoRefresh();
+  }, 60000);
+}
+function stopMonitorAutoRefresh() {
+  if (monitorAutoInterval) { clearInterval(monitorAutoInterval); monitorAutoInterval = null; }
+}
+
+async function fetchMonitoring() {
+  try {
+    const res = await fetch('/api/monitoring');
+    const data = await res.json();
+    renderMonitoringTable(data);
+  } catch (e) { console.error('Monitoring fetch error:', e); }
+}
+
+function formatMonitorTime(iso) {
+  if (!iso) return '--';
+  return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function formatDownDuration(downSince) {
+  if (!downSince) return '';
+  const diffMs = Date.now() - new Date(downSince).getTime();
+  if (diffMs < 0) return '';
+  const s = Math.floor(diffMs / 1000);
+  if (s < 60) return s + 's';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + 'm ' + (s % 60) + 's';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + 'h ' + (m % 60) + 'm';
+  return Math.floor(h / 24) + 'd ' + (h % 24) + 'h';
+}
+
+function cloudTagClass(cloud) {
+  if (!cloud) return 'cloud-tag';
+  const c = cloud.toLowerCase();
+  if (c.includes('aws') || c.includes('ec2')) return 'cloud-tag cloud-tag-aws';
+  if (c.includes('azure'))                     return 'cloud-tag cloud-tag-azure';
+  if (c.includes('gcp') || c.includes('google')) return 'cloud-tag cloud-tag-gcp';
+  return 'cloud-tag';
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderMonitoringTable(data) {
+  const results   = data.results  || [];
+  const incidents = data.incidents || [];
+
+  const lastCheckedEl = document.getElementById('monitor-last-checked');
+  if (lastCheckedEl) lastCheckedEl.textContent = data.lastChecked ? 'Last checked: ' + formatMonitorTime(data.lastChecked) : 'Last checked: Never';
+
+  const total = results.length;
+  const up    = results.filter(r => r.status === 'up').length;
+  const down  = results.filter(r => r.status === 'down').length;
+  const respVals = results.filter(r => r.responseMs != null).map(r => r.responseMs);
+  const avgResp  = respVals.length ? Math.round(respVals.reduce((a,b)=>a+b,0)/respVals.length) : null;
+
+  const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  setEl('monitor-stat-total', total);
+  setEl('monitor-stat-up',    up);
+  setEl('monitor-stat-down',  down);
+  setEl('monitor-stat-avg-resp', avgResp != null ? avgResp + 'ms' : '--');
+
+  const tbody = document.getElementById('monitor-table-body');
+  if (!tbody) return;
+
+  if (results.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="padding:28px;text-align:center;color:#8b949e;font-size:12px;">No active servers found. Deploy an EC2/Azure/GCP instance first.</td></tr>';
+  } else {
+    tbody.innerHTML = results.map(r => {
+      const sc = r.status === 'up' ? 'monitor-status-up' : r.status === 'down' ? 'monitor-status-down' : 'monitor-status-unknown';
+      const sl = r.status === 'up' ? 'ONLINE' : r.status === 'down' ? 'OFFLINE' : 'UNKNOWN';
+      const rd = r.responseMs != null ? '<span class="resp-ms">' + r.responseMs + 'ms</span>' : '<span style="color:#484f58;font-size:11px;">--</span>';
+      const ds = r.downSince ? '<span class="down-since">' + formatMonitorTime(r.downSince) + '<br><span style="font-size:10px;opacity:0.8;">(' + formatDownDuration(r.downSince) + ' ago)</span></span>' : '<span class="no-down-since">--</span>';
+      return '<tr><td><div class="server-name" title="' + escapeHtml(r.name) + '">' + escapeHtml(r.name) + '</div></td><td><span class="' + cloudTagClass(r.cloud) + '">' + escapeHtml(r.cloud || '--') + '</span></td><td><span class="ip-mono">' + escapeHtml(r.ip) + '</span></td><td><span class="monitor-status-badge ' + sc + '"><span class="dot"></span>' + sl + '</span></td><td>' + rd + '</td><td style="font-size:11px;color:#8b949e;">' + formatMonitorTime(r.checkedAt) + '</td><td>' + ds + '</td></tr>';
+    }).join('');
+  }
+
+  const incidentLog = document.getElementById('monitor-incident-log');
+  if (!incidentLog) return;
+  if (incidents.length === 0) {
+    incidentLog.innerHTML = '<div style="font-size:12px;color:#8b949e;text-align:center;padding:12px 0;">No incidents recorded yet.</div>';
+  } else {
+    incidentLog.innerHTML = incidents.slice(0, 50).map(inc => {
+      const isDown = inc.type === 'DOWN';
+      const icon   = isDown ? '&#128308;' : '&#128994;';
+      const label  = isDown ? 'went OFFLINE' : 'came back ONLINE';
+      const detail = isDown ? inc.ip + ' - ' + (inc.cloud || '') : inc.ip + ' - ' + (inc.cloud || '') + ' (was down since ' + formatMonitorTime(inc.downSince) + ')';
+      return '<div class="incident-entry ' + (isDown ? 'incident-down' : 'incident-up') + '"><span class="incident-icon">' + icon + '</span><div class="incident-body"><div class="incident-title">' + escapeHtml(inc.name) + ' ' + label + '</div><div class="incident-meta">' + escapeHtml(detail) + '</div></div><span class="incident-time">' + formatMonitorTime(inc.at) + '</span></div>';
+    }).join('');
+  }
+}

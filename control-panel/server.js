@@ -5365,6 +5365,171 @@ app.post('/api/gcp/sql/destroy', requirePermission('gcp', 'execute'), (req, res)
 });
 
 
+
+// ============================================================
+// MONITORING SYSTEM
+// ============================================================
+const http = require('http');
+const net = require('net');
+
+const MONITOR_DB_FILE = path.join(BASE_DIR, 'monitoring.json');
+if (!fs.existsSync(MONITOR_DB_FILE)) {
+  fs.writeFileSync(MONITOR_DB_FILE, JSON.stringify({ results: [], incidents: [] }));
+}
+
+function readMonitorDB() {
+  try { return JSON.parse(fs.readFileSync(MONITOR_DB_FILE, 'utf8')); } catch (e) { return { results: [], incidents: [] }; }
+}
+function writeMonitorDB(data) {
+  fs.writeFileSync(MONITOR_DB_FILE, JSON.stringify(data, null, 2));
+}
+
+// Collect all active deployments that have a publicIp across EC2, Azure, GCP
+function getAllMonitorTargets() {
+  const targets = [];
+  try {
+    const ec2 = JSON.parse(fs.readFileSync(DB_FILE, 'utf8') || '[]');
+    ec2.forEach(d => {
+      if (d.status === 'active' && d.publicIp) {
+        targets.push({ name: d.name, ip: d.publicIp, cloud: 'AWS EC2', region: d.region || '' });
+      }
+    });
+  } catch (e) {}
+  try {
+    const azureDB = JSON.parse(fs.readFileSync(path.join(BASE_DIR, 'azure.json'), 'utf8') || '{}');
+    const azureVms = azureDB.vms || [];
+    azureVms.forEach(d => {
+      if (d.status === 'active' && d.publicIp) {
+        targets.push({ name: d.name, ip: d.publicIp, cloud: 'Azure VM', region: d.location || '' });
+      }
+    });
+  } catch (e) {}
+  try {
+    const gcpDB = JSON.parse(fs.readFileSync(path.join(BASE_DIR, 'gcp.json'), 'utf8') || '{}');
+    const gcpVms = gcpDB.vms || [];
+    gcpVms.forEach(d => {
+      if (d.status === 'active' && d.publicIp) {
+        targets.push({ name: d.name, ip: d.publicIp, cloud: 'GCP VM', region: d.region || '' });
+      }
+    });
+  } catch (e) {}
+  return targets;
+}
+
+// Ping a single server — tries HTTP first, falls back to TCP port 22
+function pingServer(ip, timeoutMs = 8000) {
+  return new Promise(resolve => {
+    const start = Date.now();
+    const req = http.get({ hostname: ip, port: 80, path: '/', timeout: timeoutMs }, res => {
+      res.resume();
+      resolve({ reachable: true, responseMs: Date.now() - start, method: 'http' });
+    });
+    req.on('timeout', () => { req.destroy(); });
+    req.on('error', () => {
+      // HTTP failed — try TCP on port 22
+      const start2 = Date.now();
+      const sock = new net.Socket();
+      sock.setTimeout(timeoutMs);
+      sock.connect(22, ip, () => {
+        sock.destroy();
+        resolve({ reachable: true, responseMs: Date.now() - start2, method: 'tcp-22' });
+      });
+      sock.on('error', () => { sock.destroy(); resolve({ reachable: false, responseMs: null, method: 'none' }); });
+      sock.on('timeout', () => { sock.destroy(); resolve({ reachable: false, responseMs: null, method: 'timeout' }); });
+    });
+  });
+}
+
+async function runMonitorCheck() {
+  const targets = getAllMonitorTargets();
+  const db = readMonitorDB();
+  const now = new Date().toISOString();
+  const newResults = [];
+
+  for (const target of targets) {
+    const pingResult = await pingServer(target.ip);
+    const prevResult = db.results.find(r => r.ip === target.ip && r.name === target.name);
+    const status = pingResult.reachable ? 'up' : 'down';
+
+    // Incident tracking: record when status flips
+    let downSince = null;
+    if (status === 'down') {
+      if (prevResult && prevResult.status === 'down' && prevResult.downSince) {
+        downSince = prevResult.downSince; // carry forward existing downSince
+      } else {
+        downSince = now; // freshly went down — record this moment
+        // Add incident entry
+        db.incidents.unshift({
+          name: target.name,
+          ip: target.ip,
+          cloud: target.cloud,
+          type: 'DOWN',
+          at: now,
+          id: `${target.ip}-${Date.now()}`
+        });
+        // Cap incidents at 100
+        if (db.incidents.length > 100) db.incidents = db.incidents.slice(0, 100);
+      }
+    } else if (status === 'up' && prevResult && prevResult.status === 'down') {
+      // Server came back up — record recovery
+      db.incidents.unshift({
+        name: target.name,
+        ip: target.ip,
+        cloud: target.cloud,
+        type: 'UP',
+        at: now,
+        downSince: prevResult.downSince,
+        id: `${target.ip}-${Date.now()}`
+      });
+      if (db.incidents.length > 100) db.incidents = db.incidents.slice(0, 100);
+    }
+
+    newResults.push({
+      name: target.name,
+      ip: target.ip,
+      cloud: target.cloud,
+      region: target.region,
+      status,
+      responseMs: pingResult.responseMs,
+      method: pingResult.method,
+      checkedAt: now,
+      downSince
+    });
+  }
+
+  db.results = newResults;
+  db.lastChecked = now;
+  writeMonitorDB(db);
+  console.log(`[Monitor] Checked ${targets.length} servers at ${now}`);
+  return db;
+}
+
+// Start background polling every 60 seconds
+let monitorInterval = null;
+function startMonitoring() {
+  if (monitorInterval) clearInterval(monitorInterval);
+  // Initial check after 5s startup delay
+  setTimeout(() => runMonitorCheck().catch(() => {}), 5000);
+  monitorInterval = setInterval(() => runMonitorCheck().catch(() => {}), 60000);
+}
+startMonitoring();
+
+// GET /api/monitoring — return current monitoring state
+app.get('/api/monitoring', (req, res) => {
+  const db = readMonitorDB();
+  res.json(db);
+});
+
+// POST /api/monitoring/check-now — trigger immediate re-check
+app.post('/api/monitoring/check-now', async (req, res) => {
+  try {
+    const db = await runMonitorCheck();
+    res.json(db);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Start Server
 app.listen(PORT, () => {
   console.log(`AWS Cloud Control Panel running on port ${PORT}`);
