@@ -5601,7 +5601,7 @@ function startMonitorAutoRefresh() {
       console.error('Monitor auto-check error:', e);
     }
     monitorIsChecking = false;
-  }, 5000);
+  }, 15000);
 }
 function stopMonitorAutoRefresh() {
   if (monitorAutoInterval) { clearInterval(monitorAutoInterval); monitorAutoInterval = null; }
