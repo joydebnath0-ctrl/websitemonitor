@@ -5579,12 +5579,28 @@ function initMonitoringPanel() {
   startMonitorAutoRefresh();
 }
 
+let monitorIsChecking = false;
+
 function startMonitorAutoRefresh() {
   stopMonitorAutoRefresh();
-  monitorAutoInterval = setInterval(() => {
+  monitorAutoInterval = setInterval(async () => {
     const panel = document.getElementById('svc-panel-monitoring');
-    if (panel && panel.classList.contains('active')) fetchMonitoring();
-    else stopMonitorAutoRefresh();
+    if (!panel || !panel.classList.contains('active')) {
+      stopMonitorAutoRefresh();
+      return;
+    }
+    if (monitorIsChecking) return; // skip if previous check still running
+    monitorIsChecking = true;
+    const lastEl = document.getElementById('monitor-last-checked');
+    if (lastEl) lastEl.textContent = 'Checking...';
+    try {
+      const res = await fetch('/api/monitoring/check-now', { method: 'POST' });
+      const data = await res.json();
+      renderMonitoringTable(data);
+    } catch (e) {
+      console.error('Monitor auto-check error:', e);
+    }
+    monitorIsChecking = false;
   }, 5000);
 }
 function stopMonitorAutoRefresh() {
@@ -5593,7 +5609,7 @@ function stopMonitorAutoRefresh() {
 
 async function fetchMonitoring() {
   try {
-    const res = await fetch('/api/monitoring');
+    const res = await fetch('/api/monitoring/check-now', { method: 'POST' });
     const data = await res.json();
     renderMonitoringTable(data);
   } catch (e) { console.error('Monitoring fetch error:', e); }
