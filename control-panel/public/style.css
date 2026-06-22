@@ -2526,3 +2526,570 @@ body.light-theme .monitor-table thead tr { background: #f8f9fa; }
 body.light-theme .monitor-table th { color: #545b64; border-bottom-color: #d5dbdb; }
 body.light-theme .monitor-table td { border-bottom-color: #eaeded; color: #232f3e; }
 body.light-theme .monitor-table .server-name { color: #16191f; }
+
+/* Redesigned Floating Metric Monitoring Elements */
+.monitor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+  margin-top: 10px;
+  margin-bottom: 25px;
+}
+
+.monitor-card {
+  position: relative;
+  background: rgba(22, 27, 34, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(48, 54, 61, 0.8);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.monitor-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+  border-color: rgba(88, 166, 255, 0.4);
+}
+
+.monitor-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(90deg, #58a6ff, #a371f7, #39d353);
+  opacity: 0.85;
+  transition: opacity 0.3s ease;
+}
+
+.monitor-card.status-down::before {
+  background: linear-gradient(90deg, #da3633, #f85149);
+}
+
+.monitor-stat-card {
+  position: relative;
+  background: rgba(22, 27, 34, 0.75) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(48, 54, 61, 0.8) !important;
+  border-radius: 12px !important;
+  padding: 16px 20px !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease, border-color 0.25s ease !important;
+  overflow: hidden;
+}
+
+.monitor-stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+  border-color: rgba(163, 113, 247, 0.5) !important;
+}
+
+.monitor-stat-card::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, #a371f7, #58a6ff);
+  opacity: 0.7;
+}
+
+.monitor-stat-card.stat-online::after {
+  background: linear-gradient(90deg, #3fb950, #58a6ff);
+}
+
+.monitor-stat-card.stat-offline::after {
+  background: linear-gradient(90deg, #f85149, #da3633);
+}
+
+.neon-glow-dot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.neon-glow-dot.up {
+  background: #3fb950;
+  box-shadow: 0 0 10px #3fb950, 0 0 20px rgba(63, 185, 80, 0.4);
+}
+
+.neon-glow-dot.down {
+  background: #f85149;
+  box-shadow: 0 0 10px #f85149, 0 0 20px rgba(248, 81, 73, 0.5);
+}
+
+.neon-glow-dot.unknown {
+  background: #8b949e;
+  box-shadow: 0 0 8px #8b949e;
+}
+
+.cloud-provider-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 6px;
+  flex-shrink: 0;
+}
+
+.cloud-provider-icon.aws {
+  color: #ff9900;
+  background: rgba(255, 153, 0, 0.1);
+  box-shadow: 0 0 10px rgba(255, 153, 0, 0.15);
+}
+
+.cloud-provider-icon.azure {
+  color: #0078d4;
+  background: rgba(0, 120, 212, 0.1);
+  box-shadow: 0 0 10px rgba(0, 120, 212, 0.15);
+}
+
+.cloud-provider-icon.gcp {
+  color: #ffcc00;
+  background: rgba(255, 204, 0, 0.1);
+  box-shadow: 0 0 10px rgba(255, 204, 0, 0.15);
+}
+
+.monitor-metric-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.monitor-metric-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: #8b949e;
+  font-weight: 500;
+}
+
+.monitor-metric-value {
+  font-family: 'JetBrains Mono', monospace;
+  color: #f0f6fc;
+  font-weight: 600;
+}
+
+.monitor-progress-bg {
+  width: 100%;
+  height: 6px;
+  background: rgba(48, 54, 61, 0.5);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.monitor-progress-bar {
+  height: 100%;
+  border-radius: 3px;
+  width: 0%;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  background: linear-gradient(90deg, #58a6ff, #1f6feb);
+}
+
+.monitor-progress-bar.cpu {
+  background: linear-gradient(90deg, #58a6ff, #a371f7);
+}
+
+.monitor-progress-bar.mem {
+  background: linear-gradient(90deg, #1f6feb, #58a6ff);
+}
+
+.monitor-progress-bar.disk {
+  background: linear-gradient(90deg, #d2a679, #f78166);
+}
+
+.monitor-progress-bar.warning {
+  background: linear-gradient(90deg, #e3b341, #ffcc00) !important;
+}
+
+.monitor-progress-bar.danger {
+  background: linear-gradient(90deg, #f85149, #da3633) !important;
+}
+
+.monitor-widgets-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  padding: 12px;
+  border: 1px solid rgba(48, 54, 61, 0.4);
+}
+
+.monitor-widget-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.monitor-widget-title {
+  font-size: 10px;
+  color: #8b949e;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.monitor-widget-value {
+  font-size: 12px;
+  color: #f0f6fc;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.monitor-widget-value.healthy {
+  color: #3fb950;
+  text-shadow: 0 0 8px rgba(63, 185, 80, 0.3);
+}
+
+.monitor-widget-value.unhealthy {
+  color: #f85149;
+  text-shadow: 0 0 8px rgba(248, 81, 73, 0.3);
+}
+
+.monitor-widget-value.not-installed {
+  color: #8b949e;
+}
+
+.ssl-expiry-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.ssl-expiry-badge.ok {
+  background: rgba(63, 185, 80, 0.1);
+  color: #3fb950;
+  border: 1px solid rgba(63, 185, 80, 0.2);
+}
+
+.ssl-expiry-badge.warning {
+  background: rgba(227, 179, 65, 0.1);
+  color: #e3b341;
+  border: 1px solid rgba(227, 179, 65, 0.2);
+}
+
+.ssl-expiry-badge.danger {
+  background: rgba(248, 81, 73, 0.1);
+  color: #f85149;
+  border: 1px solid rgba(248, 81, 73, 0.2);
+}
+
+/* Light theme overrides for redesigned monitoring dashboard */
+body.light-theme .monitor-card {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(213, 219, 219, 0.8);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+body.light-theme .monitor-card:hover {
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+  border-color: rgba(0, 120, 212, 0.4);
+}
+
+body.light-theme .monitor-widgets-grid {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(213, 219, 219, 0.5);
+}
+
+body.light-theme .monitor-widget-value {
+  color: #232f3e;
+}
+
+body.light-theme .monitor-progress-bg {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+body.light-theme .cloud-provider-icon {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+body.light-theme .monitor-stat-card {
+  background: rgba(255, 255, 255, 0.85) !important;
+  border-color: rgba(213, 219, 219, 0.8) !important;
+}
+
+body.light-theme .monitor-stat-card:hover {
+  border-color: rgba(124, 58, 237, 0.4) !important;
+}
+
+body.light-theme .monitor-stat-value {
+  color: #232f3e;
+}
+
+body.light-theme .monitor-metric-value {
+  color: #232f3e;
+}
+
+/* Premium Dashboard UI & Controls */
+.monitor-progress-bar {
+  position: relative;
+}
+.monitor-progress-bar::after {
+  content: '';
+  position: absolute;
+  right: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 6px currentColor, 0 0 12px currentColor;
+  border: 2px solid #0d0b21;
+}
+
+.monitor-progress-bar.cpu::after { color: #a371f7; }
+.monitor-progress-bar.mem::after { color: #ffb703; }
+.monitor-progress-bar.disk::after { color: #e76f51; }
+.monitor-progress-bar.cpu-temp::after { color: #ffdd00; }
+.monitor-progress-bar.swap::after { color: #00f2fe; }
+.monitor-progress-bar.io-wait::after { color: #ff0844; }
+
+/* Custom Progress Bar Gradients */
+.monitor-progress-bar.cpu { background: linear-gradient(90deg, #a371f7, #8a2be2) !important; }
+.monitor-progress-bar.mem { background: linear-gradient(90deg, #ffb703, #fb8500) !important; }
+.monitor-progress-bar.disk { background: linear-gradient(90deg, #e76f51, #f4a261) !important; }
+.monitor-progress-bar.cpu-temp { background: linear-gradient(90deg, #ffdd00, #ff9900) !important; }
+.monitor-progress-bar.swap { background: linear-gradient(90deg, #00f2fe, #4facfe) !important; }
+.monitor-progress-bar.io-wait { background: linear-gradient(90deg, #ff0844, #ffb199) !important; }
+
+/* Network Chart */
+.network-bar-chart {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  height: 60px;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+.network-bar-chart .bar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  height: 100%;
+  justify-content: flex-end;
+}
+.network-bar-chart .bar-fill {
+  width: 8px;
+  border-radius: 4px 4px 0 0;
+  height: 0%;
+  transition: height 0.5s ease;
+}
+.network-bar-chart.inbound .bar-fill {
+  background: linear-gradient(180deg, #00f2fe, #4facfe);
+  box-shadow: 0 0 6px rgba(0, 242, 254, 0.3);
+}
+.network-bar-chart.outbound .bar-fill {
+  background: linear-gradient(180deg, #fb8500, #ffb703);
+  box-shadow: 0 0 6px rgba(251, 133, 0, 0.3);
+}
+
+/* Request Rate & Connections */
+.req-rate-row, .region-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  font-size: 11px;
+}
+.req-rate-label, .region-label {
+  width: 75px;
+  color: #8b949e;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.req-rate-bar-bg, .region-bar-bg {
+  flex: 1;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.req-rate-bar, .region-bar {
+  height: 100%;
+  border-radius: 3px;
+  width: 0%;
+  transition: width 0.5s ease;
+}
+.req-rate-bar.get { background: linear-gradient(90deg, #a371f7, #8a2be2); }
+.req-rate-bar.post { background: linear-gradient(90deg, #00f2fe, #4facfe); }
+.req-rate-bar.err4xx { background: linear-gradient(90deg, #ffb703, #fb8500); }
+.req-rate-bar.err5xx { background: linear-gradient(90deg, #ff0844, #ff5e62); }
+
+.region-bar.us { background: linear-gradient(90deg, #a371f7, #8a2be2); }
+.region-bar.eu { background: linear-gradient(90deg, #00f2fe, #4facfe); }
+.region-bar.ap { background: linear-gradient(90deg, #00ff66, #3fb950); }
+.region-bar.au { background: linear-gradient(90deg, #ffb703, #fb8500); }
+
+.req-rate-val, .region-val {
+  width: 80px;
+  text-align: right;
+  font-family: 'JetBrains Mono', monospace;
+  color: #f0f6fc;
+  font-weight: 600;
+}
+
+/* Semi-circular gauge */
+.cache-hit-gauge-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0 auto 10px;
+  position: relative;
+  width: 140px;
+  height: 80px;
+}
+
+/* Processes table */
+.processes-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.processes-table tr {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.processes-table tr:last-child {
+  border-bottom: none;
+}
+.processes-table td {
+  padding: 8px 4px;
+}
+.process-name {
+  color: #c9d1d9;
+  font-weight: 500;
+}
+.process-cpu {
+  color: #a371f7;
+  text-align: right;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+}
+.process-mem {
+  color: #ffb703;
+  text-align: right;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Timeline */
+.timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+  padding-left: 14px;
+}
+.timeline-list::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.timeline-item {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+}
+.timeline-dot {
+  position: absolute;
+  left: -14px;
+  top: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #8b949e;
+}
+.timeline-dot.up {
+  background: #00ff66;
+  box-shadow: 0 0 6px #00ff66;
+}
+.timeline-dot.down {
+  background: #ff0844;
+  box-shadow: 0 0 6px #ff0844;
+}
+.timeline-dot.warning {
+  background: #ffb703;
+  box-shadow: 0 0 6px #ffb703;
+}
+.timeline-text {
+  color: #c9d1d9;
+}
+.timeline-time {
+  color: #8b949e;
+  font-size: 10px;
+}
+
+/* Premium summary cards overrides */
+.monitor-stat-card {
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  background: rgba(20, 18, 43, 0.6) !important;
+}
+.monitor-stat-card::after {
+  height: 2px !important;
+}
+.monitor-stat-card.stat-online::after {
+  background: linear-gradient(90deg, #00ff66, #00f2fe) !important;
+}
+.monitor-stat-card.stat-offline::after {
+  background: linear-gradient(90deg, #ff0844, #ffb703) !important;
+}
+.monitor-card {
+  background: rgba(20, 18, 43, 0.6) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+.monitor-card::before {
+  height: 3px !important;
+  background: linear-gradient(90deg, #a371f7, #00f2fe) !important;
+}
+.monitor-widgets-grid {
+  background: rgba(0, 0, 0, 0.2) !important;
+  border: 1px solid rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Active Server detail subgrid layout */
+.monitor-dashboard-container {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 16px;
+  margin-top: 10px;
+}
+
+.monitor-dashboard-row-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+  margin-bottom: 25px;
+}
+
+
+
