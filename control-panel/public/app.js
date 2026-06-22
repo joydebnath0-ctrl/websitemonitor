@@ -6229,6 +6229,10 @@ function renderMonitoringTable(data) {
       </svg>
     `;
   }
+  const redisHitRateText = document.getElementById('redis-hit-rate-text');
+  if (redisHitRateText) {
+    redisHitRateText.textContent = `${redis.hitRate}%`;
+  }
   setEl('redis-hits-val', redis.hits);
   setEl('redis-misses-val', redis.misses);
   setEl('redis-mem-val', redis.memory);

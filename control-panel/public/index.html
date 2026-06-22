@@ -1708,99 +1708,92 @@
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
               <h3 class="section-heading" style="margin:0;">Active Server Status + Expanded Inputs</h3>
               <div id="monitor-server-selector" style="display:flex;gap:6px;"></div>
-            </div>
-
-            <div id="monitor-dashboard-empty" style="padding:28px;text-align:center;color:#8b949e;font-size:12px;background:#161b22;border:1px solid #30363d;border-radius:8px;">
-              Click "Check Now" or wait for the first automatic check
-            </div>
-
-            <div id="monitor-dashboard-layout" class="monitor-dashboard-container" style="display:none;">
+            </div>            <div id="monitor-dashboard-layout" class="monitor-dashboard-container" style="display:none;">
               
               <!-- LEFT COLUMN: Selected Server detailed card & metric sliders -->
               <div id="monitor-dashboard-left-col"></div>
 
-              <!-- RIGHT COLUMN: Network, Request Type connection rates -->
-              <div id="monitor-dashboard-right-col" style="display:flex;flex-direction:column;gap:16px;">
+              <!-- MIDDLE COLUMN: Network, Request Type connection rates -->
+              <div id="monitor-dashboard-right-col" style="display:flex;flex-direction:column;gap:10px;">
                 
                 <!-- Card 1: Network In/Out Checks -->
-                <div class="monitor-card" style="padding:16px;">
-                  <h4 style="margin:0 0 10px;font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Network In / Out - Last 8 Checks</h4>
-                  
-                  <div style="font-size:10px;color:#8b949e;margin-bottom:4px;">Inbound</div>
-                  <div id="network-in-chart" class="network-bar-chart inbound"></div>
-                  <div style="font-size:11px;color:#00ff66;font-weight:600;margin-top:6px;display:flex;align-items:center;gap:4px;" id="network-in-val">
-                    ↓ 0.0 MB/s
+                <div class="monitor-card" style="padding:10px 12px;height:180px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;">
+                  <h4 style="margin:0;font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Network In / Out (Last 8)</h4>
+                  <div>
+                    <div style="font-size:9px;color:#8b949e;margin-bottom:2px;display:flex;justify-content:space-between;"><span>Inbound</span><span style="color:#00ff66;font-weight:600;font-family:'JetBrains Mono',monospace;" id="network-in-val">0.0 KB/s</span></div>
+                    <div id="network-in-chart" class="network-bar-chart inbound" style="height:45px;padding:4px 8px;"></div>
                   </div>
-
-                  <div style="font-size:10px;color:#8b949e;margin-top:12px;margin-bottom:4px;">Outbound</div>
-                  <div id="network-out-chart" class="network-bar-chart outbound"></div>
-                  <div style="font-size:11px;color:#ffb703;font-weight:600;margin-top:6px;display:flex;align-items:center;gap:4px;" id="network-out-val">
-                    ↑ 0.0 MB/s
+                  <div>
+                    <div style="font-size:9px;color:#8b949e;margin-top:4px;margin-bottom:2px;display:flex;justify-content:space-between;"><span>Outbound</span><span style="color:#ffb703;font-weight:600;font-family:'JetBrains Mono',monospace;" id="network-out-val">0.0 KB/s</span></div>
+                    <div id="network-out-chart" class="network-bar-chart outbound" style="height:45px;padding:4px 8px;"></div>
                   </div>
                 </div>
 
                 <!-- Card 2: Request Rate by Type -->
-                <div class="monitor-card" style="padding:16px;">
-                  <h4 style="margin:0 0 12px;font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Request Rate · By Type</h4>
+                <div class="monitor-card" style="padding:10px 12px;height:122px;box-sizing:border-box;">
+                  <h4 style="margin:0 0 6px;font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Request Rate · By Type</h4>
                   <div id="request-rates-container"></div>
                 </div>
 
                 <!-- Card 3: Active Connections by Region -->
-                <div class="monitor-card" style="padding:16px;">
-                  <h4 style="margin:0 0 12px;font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Active Connections · By Region</h4>
+                <div class="monitor-card" style="padding:10px 12px;height:122px;box-sizing:border-box;">
+                  <h4 style="margin:0 0 6px;font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Connections · By Region</h4>
                   <div id="connections-region-container"></div>
                 </div>
 
               </div>
-            </div>
 
-            <!-- BOTTOM ROW: Processes, Cache Redis Performance, Incident History -->
-            <div id="monitor-dashboard-bottom-title" style="margin-top:20px;margin-bottom:10px;display:none;">
-              <h3 class="section-heading" style="margin:0;">Process Monitor - Cache - Incident History</h3>
-            </div>
-
-            <div id="monitor-dashboard-bottom-layout" class="monitor-dashboard-row-bottom" style="display:none;">
-              
-              <!-- Column 1: Top Processes -->
-              <div class="monitor-card" style="padding:16px;min-height:240px;">
-                <h4 style="margin:0 0 12px;font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Top Processes - CPU + Mem</h4>
-                <table class="processes-table">
-                  <tbody id="top-processes-table-body"></tbody>
-                </table>
-              </div>
-
-              <!-- Column 2: Cache Redis Performance -->
-              <div class="monitor-card" style="padding:16px;min-height:240px;display:flex;flex-direction:column;justify-content:space-between;">
-                <h4 style="margin:0 0 10px;font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Cache - Redis Performance</h4>
+              <!-- RIGHT COLUMN: Processes, Cache, Incidents -->
+              <div id="monitor-dashboard-third-col" style="display:flex;flex-direction:column;gap:10px;">
                 
-                <div class="cache-hit-gauge-container" id="redis-hit-gauge-wrap"></div>
+                <!-- Card 1: Top Processes -->
+                <div class="monitor-card" style="padding:10px 12px;height:140px;box-sizing:border-box;">
+                  <h4 style="margin:0 0 6px;font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Top Processes</h4>
+                  <table class="processes-table">
+                    <tbody id="top-processes-table-body"></tbody>
+                  </table>
+                </div>
 
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                  <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:6px;padding:6px 10px;">
-                    <div style="font-size:8px;color:#8b949e;">HITS</div>
-                    <div style="font-size:11px;font-weight:700;color:#f0f6fc;font-family:'JetBrains Mono',monospace;" id="redis-hits-val">—</div>
+                <!-- Card 2: Cache - Redis Performance -->
+                <div class="monitor-card" style="padding:10px 12px;height:140px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;">
+                  <h4 style="margin:0 0 6px;font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Cache - Redis</h4>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:10px;">
+                    <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:4px;padding:4px 8px;display:flex;justify-content:space-between;align-items:center;">
+                      <span style="color:#8b949e;">Hits</span>
+                      <span style="color:#f0f6fc;font-weight:600;font-family:'JetBrains Mono',monospace;" id="redis-hits-val">—</span>
+                    </div>
+                    <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:4px;padding:4px 8px;display:flex;justify-content:space-between;align-items:center;">
+                      <span style="color:#8b949e;">Miss</span>
+                      <span style="color:#f0f6fc;font-weight:600;font-family:'JetBrains Mono',monospace;" id="redis-misses-val">—</span>
+                    </div>
+                    <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:4px;padding:4px 8px;display:flex;justify-content:space-between;align-items:center;">
+                      <span style="color:#8b949e;">Mem</span>
+                      <span style="color:#ffb703;font-weight:600;font-family:'JetBrains Mono',monospace;" id="redis-mem-val">—</span>
+                    </div>
+                    <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:4px;padding:4px 8px;display:flex;justify-content:space-between;align-items:center;">
+                      <span style="color:#8b949e;">Keys</span>
+                      <span style="color:#00f2fe;font-weight:600;font-family:'JetBrains Mono',monospace;" id="redis-keys-val">—</span>
+                    </div>
                   </div>
-                  <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:6px;padding:6px 10px;">
-                    <div style="font-size:8px;color:#8b949e;">MISSES</div>
-                    <div style="font-size:11px;font-weight:700;color:#f0f6fc;font-family:'JetBrains Mono',monospace;" id="redis-misses-val">—</div>
-                  </div>
-                  <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:6px;padding:6px 10px;">
-                    <div style="font-size:8px;color:#8b949e;">MEMORY</div>
-                    <div style="font-size:11px;font-weight:700;color:#ffb703;font-family:'JetBrains Mono',monospace;" id="redis-mem-val">—</div>
-                  </div>
-                  <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:6px;padding:6px 10px;">
-                    <div style="font-size:8px;color:#8b949e;">KEYS</div>
-                    <div style="font-size:11px;font-weight:700;color:#00f2fe;font-family:'JetBrains Mono',monospace;" id="redis-keys-val">—</div>
+                  <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;margin-top:2px;">
+                    <span style="color:#8b949e;">Hit Rate</span>
+                    <span style="color:#00ff66;font-weight:700;" id="redis-hit-rate-text">100%</span>
                   </div>
                 </div>
+
+                <!-- Card 3: Incident History -->
+                <div class="monitor-card" style="padding:10px 12px;height:140px;box-sizing:border-box;overflow:hidden;display:flex;flex-direction:column;">
+                  <h4 style="margin:0 0 6px;font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Incident History</h4>
+                  <div class="timeline-list" id="monitor-incident-timeline" style="flex:1;overflow-y:auto;padding-left:10px;margin-left:2px;"></div>
+                </div>
+
               </div>
 
-              <!-- Column 3: Incident History -->
-              <div class="monitor-card" style="padding:16px;min-height:240px;overflow-y:auto;">
-                <h4 style="margin:0 0 12px;font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Incident History</h4>
-                <div class="timeline-list" id="monitor-incident-timeline"></div>
-              </div>
             </div>
+
+            <!-- Empty hidden elements for compatibility with legacy display toggles -->
+            <div id="monitor-dashboard-bottom-title" style="display:none !important;"></div>
+            <div id="monitor-dashboard-bottom-layout" style="display:none !important;"></div>
 
           </div>
         </div><!-- end svc-panel-monitoring -->
