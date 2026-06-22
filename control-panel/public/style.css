@@ -2842,17 +2842,7 @@ body.light-theme .monitor-metric-value {
   position: relative;
 }
 .monitor-progress-bar::after {
-  content: '';
-  position: absolute;
-  right: -5px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #ffffff;
-  box-shadow: 0 0 6px currentColor, 0 0 12px currentColor;
-  border: 2px solid #0d0b21;
+  display: none;
 }
 
 .monitor-progress-bar.cpu::after { color: #a371f7; }

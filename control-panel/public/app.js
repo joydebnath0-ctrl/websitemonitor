@@ -5971,7 +5971,7 @@ function renderMonitoringTable(data) {
           </div>
         </div>
 
-        <div style="display:flex;flex-direction:column;gap:12px;margin-top:4px;">
+        <div style="display:flex;flex-direction:column;gap:7px;margin-top:4px;">
           <div class="monitor-metric-row">
             <div class="monitor-metric-label-row">
               <span style="color:#c9d1d9;font-weight:500;font-size:11px;">CPU Usage</span>
@@ -6002,7 +6002,7 @@ function renderMonitoringTable(data) {
             </div>
           </div>
 
-          <div style="font-size:9px;color:#ffb703;text-transform:uppercase;font-weight:700;letter-spacing:0.05em;margin-top:4px;border-bottom:1px solid rgba(255,255,255,0.03);padding-bottom:4px;">New Inputs</div>
+          <div style="font-size:9px;color:#ffb703;text-transform:uppercase;font-weight:700;letter-spacing:0.05em;margin-top:2px;border-bottom:1px solid rgba(255,255,255,0.03);padding-bottom:3px;">New Inputs</div>
 
           <div class="monitor-metric-row">
             <div class="monitor-metric-label-row">
@@ -6035,7 +6035,7 @@ function renderMonitoringTable(data) {
           </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:6px;">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:8px;">
           <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:6px;padding:7px 10px;height:46px;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;">
             <div style="font-size:8px;color:#8b949e;text-transform:uppercase;font-weight:600;letter-spacing:0.3px;">NETWORK</div>
             <div style="font-size:11px;font-weight:700;color:#f0f6fc;font-family:'JetBrains Mono',monospace;display:flex;align-items:center;height:14px;line-height:14px;">${selected.networkThroughput || '0 KB/s'}</div>
@@ -6072,6 +6072,28 @@ function renderMonitoringTable(data) {
           <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:6px;padding:7px 10px;height:46px;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;">
             <div style="font-size:8px;color:#8b949e;text-transform:uppercase;font-weight:600;letter-spacing:0.3px;">DB CONNS</div>
             <div style="font-size:11px;font-weight:700;color:#00ff66;font-family:'JetBrains Mono',monospace;display:flex;align-items:center;height:14px;line-height:14px;">${selected.dbConns || '0 / 100'}</div>
+          </div>
+        </div>
+
+        <div style="margin-top:10px;background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:6px;padding:10px;box-sizing:border-box;">
+          <div style="font-size:9px;color:#ffb703;text-transform:uppercase;font-weight:700;letter-spacing:0.05em;border-bottom:1px solid rgba(255,255,255,0.03);padding-bottom:3px;margin-bottom:6px;">Instance Metadata</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:11px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px dashed rgba(255,255,255,0.03);padding-bottom:2px;">
+              <span style="color:#8b949e;">Platform</span>
+              <span style="color:#f0f6fc;font-weight:600;">${escapeHtml(selected.cloud)}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px dashed rgba(255,255,255,0.03);padding-bottom:2px;">
+              <span style="color:#8b949e;">Region</span>
+              <span style="color:#f0f6fc;font-weight:600;">${escapeHtml(selected.region || 'N/A')}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px dashed rgba(255,255,255,0.03);padding-bottom:2px;">
+              <span style="color:#8b949e;">SSH User</span>
+              <span style="color:#f0f6fc;font-weight:600;">ubuntu</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px dashed rgba(255,255,255,0.03);padding-bottom:2px;">
+              <span style="color:#8b949e;">Method</span>
+              <span style="color:#f0f6fc;font-weight:600;text-transform:uppercase;">${escapeHtml(selected.method || 'SSH')}</span>
+            </div>
           </div>
         </div>
       </div>
