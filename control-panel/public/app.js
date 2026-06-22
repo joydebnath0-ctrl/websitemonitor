@@ -6036,42 +6036,42 @@ function renderMonitoringTable(data) {
         </div>
 
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:6px;">
-          <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:6px;padding:6px 10px;">
-            <div style="font-size:8px;color:#8b949e;text-transform:uppercase;font-weight:600;">NETWORK</div>
-            <div style="font-size:11px;font-weight:700;color:#f0f6fc;margin-top:2px;font-family:'JetBrains Mono',monospace;">${selected.networkThroughput || '0 KB/s'}</div>
+          <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:6px;padding:7px 10px;height:46px;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;">
+            <div style="font-size:8px;color:#8b949e;text-transform:uppercase;font-weight:600;letter-spacing:0.3px;">NETWORK</div>
+            <div style="font-size:11px;font-weight:700;color:#f0f6fc;font-family:'JetBrains Mono',monospace;display:flex;align-items:center;height:14px;line-height:14px;">${selected.networkThroughput || '0 KB/s'}</div>
           </div>
 
-          <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:6px;padding:6px 10px;">
-            <div style="font-size:8px;color:#8b949e;text-transform:uppercase;font-weight:600;">SSL EXPIRY</div>
-            <div style="margin-top:2px;">
-              <span class="ssl-expiry-badge ${sslClass}" style="font-size:9px;padding:1px 6px;border-radius:4px;font-weight:700;border:1px solid currentColor;">${sslText}</span>
+          <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:6px;padding:7px 10px;height:46px;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;">
+            <div style="font-size:8px;color:#8b949e;text-transform:uppercase;font-weight:600;letter-spacing:0.3px;">SSL EXPIRY</div>
+            <div style="display:flex;align-items:center;height:14px;">
+              <span class="ssl-expiry-badge ${sslClass}" style="font-size:9px;padding:0 5px;border-radius:3px;font-weight:700;border:1px solid currentColor;display:inline-flex;align-items:center;height:12px;line-height:12px;">${sslText}</span>
             </div>
           </div>
 
-          <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:6px;padding:6px 10px;">
-            <div style="font-size:8px;color:#8b949e;text-transform:uppercase;font-weight:600;">REDIS</div>
-            <div style="font-size:11px;font-weight:700;color:${redisDot === 'up' ? '#00ff66' : '#8b949e'};margin-top:2px;display:flex;align-items:center;gap:4px;">
+          <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:6px;padding:7px 10px;height:46px;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;">
+            <div style="font-size:8px;color:#8b949e;text-transform:uppercase;font-weight:600;letter-spacing:0.3px;">REDIS</div>
+            <div style="font-size:11px;font-weight:700;color:${redisDot === 'up' ? '#00ff66' : '#8b949e'};display:flex;align-items:center;gap:4px;height:14px;line-height:14px;">
               <span class="neon-glow-dot ${redisDot}" style="width:6px;height:6px;"></span>
               ${redisText}
             </div>
           </div>
 
-          <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:6px;padding:6px 10px;">
-            <div style="font-size:8px;color:#8b949e;text-transform:uppercase;font-weight:600;">DATABASE</div>
-            <div style="font-size:11px;font-weight:700;color:${dbDot === 'up' ? '#00ff66' : '#8b949e'};margin-top:2px;display:flex;align-items:center;gap:4px;">
+          <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:6px;padding:7px 10px;height:46px;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;">
+            <div style="font-size:8px;color:#8b949e;text-transform:uppercase;font-weight:600;letter-spacing:0.3px;">DATABASE</div>
+            <div style="font-size:11px;font-weight:700;color:${dbDot === 'up' ? '#00ff66' : '#8b949e'};display:flex;align-items:center;gap:4px;height:14px;line-height:14px;">
               <span class="neon-glow-dot ${dbDot}" style="width:6px;height:6px;"></span>
               ${dbText}
             </div>
           </div>
 
-          <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:6px;padding:6px 10px;">
-            <div style="font-size:8px;color:#8b949e;text-transform:uppercase;font-weight:600;">OPEN PORTS</div>
-            <div style="font-size:11px;font-weight:700;color:#f0f6fc;margin-top:2px;font-family:'JetBrains Mono',monospace;">80, 443, 22</div>
+          <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:6px;padding:7px 10px;height:46px;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;" title="${selected.openPorts || '80, 443, 22'}">
+            <div style="font-size:8px;color:#8b949e;text-transform:uppercase;font-weight:600;letter-spacing:0.3px;">OPEN PORTS</div>
+            <div style="font-size:11px;font-weight:700;color:#f0f6fc;font-family:'JetBrains Mono',monospace;display:flex;align-items:center;height:14px;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${selected.openPorts || '80, 443, 22'}</div>
           </div>
 
-          <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:6px;padding:6px 10px;">
-            <div style="font-size:8px;color:#8b949e;text-transform:uppercase;font-weight:600;">DB CONNS</div>
-            <div style="font-size:11px;font-weight:700;color:#00ff66;margin-top:2px;font-family:'JetBrains Mono',monospace;">${selected.dbConns || '0 / 100'}</div>
+          <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:6px;padding:7px 10px;height:46px;display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;">
+            <div style="font-size:8px;color:#8b949e;text-transform:uppercase;font-weight:600;letter-spacing:0.3px;">DB CONNS</div>
+            <div style="font-size:11px;font-weight:700;color:#00ff66;font-family:'JetBrains Mono',monospace;display:flex;align-items:center;height:14px;line-height:14px;">${selected.dbConns || '0 / 100'}</div>
           </div>
         </div>
       </div>

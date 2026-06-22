@@ -5566,6 +5566,15 @@ async function sendRecoveryAlert(target, downSince) {
   }
 }
 
+function getSectionLines(lines, header) {
+  const startIdx = lines.findIndex(l => l.includes(header));
+  if (startIdx === -1) return [];
+  const nextIdx = lines.slice(startIdx + 1).findIndex(l => l.includes('==='));
+  return nextIdx !== -1 
+    ? lines.slice(startIdx + 1, startIdx + 1 + nextIdx) 
+    : lines.slice(startIdx + 1);
+}
+
 function fetchSshMetrics(target) {
   return new Promise((resolve) => {
     let ipHash = 0;
@@ -5719,15 +5728,20 @@ function fetchSshMetrics(target) {
 
         // Parse SS Open Ports
         let ports = [];
-        const ssIdx = lines.findIndex(l => l.includes('===SS==='));
-        if (ssIdx !== -1) {
-          const ssLines = lines.slice(ssIdx);
+        const ssLines = getSectionLines(lines, '===SS===');
+        if (ssLines.length > 0) {
           ports = ssLines.map(l => {
-            const m = l.match(/:(\d+)\s+/);
-            return m ? m[1] : null;
+            const parts = l.trim().split(/\s+/);
+            if (parts.length >= 4) {
+              const localAddrPort = parts[3];
+              return localAddrPort.split(':').pop();
+            }
+            return null;
           }).filter(Boolean);
 
-          const uniquePorts = [...new Set(ports)].filter(p => ['22', '80', '443', '3306', '27017', '5432', '6379'].includes(p)).sort((a,b) => parseInt(a,10) - parseInt(b,10));
+          const uniquePorts = [...new Set(ports)]
+            .filter(p => !['53', '54', '631'].includes(p) && /^\d+$/.test(p))
+            .sort((a,b) => parseInt(a,10) - parseInt(b,10));
           metrics.openPorts = uniquePorts.join(', ') || '80, 443, 22';
 
           metrics.redisHealth = ports.includes('6379') ? 'healthy' : 'not-installed';
@@ -5735,16 +5749,15 @@ function fetchSshMetrics(target) {
         }
 
         // Parse SS_CONNS (Database Connections & Region distribution)
-        const ssConnsIdx = lines.findIndex(l => l.includes('===SS_CONNS==='));
-        if (ssConnsIdx !== -1) {
-          const connLines = lines.slice(ssConnsIdx);
+        const ssConnLines = getSectionLines(lines, '===SS_CONNS===');
+        if (ssConnLines.length > 0) {
           let dbConnCount = 0;
           let usEast = 0;
           let euWest = 0;
           let asiaPac = 0;
           let auEast = 0;
 
-          connLines.forEach(l => {
+          ssConnLines.forEach(l => {
             if (l.includes(':27017') || l.includes(':3306') || l.includes(':5432')) {
               dbConnCount++;
             }
