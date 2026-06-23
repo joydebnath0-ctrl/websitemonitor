@@ -1,0 +1,19 @@
+[Unit]
+Description=EC2 Deployment Control Panel
+After=network.target
+
+[Service]
+WorkingDirectory=/home/ubuntu/control-panel
+ExecStart=/usr/bin/node server.js
+Restart=always
+User=root
+Environment="PORT=80"
+Environment="SMTP_HOST=webmail.wordpress-developer.us"
+Environment="SMTP_PORT=465"
+Environment="SMTP_SECURE=true"
+Environment="SMTP_USER=developer@wordpress-developer.us"
+Environment="SMTP_PASS=Webskitters@Wordpressserver!1"
+Environment="SMTP_FROM=AWS Monitor <developer@wordpress-developer.us>"
+
+[Install]
+WantedBy=multi-user.target

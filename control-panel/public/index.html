@@ -264,6 +264,139 @@
         </div>
       </div>
 
+      <!-- SSM / SECRETS BROWSER MODAL -->
+      <div id="ecs-ssm-secrets-modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1050; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+        <div class="ecs-search-modal">
+          <div class="ecs-modal-header">
+            <h3 class="ecs-modal-title" id="ecs-browser-title">Browse AWS SSM / Secrets</h3>
+            <button type="button" class="ecs-modal-close-btn" id="btn-ecs-browser-close">&times;</button>
+          </div>
+          <div class="ecs-search-input-wrapper">
+            <input type="text" id="ecs-browser-search" class="ec2-input" placeholder="Search by name...">
+          </div>
+          <div class="ecs-search-results-list" id="ecs-browser-results">
+            <!-- Results populated dynamically -->
+          </div>
+          <p style="font-size:11px;color:#8b949e;margin:0;">Select an item from the list to set its value.</p>
+        </div>
+      </div>
+
+      <!-- SECURITY GROUP RULES CONFIG MODAL -->
+      <div id="ecs-sg-modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1050; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+        <div class="ecs-search-modal" style="width:600px;">
+          <div class="ecs-modal-header">
+            <h3 class="ecs-modal-title">Configure Security Group Rules</h3>
+            <button type="button" class="ecs-modal-close-btn" id="btn-ecs-sg-close">&times;</button>
+          </div>
+          <p style="font-size:11px;color:#8b949e;">Define ingress rules for the new security group.</p>
+          <div style="max-height:300px;overflow-y:auto;border:1px solid #21262d;border-radius:6px;background:#161b22;padding:10px;">
+            <table class="ecs-editor-table" id="ecs-sg-rules-table">
+              <thead>
+                <tr>
+                  <th>Protocol</th>
+                  <th>Port Range</th>
+                  <th>Source (CIDR)</th>
+                  <th>Description</th>
+                  <th style="width:50px;">Action</th>
+                </tr>
+              </thead>
+              <tbody id="ecs-sg-rules-tbody">
+                <!-- SG rule rows -->
+              </tbody>
+            </table>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+            <button type="button" class="ec2-btn-outline" id="btn-add-sg-rule">➕ Add Rule</button>
+            <button type="button" class="ec2-btn-primary" id="btn-save-sg-rules" style="background:linear-gradient(135deg,#58a6ff,#00f2fe);">Save Rules</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ECS SUMMARY MODAL -->
+      <div id="ecs-summary-modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:1100; align-items:center; justify-content:center; backdrop-filter:blur(5px);">
+        <div class="ecs-summary-modal-card">
+          <div class="ecs-modal-header">
+            <h3 class="ecs-modal-title">ECS Deployment Summary & Cost Estimate</h3>
+            <button type="button" class="ecs-modal-close-btn" id="btn-ecs-summary-close">&times;</button>
+          </div>
+          
+          <!-- Traffic Flow Diagram -->
+          <div class="diagram-wrapper">
+            <div class="diagram-title">Visual Architecture Flow</div>
+            <div class="diagram-flow">
+              <div class="diagram-node">
+                <div class="diagram-node-icon">🌐</div>
+                <div class="diagram-node-title">Internet</div>
+                <div class="diagram-node-meta" id="diag-internet-meta">HTTP Traffic</div>
+              </div>
+              <div class="diagram-arrow" id="diag-arrow-1"></div>
+              <div class="diagram-node">
+                <div class="diagram-node-icon">⚖️</div>
+                <div class="diagram-node-title">ALB</div>
+                <div class="diagram-node-meta" id="diag-alb-meta">Port 80</div>
+              </div>
+              <div class="diagram-arrow" id="diag-arrow-2"></div>
+              <div class="diagram-node">
+                <div class="diagram-node-icon">🎯</div>
+                <div class="diagram-node-title">Target Group</div>
+                <div class="diagram-node-meta" id="diag-tg-meta">Path /</div>
+              </div>
+              <div class="diagram-arrow" id="diag-arrow-3"></div>
+              <div class="diagram-node">
+                <div class="diagram-node-icon">🐳</div>
+                <div class="diagram-node-title">Fargate Task</div>
+                <div class="diagram-node-meta" id="diag-task-meta">Port 80</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Monthly Cost Estimator -->
+          <div class="cost-breakdown-card">
+            <div class="cost-breakdown-title">Estimated Monthly Cost (US-East Region)</div>
+            <div id="cost-details">
+              <div class="cost-row"><span>Fargate Compute (CPU & Memory)</span><span id="cost-compute-val">$0.00</span></div>
+              <div class="cost-row" id="cost-spot-savings-row" style="display:none;color:#3fb950;"><span>Fargate Spot Savings</span><span id="cost-spot-savings-val">-$0.00</span></div>
+              <div class="cost-row"><span>Load Balancer Base Fee</span><span id="cost-alb-val">$16.20</span></div>
+              <div class="cost-row"><span>CloudWatch Log Storage (estimated 10GB)</span><span id="cost-logs-val">$0.30</span></div>
+              <div class="cost-row total"><span>Total Estimated Cost</span><span id="cost-total-val">$16.50</span></div>
+            </div>
+          </div>
+
+          <!-- Deployment Steps Progress Timeline -->
+          <div>
+            <div class="timeline-title">Deployment Progress Timeline</div>
+            <div class="timeline-steps">
+              <div class="timeline-step pending" id="step-timeline-sg">
+                <div class="timeline-dot">1</div>
+                <span class="timeline-label">Create Security Group Rules</span>
+              </div>
+              <div class="timeline-step pending" id="step-timeline-alb">
+                <div class="timeline-dot">2</div>
+                <span class="timeline-label">Configure Load Balancer & Target Group</span>
+              </div>
+              <div class="timeline-step pending" id="step-timeline-iam">
+                <div class="timeline-dot">3</div>
+                <span class="timeline-label">Create IAM Exec & Task Roles</span>
+              </div>
+              <div class="timeline-step pending" id="step-timeline-taskdef">
+                <div class="timeline-dot">4</div>
+                <span class="timeline-label">Register Task Definition</span>
+              </div>
+              <div class="timeline-step pending" id="step-timeline-service">
+                <div class="timeline-dot">5</div>
+                <span class="timeline-label">Provision ECS Cluster & Fargate Service</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div style="display:flex; justify-content:flex-end; gap:12px;" id="ecs-summary-actions-wrapper">
+            <button type="button" class="ec2-btn-outline" id="btn-ecs-summary-cancel" style="padding:10px 20px;">Cancel</button>
+            <button type="button" class="ec2-btn-primary" id="btn-ecs-summary-deploy" style="padding:10px 30px; background:linear-gradient(135deg, #238636, #2ea043);">Confirm & Deploy Service</button>
+          </div>
+        </div>
+      </div>
+
     <!-- AWS Provider Panel -->
     <div id="aws-provider-panel" class="provider-panel active">
       <!-- Service Switcher Nav -->
@@ -1153,95 +1286,944 @@
           <div class="ec2-tab-contents-container">
             <!-- ECS CONFIG TAB -->
             <div class="ec2-tab-content active" id="tab-content-ecs-config">
-              <div class="ec2-form-group">
-                <label class="ec2-label">Cluster / Project Name</label>
-                <input type="text" id="ecs-name" class="ec2-input" placeholder="my-ecs-service" pattern="[a-zA-Z0-9-]+" title="Alphanumeric and dashes only">
-                <p class="field-err" id="err-ecs-name" style="display:none;"></p>
-              </div>
-
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">
-                <div>
-                  <label class="ec2-label">AWS Profile</label>
-                  <select id="ecs-profile" class="ec2-select">
-                    <option value="default">default</option>
-                  </select>
+              <!-- Pre-flight Validation Checklist -->
+              <div class="preflight-panel">
+                <div class="preflight-title">
+                  <span>Pre-flight Validation Checklist</span>
+                  <span id="ecs-preflight-badge" class="preflight-badge has-errors">Invalid Configuration</span>
                 </div>
-                <div>
-                  <label class="ec2-label">Environment</label>
-                  <select id="ecs-env" class="ec2-select">
-                    <option value="dev">Development (dev)</option>
-                    <option value="staging">Staging (staging)</option>
-                    <option value="prod">Production (prod)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">
-                <div>
-                  <label class="ec2-label">Fargate CPU</label>
-                  <select id="ecs-cpu" class="ec2-select">
-                    <option value="256">0.25 vCPU (256)</option>
-                    <option value="512">0.5 vCPU (512)</option>
-                    <option value="1024" selected>1 vCPU (1024)</option>
-                    <option value="2048">2 vCPU (2048)</option>
-                    <option value="4096">4 vCPU (4096)</option>
-                  </select>
-                </div>
-                <div>
-                  <label class="ec2-label">Fargate Memory</label>
-                  <select id="ecs-memory" class="ec2-select">
-                    <!-- Dynamic based on CPU selection -->
-                  </select>
-                </div>
-              </div>
-
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">
-                <div>
-                  <label class="ec2-label">Container Port</label>
-                  <input type="number" id="ecs-port" class="ec2-input" value="80" min="1" max="65535">
-                  <p class="field-err" id="err-ecs-port" style="display:none;"></p>
-                </div>
-                <div>
-                  <label class="ec2-label">Desired Tasks</label>
-                  <input type="number" id="ecs-tasks" class="ec2-input" value="1" min="1" max="10">
-                  <p class="field-err" id="err-ecs-tasks" style="display:none;"></p>
-                </div>
-              </div>
-
-              <div class="ec2-form-group">
-                <label class="ec2-label">VPC Network</label>
-                <select id="ecs-vpc" class="ec2-select">
-                  <option value="">Default VPC</option>
-                </select>
-              </div>
-
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;">
-                <div>
-                  <label class="ec2-label">ALB Public Subnets</label>
-                  <div id="ecs-public-subnets-container" class="subnets-checkbox-list" style="background:#161b22; border:1px solid #30363d; border-radius:6px; padding:10px; max-height:120px; overflow-y:auto; font-size:12px; color:#c9d1d9;">
-                    <p style="margin:0;color:#8b949e;">Select a VPC first</p>
+                <div class="preflight-grid">
+                  <div class="preflight-item invalid" id="pf-project-name">
+                    <span class="preflight-icon"></span>
+                    <span>Project Name Valid</span>
                   </div>
-                  <p class="field-err" id="err-ecs-pub-subnets" style="display:none;"></p>
-                </div>
-                <div>
-                  <label class="ec2-label">Fargate Private Subnets</label>
-                  <div id="ecs-private-subnets-container" class="subnets-checkbox-list" style="background:#161b22; border:1px solid #30363d; border-radius:6px; padding:10px; max-height:120px; overflow-y:auto; font-size:12px; color:#c9d1d9;">
-                    <p style="margin:0;color:#8b949e;">Select a VPC first</p>
+                  <div class="preflight-item invalid" id="pf-vpc-subnets">
+                    <span class="preflight-icon"></span>
+                    <span>VPC & Subnets Selected</span>
                   </div>
-                  <p class="field-err" id="err-ecs-priv-subnets" style="display:none;"></p>
+                  <div class="preflight-item invalid" id="pf-image-source">
+                    <span class="preflight-icon"></span>
+                    <span>Container Image Source</span>
+                  </div>
+                  <div class="preflight-item invalid" id="pf-port-mappings">
+                    <span class="preflight-icon"></span>
+                    <span>Port Mapping Defined</span>
+                  </div>
+                  <div class="preflight-item valid" id="pf-iam-roles">
+                    <span class="preflight-icon"></span>
+                    <span>IAM Roles Configured</span>
+                  </div>
+                  <div class="preflight-item valid" id="pf-alb-config">
+                    <span class="preflight-icon"></span>
+                    <span>ALB & Health Checks</span>
+                  </div>
                 </div>
               </div>
 
-              <div class="ec2-form-group">
-                <label class="ec2-label">S3 Bucket Access Reference <span style="color:#484f58;font-weight:400;">(optional)</span></label>
-                <select id="ecs-s3-bucket" class="ec2-select">
-                  <option value="">None</option>
-                </select>
-                <p style="font-size:11px;color:#8b949e;margin-top:4px;">Grants the ECS task read/write permissions to this S3 bucket</p>
+              <div class="ecs-accordion">
+                <!-- SECTION 1: Cluster Configuration -->
+                <div class="ecs-accordion-item active" id="ecs-section-1">
+                  <div class="ecs-accordion-header" onclick="toggleEcsAccordion(1)">
+                    <div class="ecs-accordion-title-wrapper">
+                      <span class="ecs-accordion-status invalid" id="ecs-status-1"></span>
+                      <span class="ecs-accordion-title">SECTION 1 — Cluster Configuration</span>
+                    </div>
+                    <span class="ecs-accordion-chevron"></span>
+                  </div>
+                  <div class="ecs-accordion-content">
+                    <div class="ec2-form-group" style="margin-bottom:14px;">
+                      <label class="ec2-label">Cluster / Project Name</label>
+                      <input type="text" id="ecs-name" class="ec2-input" placeholder="my-ecs-service" pattern="[a-zA-Z0-9-]+" title="Alphanumeric and dashes only">
+                      <p class="field-err" id="err-ecs-name" style="display:none;"></p>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                      <div>
+                        <label class="ec2-label">AWS Profile</label>
+                        <select id="ecs-profile" class="ec2-select">
+                          <option value="default">default</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="ec2-label">Environment</label>
+                        <select id="ecs-env" class="ec2-select">
+                          <option value="dev">Development (dev)</option>
+                          <option value="staging">Staging (staging)</option>
+                          <option value="prod">Production (prod)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="ec2-form-group" style="margin-bottom:14px;">
+                      <label class="ec2-label">Service Name</label>
+                      <input type="text" id="ecs-service-name" class="ec2-input" placeholder="my-ecs-service-service">
+                    </div>
+
+                    <div class="ec2-form-group" style="margin-bottom:14px;">
+                      <label class="ec2-label">Launch Type / Capacity Provider Mode</label>
+                      <div style="display:flex;gap:16px;margin-top:4px;">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;">
+                          <input type="radio" name="ecs-launch-type" id="ecs-launch-fargate" value="FARGATE" checked> Fargate
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;">
+                          <input type="radio" name="ecs-launch-type" id="ecs-launch-spot" value="FARGATE_SPOT"> Fargate Spot
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;">
+                          <input type="radio" name="ecs-launch-type" id="ecs-launch-mixed" value="MIXED"> Mixed
+                        </label>
+                      </div>
+                    </div>
+
+                    <div id="ecs-mixed-weights-panel" style="display:none;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:12px;margin-bottom:14px;">
+                      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                        <div>
+                          <label class="ec2-label">Fargate Base / Weight</label>
+                          <input type="number" id="ecs-fargate-weight" class="ec2-input" value="1" min="0">
+                        </div>
+                        <div>
+                          <label class="ec2-label">Fargate Spot Weight</label>
+                          <input type="number" id="ecs-spot-weight" class="ec2-input" value="1" min="0">
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                      <div>
+                        <label class="ec2-label">Fargate CPU</label>
+                        <select id="ecs-cpu" class="ec2-select">
+                          <option value="256">0.25 vCPU (256)</option>
+                          <option value="512">0.5 vCPU (512)</option>
+                          <option value="1024" selected>1 vCPU (1024)</option>
+                          <option value="2048">2 vCPU (2048)</option>
+                          <option value="4096">4 vCPU (4096)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="ec2-label">Fargate Memory</label>
+                        <select id="ecs-memory" class="ec2-select"></select>
+                      </div>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                      <div>
+                        <label class="ec2-label">Platform Version</label>
+                        <select id="ecs-platform-version" class="ec2-select">
+                          <option value="LATEST">LATEST</option>
+                          <option value="1.4.0">1.4.0</option>
+                          <option value="1.3.0">1.3.0</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="ec2-label">Desired Tasks</label>
+                        <input type="number" id="ecs-tasks" class="ec2-input" value="1" min="1" max="10">
+                        <p class="field-err" id="err-ecs-tasks" style="display:none;"></p>
+                      </div>
+                    </div>
+
+                    <div class="toggle-row" style="margin-top:10px;">
+                      <div class="toggle-info">
+                        <span class="toggle-title">Container Insights</span>
+                        <span class="toggle-desc">Enable CloudWatch Container Insights</span>
+                      </div>
+                      <label class="toggle-switch">
+                        <input type="checkbox" id="ecs-container-insights">
+                        <span class="toggle-slider"></span>
+                      </label>
+                    </div>
+
+                    <div class="ec2-form-group" style="margin-top:14px;">
+                      <label class="ec2-label">Service Discovery Namespace <span style="color:#8b949e;font-weight:normal;">(Optional)</span></label>
+                      <input type="text" id="ecs-service-discovery-namespace" class="ec2-input" placeholder="local">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- SECTION 2: Container & Image -->
+                <div class="ecs-accordion-item" id="ecs-section-2">
+                  <div class="ecs-accordion-header" onclick="toggleEcsAccordion(2)">
+                    <div class="ecs-accordion-title-wrapper">
+                      <span class="ecs-accordion-status invalid" id="ecs-status-2"></span>
+                      <span class="ecs-accordion-title">SECTION 2 — Container & Image</span>
+                    </div>
+                    <span class="ecs-accordion-chevron"></span>
+                  </div>
+                  <div class="ecs-accordion-content">
+                    <div class="ec2-form-group" style="margin-bottom:14px;">
+                      <label class="ec2-label">Image Source</label>
+                      <div style="display:flex;gap:16px;margin-top:4px;">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;">
+                          <input type="radio" name="ecs-image-source" id="ecs-image-source-ecr" value="ECR" checked> AWS ECR
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;">
+                          <input type="radio" name="ecs-image-source" id="ecs-image-source-dockerhub" value="DOCKERHUB"> Docker Hub (Public)
+                        </label>
+                      </div>
+                    </div>
+
+                    <!-- ECR Panel -->
+                    <div id="ecs-image-ecr-panel" style="margin-bottom:14px;">
+                      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                        <div>
+                          <label class="ec2-label">ECR Repository</label>
+                          <select id="ecs-ecr-repo-select" class="ec2-select">
+                            <option value="">Loading repos...</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label class="ec2-label">Image Tag <span style="font-weight:400;color:#ff7b72;">(Tag must exist in ECR)</span></label>
+                          <input type="text" id="ecs-image-tag" class="ec2-input" value="latest" placeholder="latest">
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Docker Hub Panel -->
+                    <div id="ecs-image-dockerhub-panel" style="display:none;margin-bottom:14px;">
+                      <div class="ec2-form-group">
+                        <label class="ec2-label">Image URI</label>
+                        <input type="text" id="ecs-image-uri" class="ec2-input" placeholder="e.g. nginx:latest or node:18">
+                      </div>
+                    </div>
+
+                    <div class="ec2-form-group" style="margin-bottom:14px;">
+                      <label class="ec2-label">Container Name <span style="color:#8b949e;font-weight:normal;">(defaults to cluster name)</span></label>
+                      <input type="text" id="ecs-container-name" class="ec2-input" placeholder="app">
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                      <div>
+                        <label class="ec2-label">Entrypoint Override <span style="color:#8b949e;font-weight:normal;">(Comma-separated)</span></label>
+                        <input type="text" id="ecs-entrypoint" class="ec2-input" placeholder="e.g. /bin/sh, -c">
+                      </div>
+                      <div>
+                        <label class="ec2-label">Command Override <span style="color:#8b949e;font-weight:normal;">(Comma-separated)</span></label>
+                        <input type="text" id="ecs-command" class="ec2-input" placeholder="e.g. node, server.js">
+                      </div>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                      <div>
+                        <label class="ec2-label">Working Directory</label>
+                        <input type="text" id="ecs-working-dir" class="ec2-input" placeholder="e.g. /usr/src/app">
+                      </div>
+                      <div class="toggle-row" style="margin-top:14px;">
+                        <div class="toggle-info">
+                          <span class="toggle-title">Essential Container</span>
+                          <span class="toggle-desc">If this container fails, the task stops</span>
+                        </div>
+                        <label class="toggle-switch">
+                          <input type="checkbox" id="ecs-essential" checked>
+                          <span class="toggle-slider"></span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- SECTION 3: Port Mappings -->
+                <div class="ecs-accordion-item" id="ecs-section-3">
+                  <div class="ecs-accordion-header" onclick="toggleEcsAccordion(3)">
+                    <div class="ecs-accordion-title-wrapper">
+                      <span class="ecs-accordion-status invalid" id="ecs-status-3"></span>
+                      <span class="ecs-accordion-title">SECTION 3 — Port Mappings</span>
+                    </div>
+                    <span class="ecs-accordion-chevron"></span>
+                  </div>
+                  <div class="ecs-accordion-content">
+                    <p style="font-size:11px;color:#8b949e;margin-bottom:10px;">Configure container ports exposed by this service.</p>
+                    <input type="hidden" id="ecs-port" value="80">
+                    <p class="field-err" id="err-ecs-port" style="display:none;"></p>
+                    <table class="ecs-editor-table" id="ecs-ports-table">
+                      <thead>
+                        <tr>
+                          <th>Container Port</th>
+                          <th>Host Port</th>
+                          <th>Protocol</th>
+                          <th>Name</th>
+                          <th>App Protocol</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody id="ecs-ports-tbody">
+                        <!-- Port rows inserted here dynamically -->
+                      </tbody>
+                    </table>
+                    <button type="button" class="ec2-btn-outline" id="btn-add-port-mapping">➕ Add Port Mapping</button>
+                  </div>
+                </div>
+
+                <!-- SECTION 4: IAM Roles -->
+                <div class="ecs-accordion-item" id="ecs-section-4">
+                  <div class="ecs-accordion-header" onclick="toggleEcsAccordion(4)">
+                    <div class="ecs-accordion-title-wrapper">
+                      <span class="ecs-accordion-status valid" id="ecs-status-4"></span>
+                      <span class="ecs-accordion-title">SECTION 4 — IAM Roles</span>
+                    </div>
+                    <span class="ecs-accordion-chevron"></span>
+                  </div>
+                  <div class="ecs-accordion-content">
+                    <!-- Task Execution Role -->
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                      <div>
+                        <label class="ec2-label">Execution Role Mode</label>
+                        <select id="ecs-execution-role-mode" class="ec2-select">
+                          <option value="auto">Create New (Auto-managed)</option>
+                          <option value="existing">Select Existing Role</option>
+                        </select>
+                      </div>
+                      <div id="ecs-execution-role-select-wrapper" style="display:none;">
+                        <label class="ec2-label">Existing Execution Role</label>
+                        <select id="ecs-execution-role-select" class="ec2-select">
+                          <option value="">Loading roles...</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <!-- Task Role -->
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                      <div>
+                        <label class="ec2-label">Task Role Mode</label>
+                        <select id="ecs-task-role-mode" class="ec2-select">
+                          <option value="none">None (No special AWS API access)</option>
+                          <option value="create">Create Custom Task Role</option>
+                          <option value="existing">Select Existing Role</option>
+                        </select>
+                      </div>
+                      <div id="ecs-task-role-select-wrapper" style="display:none;">
+                        <label class="ec2-label">Existing Task Role</label>
+                        <select id="ecs-task-role-select" class="ec2-select">
+                          <option value="">Loading roles...</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <!-- Custom permissions checklists -->
+                    <div id="ecs-task-role-permissions-panel" style="display:none;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:12px;margin-bottom:14px;">
+                      <label class="ec2-label" style="margin-bottom:10px;">Select required AWS permissions:</label>
+                      <div style="display:flex;flex-direction:column;gap:10px;">
+                        <div>
+                          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;">
+                            <input type="checkbox" id="ecs-perm-s3"> S3 Read/Write Access
+                          </label>
+                          <div id="ecs-perm-s3-bucket-wrapper" style="display:none;margin-top:6px;padding-left:20px;">
+                            <select id="ecs-s3-bucket" class="ec2-select"></select>
+                            <p style="font-size:11px;color:#8b949e;margin-top:4px;">Grants the ECS task read/write permissions to this S3 bucket</p>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;">
+                            <input type="checkbox" id="ecs-perm-dynamo"> DynamoDB Read/Write Access
+                          </label>
+                          <div id="ecs-perm-dynamo-wrapper" style="display:none;margin-top:6px;padding-left:20px;">
+                            <input type="text" id="ecs-perm-dynamo-table" class="ec2-input" placeholder="DynamoDB Table Name">
+                          </div>
+                        </div>
+
+                        <div>
+                          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;">
+                            <input type="checkbox" id="ecs-perm-ssm"> SSM Parameter Store Read
+                          </label>
+                          <div id="ecs-perm-ssm-wrapper" style="display:none;margin-top:6px;padding-left:20px;">
+                            <input type="text" id="ecs-perm-ssm-path" class="ec2-input" placeholder="/app/dev/*">
+                          </div>
+                        </div>
+
+                        <div>
+                          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;">
+                            <input type="checkbox" id="ecs-perm-secret"> Secrets Manager Read
+                          </label>
+                          <div id="ecs-perm-secret-wrapper" style="display:none;margin-top:6px;padding-left:20px;">
+                            <input type="text" id="ecs-perm-secret-arn" class="ec2-input" placeholder="Secret ARN or *">
+                          </div>
+                        </div>
+
+                        <div>
+                          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;">
+                            <input type="checkbox" id="ecs-perm-sqs"> SQS Queue Send/Receive
+                          </label>
+                          <div id="ecs-perm-sqs-wrapper" style="display:none;margin-top:6px;padding-left:20px;">
+                            <input type="text" id="ecs-perm-sqs-url" class="ec2-input" placeholder="SQS Queue URL">
+                          </div>
+                        </div>
+
+                        <div>
+                          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;">
+                            <input type="checkbox" id="ecs-perm-sns"> SNS Topic Publish
+                          </label>
+                          <div id="ecs-perm-sns-wrapper" style="display:none;margin-top:6px;padding-left:20px;">
+                            <input type="text" id="ecs-perm-sns-topic" class="ec2-input" placeholder="SNS Topic ARN">
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style="margin-top:14px;">
+                        <label class="ec2-label">Generated Policy Preview</label>
+                        <div class="policy-preview-box" id="ecs-policy-preview">{}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- SECTION 5: Env Vars & Secrets -->
+                <div class="ecs-accordion-item" id="ecs-section-5">
+                  <div class="ecs-accordion-header" onclick="toggleEcsAccordion(5)">
+                    <div class="ecs-accordion-title-wrapper">
+                      <span class="ecs-accordion-status valid" id="ecs-status-5"></span>
+                      <span class="ecs-accordion-title">SECTION 5 — Env Vars & Secrets</span>
+                    </div>
+                    <span class="ecs-accordion-chevron"></span>
+                  </div>
+                  <div class="ecs-accordion-content">
+                    <div class="ec2-tabs-bar" style="padding:0;margin-bottom:12px;">
+                      <button type="button" class="ec2-tab active" id="ecs-env-tab-btn" onclick="switchEcsConfigTab('env')">Environment Variables</button>
+                      <button type="button" class="ec2-tab" id="ecs-secrets-tab-btn" onclick="switchEcsConfigTab('secrets')">Secrets</button>
+                    </div>
+
+                    <!-- Environment Variables Panel -->
+                    <div id="ecs-env-panel">
+                      <p style="font-size:11px;color:#8b949e;margin-bottom:8px;">Add plain-text environment variables injected into the container.</p>
+                      <div style="display:flex;gap:8px;margin-bottom:12px;">
+                        <span style="font-size:11px;color:#8b949e;align-self:center;">Presets:</span>
+                        <button type="button" class="ec2-btn-outline" onclick="addEcsEnvPreset('NODE_ENV', 'production')">NODE_ENV=production</button>
+                        <button type="button" class="ec2-btn-outline" onclick="addEcsEnvPreset('PORT', '80')">PORT=80</button>
+                      </div>
+                      <table class="ecs-editor-table" id="ecs-env-table">
+                        <thead>
+                          <tr>
+                            <th>Key</th>
+                            <th>Value</th>
+                            <th style="width:50px;">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody id="ecs-env-tbody">
+                          <!-- env rows inserted here dynamically -->
+                        </tbody>
+                      </table>
+                      <button type="button" class="ec2-btn-outline" id="btn-add-env">➕ Add Environment Variable</button>
+                    </div>
+
+                    <!-- Secrets Panel -->
+                    <div id="ecs-secrets-panel" style="display:none;">
+                      <p style="font-size:11px;color:#8b949e;margin-bottom:8px;">Add secrets retrieved from SSM Parameter Store or Secrets Manager.</p>
+                      <table class="ecs-editor-table" id="ecs-secrets-table">
+                        <thead>
+                          <tr>
+                            <th>Secret Name</th>
+                            <th>ValueFrom (SSM Parameter / Secret ARN)</th>
+                            <th style="width:130px;">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody id="ecs-secrets-tbody">
+                          <!-- secret rows inserted here dynamically -->
+                        </tbody>
+                      </table>
+                      <button type="button" class="ec2-btn-outline" id="btn-add-secret">➕ Add Secret</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- SECTION 6: Network & Security Groups -->
+                <div class="ecs-accordion-item" id="ecs-section-6">
+                  <div class="ecs-accordion-header" onclick="toggleEcsAccordion(6)">
+                    <div class="ecs-accordion-title-wrapper">
+                      <span class="ecs-accordion-status invalid" id="ecs-status-6"></span>
+                      <span class="ecs-accordion-title">SECTION 6 — Network & Security Groups</span>
+                    </div>
+                    <span class="ecs-accordion-chevron"></span>
+                  </div>
+                  <div class="ecs-accordion-content">
+                    <div class="ec2-form-group" style="margin-bottom:14px;">
+                      <label class="ec2-label">VPC Network</label>
+                      <select id="ecs-vpc" class="ec2-select">
+                        <option value="">Default VPC</option>
+                      </select>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                      <div>
+                        <label class="ec2-label">ALB Public Subnets</label>
+                        <div id="ecs-public-subnets-container" class="subnets-checkbox-list" style="background:#161b22; border:1px solid #30363d; border-radius:6px; padding:10px; max-height:120px; overflow-y:auto; font-size:12px; color:#c9d1d9;">
+                          <p style="margin:0;color:#8b949e;">Select a VPC first</p>
+                        </div>
+                        <p class="field-err" id="err-ecs-pub-subnets" style="display:none;"></p>
+                      </div>
+                      <div>
+                        <label class="ec2-label">Fargate Private Subnets</label>
+                        <div id="ecs-private-subnets-container" class="subnets-checkbox-list" style="background:#161b22; border:1px solid #30363d; border-radius:6px; padding:10px; max-height:120px; overflow-y:auto; font-size:12px; color:#c9d1d9;">
+                          <p style="margin:0;color:#8b949e;">Select a VPC first</p>
+                        </div>
+                        <p class="field-err" id="err-ecs-priv-subnets" style="display:none;"></p>
+                      </div>
+                    </div>
+
+                    <!-- Security Group Selection -->
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                      <div>
+                        <label class="ec2-label">Security Groups Mode</label>
+                        <select id="ecs-sg-mode" class="ec2-select">
+                          <option value="create">Create New Security Group</option>
+                          <option value="existing">Select Existing Security Groups</option>
+                        </select>
+                      </div>
+                      <div id="ecs-existing-sgs-wrapper" style="display:none;">
+                        <label class="ec2-label">Select Existing SGs</label>
+                        <div id="ecs-existing-sgs-container" class="subnets-checkbox-list" style="background:#161b22; border:1px solid #30363d; border-radius:6px; padding:10px; max-height:100px; overflow-y:auto; font-size:12px; color:#c9d1d9;">
+                          <!-- Populated dynamically -->
+                        </div>
+                      </div>
+                    </div>
+
+                    <div id="ecs-new-sg-actions" style="margin-bottom:14px;">
+                      <button type="button" class="ec2-btn-outline" id="btn-configure-sg-rules">🛡️ Configure Security Group Rules</button>
+                    </div>
+
+                    <div id="ecs-route-warning" class="field-err" style="display:none;background:rgba(227,179,65,0.1);border:1px solid #e3b341;border-radius:6px;padding:10px;color:#e3b341;font-size:12px;line-height:1.4;margin-top:10px;">
+                      <!-- Populated dynamically -->
+                    </div>
+                  </div>
+                </div>
+
+                <!-- SECTION 7: Load Balancer Integration -->
+                <div class="ecs-accordion-item" id="ecs-section-7">
+                  <div class="ecs-accordion-header" onclick="toggleEcsAccordion(7)">
+                    <div class="ecs-accordion-title-wrapper">
+                      <span class="ecs-accordion-status invalid" id="ecs-status-7"></span>
+                      <span class="ecs-accordion-title">SECTION 7 — Load Balancer Integration</span>
+                    </div>
+                    <span class="ecs-accordion-chevron"></span>
+                  </div>
+                  <div class="ecs-accordion-content">
+                    <div class="toggle-row" style="margin-bottom:14px;">
+                      <div class="toggle-info">
+                        <span class="toggle-title">Application Load Balancer</span>
+                        <span class="toggle-desc">Expose ECS service using an ALB</span>
+                      </div>
+                      <label class="toggle-switch">
+                        <input type="checkbox" id="ecs-alb-enabled" checked>
+                        <span class="toggle-slider"></span>
+                      </label>
+                    </div>
+
+                    <div id="ecs-alb-configuration-panel">
+                      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                        <div>
+                          <label class="ec2-label">ALB Option</label>
+                          <select id="ecs-alb-mode" class="ec2-select">
+                            <option value="create">Create New ALB</option>
+                            <option value="existing">Use Existing ALB</option>
+                          </select>
+                        </div>
+                        <div id="ecs-existing-alb-wrapper" style="display:none;">
+                          <label class="ec2-label">Select ALB</label>
+                          <select id="ecs-existing-alb-select" class="ec2-select">
+                            <option value="">Loading ALBs...</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div id="ecs-new-alb-panel" style="margin-bottom:14px;">
+                        <div style="display:grid;grid-template-columns:1.2fr 0.8fr;gap:14px;margin-bottom:14px;">
+                          <div>
+                            <label class="ec2-label">New ALB Name</label>
+                            <input type="text" id="ecs-new-alb-name" class="ec2-input" placeholder="my-ecs-alb">
+                          </div>
+                          <div>
+                            <label class="ec2-label">Scheme</label>
+                            <div style="display:flex;gap:10px;margin-top:6px;">
+                              <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;">
+                                <input type="radio" name="ecs-new-alb-scheme" value="internet-facing" checked> Public
+                              </label>
+                              <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;">
+                                <input type="radio" name="ecs-new-alb-scheme" value="internal"> Private
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                          <div>
+                            <label class="ec2-label">Listener Port</label>
+                            <input type="number" id="ecs-new-alb-port" class="ec2-input" value="80" min="1" max="65535">
+                          </div>
+                          <div>
+                            <label class="ec2-label">ACM SSL Certificate <span style="font-weight:normal;color:#8b949e;">(Optional)</span></label>
+                            <select id="ecs-new-alb-cert" class="ec2-select">
+                              <option value="">None (HTTP)</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div id="ecs-existing-alb-panel" style="display:none;margin-bottom:14px;">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                          <div>
+                            <label class="ec2-label">Listener Port / Target Group</label>
+                            <select id="ecs-existing-listener-select" class="ec2-select">
+                              <option value="80">HTTP (80)</option>
+                              <option value="443">HTTPS (443)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label class="ec2-label">Certificate ARN <span style="font-weight:normal;color:#8b949e;">(HTTPS)</span></label>
+                            <select id="ecs-existing-cert-select" class="ec2-select">
+                              <option value="">Select Certificate</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                        <div>
+                          <label class="ec2-label">Target Group Name</label>
+                          <input type="text" id="ecs-target-group-name" class="ec2-input" placeholder="my-target-group">
+                        </div>
+                        <div>
+                          <label class="ec2-label">Path Pattern</label>
+                          <input type="text" id="ecs-alb-path-pattern" class="ec2-input" value="/" placeholder="e.g. / or /api*">
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- SECTION 8: Health Checks -->
+                <div class="ecs-accordion-item" id="ecs-section-8">
+                  <div class="ecs-accordion-header" onclick="toggleEcsAccordion(8)">
+                    <div class="ecs-accordion-title-wrapper">
+                      <span class="ecs-accordion-status valid" id="ecs-status-8"></span>
+                      <span class="ecs-accordion-title">SECTION 8 — Health Checks</span>
+                    </div>
+                    <span class="ecs-accordion-chevron"></span>
+                  </div>
+                  <div class="ecs-accordion-content">
+                    <label class="ec2-label" style="font-size:12px;font-weight:bold;margin-bottom:8px;color:#c9d1d9;">Container Health Check</label>
+                    <div style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:12px;margin-bottom:14px;">
+                      <div class="ec2-form-group" style="margin-bottom:10px;">
+                        <label class="ec2-label">Test Command <span style="font-weight:normal;color:#8b949e;">(Comma-separated)</span></label>
+                        <input type="text" id="ecs-container-health-command" class="ec2-input" value="CMD-SHELL,curl -f http://localhost/ || exit 1">
+                      </div>
+                      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;">
+                        <div>
+                          <label class="ec2-label">Interval (s)</label>
+                          <input type="number" id="ecs-container-health-interval" class="ec2-input" value="30">
+                        </div>
+                        <div>
+                          <label class="ec2-label">Timeout (s)</label>
+                          <input type="number" id="ecs-container-health-timeout" class="ec2-input" value="5">
+                        </div>
+                        <div>
+                          <label class="ec2-label">Retries</label>
+                          <input type="number" id="ecs-container-health-retries" class="ec2-input" value="3">
+                        </div>
+                        <div>
+                          <label class="ec2-label">Start Period (s)</label>
+                          <input type="number" id="ecs-container-health-start" class="ec2-input" value="60">
+                        </div>
+                      </div>
+                    </div>
+
+                    <div id="ecs-tg-health-check-panel">
+                      <label class="ec2-label" style="font-size:12px;font-weight:bold;margin-bottom:8px;color:#c9d1d9;">Target Group Health Check</label>
+                      <div style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:12px;">
+                        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;">
+                          <div>
+                            <label class="ec2-label">Health Check Path</label>
+                            <input type="text" id="ecs-alb-health-path" class="ec2-input" value="/">
+                          </div>
+                          <div>
+                            <label class="ec2-label">Protocol</label>
+                            <select id="ecs-tg-health-protocol" class="ec2-select">
+                              <option value="HTTP">HTTP</option>
+                              <option value="HTTPS">HTTPS</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label class="ec2-label">Port</label>
+                            <input type="text" id="ecs-tg-health-port" class="ec2-input" value="traffic-port">
+                          </div>
+                        </div>
+
+                        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;">
+                          <div>
+                            <label class="ec2-label">Healthy Thresh.</label>
+                            <input type="number" id="ecs-tg-health-healthy" class="ec2-input" value="2">
+                          </div>
+                          <div>
+                            <label class="ec2-label">Unhealthy Thresh.</label>
+                            <input type="number" id="ecs-tg-health-unhealthy" class="ec2-input" value="5">
+                          </div>
+                          <div>
+                            <label class="ec2-label">Timeout (s)</label>
+                            <input type="number" id="ecs-tg-health-timeout" class="ec2-input" value="5">
+                          </div>
+                          <div>
+                            <label class="ec2-label">Interval (s)</label>
+                            <input type="number" id="ecs-tg-health-interval" class="ec2-input" value="30">
+                          </div>
+                        </div>
+
+                        <div class="ec2-form-group" style="margin-top:10px;">
+                          <label class="ec2-label">Success Matcher</label>
+                          <input type="text" id="ecs-tg-health-matcher" class="ec2-input" value="200" placeholder="e.g. 200,302">
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- SECTION 9: Logging -->
+                <div class="ecs-accordion-item" id="ecs-section-9">
+                  <div class="ecs-accordion-header" onclick="toggleEcsAccordion(9)">
+                    <div class="ecs-accordion-title-wrapper">
+                      <span class="ecs-accordion-status valid" id="ecs-status-9"></span>
+                      <span class="ecs-accordion-title">SECTION 9 — Logging</span>
+                    </div>
+                    <span class="ecs-accordion-chevron"></span>
+                  </div>
+                  <div class="ecs-accordion-content">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                      <div>
+                        <label class="ec2-label">Log Driver</label>
+                        <select id="ecs-log-driver" class="ec2-select">
+                          <option value="awslogs">awslogs (CloudWatch)</option>
+                          <option value="splunk">splunk</option>
+                          <option value="fluentd">fluentd</option>
+                          <option value="awsfirelens">awsfirelens</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="ec2-label">CloudWatch Log Group Name</label>
+                        <input type="text" id="ecs-log-group" class="ec2-input" placeholder="e.g. /ecs/my-service">
+                      </div>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                      <div>
+                        <label class="ec2-label">Log Stream Prefix</label>
+                        <input type="text" id="ecs-log-prefix" class="ec2-input" value="ecs">
+                      </div>
+                      <div>
+                        <label class="ec2-label">Retention Period</label>
+                        <select id="ecs-log-retention" class="ec2-select">
+                          <option value="7">7 Days</option>
+                          <option value="14">14 Days</option>
+                          <option value="30" selected>30 Days</option>
+                          <option value="90">90 Days</option>
+                          <option value="180">180 Days</option>
+                          <option value="365">365 Days</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="toggle-row">
+                      <div class="toggle-info">
+                        <span class="toggle-title">Non-Blocking Log Mode</span>
+                        <span class="toggle-desc">Buffer logs to prevent task stalling if logging endpoints are slow</span>
+                      </div>
+                      <label class="toggle-switch">
+                        <input type="checkbox" id="ecs-log-non-blocking">
+                        <span class="toggle-slider"></span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- SECTION 10: Deployment Configuration -->
+                <div class="ecs-accordion-item" id="ecs-section-10">
+                  <div class="ecs-accordion-header" onclick="toggleEcsAccordion(10)">
+                    <div class="ecs-accordion-title-wrapper">
+                      <span class="ecs-accordion-status valid" id="ecs-status-10"></span>
+                      <span class="ecs-accordion-title">SECTION 10 — Deployment Configuration</span>
+                    </div>
+                    <span class="ecs-accordion-chevron"></span>
+                  </div>
+                  <div class="ecs-accordion-content">
+                    <div class="ec2-form-group" style="margin-bottom:14px;">
+                      <label class="ec2-label">Deployment Controller</label>
+                      <select id="ecs-deploy-controller" class="ec2-select">
+                        <option value="rolling">ECS Rolling Update</option>
+                        <option value="bluegreen">Blue/Green (CodeDeploy)</option>
+                      </select>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                      <div>
+                        <label class="ec2-label">Min Healthy Percent</label>
+                        <input type="number" id="ecs-deploy-min-healthy" class="ec2-input" value="100" min="0" max="100">
+                      </div>
+                      <div>
+                        <label class="ec2-label">Max Percent</label>
+                        <input type="number" id="ecs-deploy-max" class="ec2-input" value="200" min="100">
+                      </div>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                      <div class="toggle-row">
+                        <div class="toggle-info">
+                          <span class="toggle-title">Deployment Circuit Breaker</span>
+                          <span class="toggle-desc">Automatically roll back failed service tasks</span>
+                        </div>
+                        <label class="toggle-switch">
+                          <input type="checkbox" id="ecs-deploy-circuit-breaker" checked>
+                          <span class="toggle-slider"></span>
+                        </label>
+                      </div>
+                      <div class="toggle-row" id="ecs-deploy-rollback-wrapper">
+                        <div class="toggle-info">
+                          <span class="toggle-title">Automatic Rollback</span>
+                          <span class="toggle-desc">Roll back immediately if circuit breaker trips</span>
+                        </div>
+                        <label class="toggle-switch">
+                          <input type="checkbox" id="ecs-deploy-rollback" checked>
+                          <span class="toggle-slider"></span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- SECTION 11: Auto Scaling -->
+                <div class="ecs-accordion-item" id="ecs-section-11">
+                  <div class="ecs-accordion-header" onclick="toggleEcsAccordion(11)">
+                    <div class="ecs-accordion-title-wrapper">
+                      <span class="ecs-accordion-status valid" id="ecs-status-11"></span>
+                      <span class="ecs-accordion-title">SECTION 11 — Auto Scaling</span>
+                    </div>
+                    <span class="ecs-accordion-chevron"></span>
+                  </div>
+                  <div class="ecs-accordion-content">
+                    <div class="toggle-row" style="margin-bottom:14px;">
+                      <div class="toggle-info">
+                        <span class="toggle-title">Enable Auto Scaling</span>
+                        <span class="toggle-desc">Scale task counts dynamically based on load</span>
+                      </div>
+                      <label class="toggle-switch">
+                        <input type="checkbox" id="ecs-autoscaling-enabled">
+                        <span class="toggle-slider"></span>
+                      </label>
+                    </div>
+
+                    <div id="ecs-autoscaling-panel" style="display:none;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:12px;">
+                      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                        <div>
+                          <label class="ec2-label">Minimum Tasks</label>
+                          <input type="number" id="ecs-autoscaling-min" class="ec2-input" value="1" min="1">
+                        </div>
+                        <div>
+                          <label class="ec2-label">Maximum Tasks</label>
+                          <input type="number" id="ecs-autoscaling-max" class="ec2-input" value="10" min="1">
+                        </div>
+                      </div>
+
+                      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                        <div>
+                          <label class="ec2-label">CPU Target Utilization (%)</label>
+                          <div style="display:flex;align-items:center;gap:10px;">
+                            <input type="range" id="ecs-autoscaling-target-cpu" min="10" max="90" value="70" style="flex-grow:1;accent-color:#58a6ff;">
+                            <span id="ecs-val-cpu" style="font-size:12px;font-family:monospace;width:30px;">70%</span>
+                          </div>
+                        </div>
+                        <div>
+                          <label class="ec2-label">Memory Target Utilization (%)</label>
+                          <div style="display:flex;align-items:center;gap:10px;">
+                            <input type="range" id="ecs-autoscaling-target-mem" min="10" max="90" value="70" style="flex-grow:1;accent-color:#58a6ff;">
+                            <span id="ecs-val-mem" style="font-size:12px;font-family:monospace;width:30px;">70%</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- SECTION 12: Storage & Volumes -->
+                <div class="ecs-accordion-item" id="ecs-section-12">
+                  <div class="ecs-accordion-header" onclick="toggleEcsAccordion(12)">
+                    <div class="ecs-accordion-title-wrapper">
+                      <span class="ecs-accordion-status valid" id="ecs-status-12"></span>
+                      <span class="ecs-accordion-title">SECTION 12 — Storage & Volumes</span>
+                    </div>
+                    <span class="ecs-accordion-chevron"></span>
+                  </div>
+                  <div class="ecs-accordion-content">
+                    <div class="ec2-form-group" style="margin-bottom:16px;">
+                      <label class="ec2-label">Ephemeral Storage Allocation</label>
+                      <div style="display:flex;align-items:center;gap:12px;">
+                        <input type="range" id="ecs-ephemeral-storage" min="21" max="200" value="21" style="flex-grow:1;accent-color:#58a6ff;">
+                        <span id="ecs-val-ephemeral" style="font-size:12px;font-family:monospace;width:45px;">21 GB</span>
+                      </div>
+                      <p style="font-size:11px;color:#8b949e;margin-top:4px;">Default is 21 GB. Up to 200 GB available for Fargate tasks.</p>
+                    </div>
+
+                    <div style="border-top:1px solid #21262d;padding-top:14px;">
+                      <label class="ec2-label" style="font-size:12px;font-weight:bold;margin-bottom:8px;color:#c9d1d9;">EFS Volume Mounts</label>
+                      <table class="ecs-editor-table" id="ecs-efs-table">
+                        <thead>
+                          <tr>
+                            <th>Volume Name</th>
+                            <th>EFS File System ID</th>
+                            <th>Root Dir</th>
+                            <th>Encrypt</th>
+                            <th>Mount Path</th>
+                            <th>RO</th>
+                            <th>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody id="ecs-efs-tbody">
+                          <!-- EFS rows inserted here dynamically -->
+                        </tbody>
+                      </table>
+                      <button type="button" class="ec2-btn-outline" id="btn-add-efs">➕ Add EFS Mount</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- SECTION 13: Tags -->
+                <div class="ecs-accordion-item" id="ecs-section-13">
+                  <div class="ecs-accordion-header" onclick="toggleEcsAccordion(13)">
+                    <div class="ecs-accordion-title-wrapper">
+                      <span class="ecs-accordion-status valid" id="ecs-status-13"></span>
+                      <span class="ecs-accordion-title">SECTION 13 — Tags</span>
+                    </div>
+                    <span class="ecs-accordion-chevron"></span>
+                  </div>
+                  <div class="ecs-accordion-content">
+                    <p style="font-size:11px;color:#8b949e;margin-bottom:8px;">Add resource tags assigned to ECS Cluster, ECS Service, and Tasks.</p>
+                    <table class="ecs-editor-table" id="ecs-tags-table">
+                      <thead>
+                        <tr>
+                          <th>Key</th>
+                          <th>Value</th>
+                          <th style="width:50px;">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody id="ecs-tags-tbody">
+                        <!-- tag rows inserted here dynamically -->
+                      </tbody>
+                    </table>
+                    <button type="button" class="ec2-btn-outline" id="btn-add-tag">➕ Add Tag</button>
+
+                    <div style="margin-top:14px;border-top:1px solid #21262d;padding-top:14px;display:grid;grid-template-columns:1.2fr 0.8fr;gap:14px;">
+                      <div class="ec2-form-group">
+                        <label class="ec2-label">Propagate Tags</label>
+                        <select id="ecs-propagate-tags" class="ec2-select">
+                          <option value="NONE">Do Not Propagate</option>
+                          <option value="SERVICE">Propagate from Service</option>
+                          <option value="TASK_DEFINITION">Propagate from Task Definition</option>
+                        </select>
+                      </div>
+                      <div class="ec2-form-group" style="padding-top:18px;">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;">
+                          <input type="checkbox" id="ecs-tag-managed" checked> Enable ECS Managed Tags
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div class="summary-card summary-card-ecs" style="margin-top:14px;">
-                <p class="summary-card-title" style="color:#f78166;">ECS Cluster Summary</p>
+              <!-- Summary Card underneath accordions for live status feedback -->
+              <div class="summary-card summary-card-ecs" style="margin-top:14px;background:#161b22;border:1px solid #21262d;">
+                <p class="summary-card-title" style="color:#58a6ff;">ECS Configuration Preview</p>
                 <div style="display:flex;flex-direction:column;gap:6px;">
                   <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Cluster Name</span><span style="color:#e2e8f0;font-weight:500;" id="ecs-summary-name">—</span></div>
                   <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Environment</span><span style="color:#e2e8f0;font-weight:500;" id="ecs-summary-env">—</span></div>

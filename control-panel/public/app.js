@@ -2895,7 +2895,68 @@ function startLogStream(name) {
   };
 }
 
+function updateTimelineFromLog(text) {
+  const setStepState = (id, state) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.className = `timeline-step ${state}`;
+  };
+
+  if (text.includes('aws_security_group') || text.includes('aws_security_group_rule')) {
+    if (text.includes('Creating...') || text.includes('Still creating...')) {
+      setStepState('step-timeline-sg', 'active');
+    } else if (text.includes('Creation complete')) {
+      setStepState('step-timeline-sg', 'complete');
+    }
+  }
+  
+  if (text.includes('aws_lb') || text.includes('aws_lb_listener') || text.includes('aws_lb_target_group')) {
+    setStepState('step-timeline-sg', 'complete');
+    if (text.includes('Creating...') || text.includes('Still creating...')) {
+      setStepState('step-timeline-alb', 'active');
+    } else if (text.includes('Creation complete')) {
+      setStepState('step-timeline-alb', 'complete');
+    }
+  }
+
+  if (text.includes('aws_iam_role') || text.includes('aws_iam_policy') || text.includes('aws_iam_role_policy')) {
+    setStepState('step-timeline-sg', 'complete');
+    setStepState('step-timeline-alb', 'complete');
+    if (text.includes('Creating...') || text.includes('Still creating...')) {
+      setStepState('step-timeline-iam', 'active');
+    } else if (text.includes('Creation complete')) {
+      setStepState('step-timeline-iam', 'complete');
+    }
+  }
+
+  if (text.includes('aws_ecs_task_definition')) {
+    setStepState('step-timeline-sg', 'complete');
+    setStepState('step-timeline-alb', 'complete');
+    setStepState('step-timeline-iam', 'complete');
+    if (text.includes('Creating...') || text.includes('Still creating...')) {
+      setStepState('step-timeline-taskdef', 'active');
+    } else if (text.includes('Creation complete')) {
+      setStepState('step-timeline-taskdef', 'complete');
+    }
+  }
+
+  if (text.includes('aws_ecs_service') || text.includes('aws_appautoscaling')) {
+    setStepState('step-timeline-sg', 'complete');
+    setStepState('step-timeline-alb', 'complete');
+    setStepState('step-timeline-iam', 'complete');
+    setStepState('step-timeline-taskdef', 'complete');
+    if (text.includes('Creating...') || text.includes('Still creating...')) {
+      setStepState('step-timeline-service', 'active');
+    } else if (text.includes('Creation complete') || text.includes('ECS Cluster Successfully Deployed')) {
+      setStepState('step-timeline-service', 'complete');
+    }
+  }
+}
+
 function appendLogLine(text) {
+  // Drive the timeline progress stepper
+  updateTimelineFromLog(text);
+
   const terminal = document.getElementById('log-terminal-container');
   const cursor = terminal.querySelector('.log-cursor');
   if (cursor) cursor.remove();
@@ -4195,6 +4256,29 @@ function updateEcsMemoryOptions() {
   }
 }
 
+// ECS state arrays
+let ecsRepos = [];
+let ecsSgs = [];
+let ecsAlbs = [];
+let ecsCerts = [];
+let ecsEfs = [];
+let ecsSsmParams = [];
+let ecsSecretsList = [];
+let ecsRoles = [];
+
+// ECS user-editable arrays
+let portMappings = [{ containerPort: 80, hostPort: 0, protocol: 'tcp', name: 'http', appProtocol: 'http' }];
+let envVars = [];
+let secrets = [];
+let efsMounts = [];
+let ecsTags = [];
+let sgRules = [
+  { protocol: 'tcp', port: '80', cidr: '0.0.0.0/0', desc: 'Allow HTTP' },
+  { protocol: 'tcp', port: '443', cidr: '0.0.0.0/0', desc: 'Allow HTTPS' }
+];
+
+let currentDeployingEcsName = null;
+
 function initEcsUI() {
   const tabs = document.querySelectorAll('#svc-panel-ecs .ec2-tab');
   const tabContents = document.querySelectorAll('#svc-panel-ecs .ec2-tab-content');
@@ -4227,16 +4311,182 @@ function initEcsUI() {
     cpuSelect.addEventListener('change', () => {
       updateEcsMemoryOptions();
       updateEcsSummary();
+      runEcsPreflightChecks();
     });
     updateEcsMemoryOptions();
   }
 
-  // Bind inputs for summary
-  ['ecs-name', 'ecs-env', 'ecs-cpu', 'ecs-memory', 'ecs-port', 'ecs-tasks', 'ecs-vpc', 'ecs-s3-bucket'].forEach(id => {
+  // Bind inputs for summary and preflight checking
+  const checkFields = ['ecs-name', 'ecs-env', 'ecs-cpu', 'ecs-memory', 'ecs-tasks', 'ecs-vpc'];
+  checkFields.forEach(id => {
     const el = document.getElementById(id);
     if (el) {
-      el.addEventListener('change', updateEcsSummary);
-      if (el.tagName === 'INPUT') el.addEventListener('input', updateEcsSummary);
+      el.addEventListener('change', () => {
+        updateEcsSummary();
+        runEcsPreflightChecks();
+      });
+      if (el.tagName === 'INPUT') {
+        el.addEventListener('input', () => {
+          updateEcsSummary();
+          runEcsPreflightChecks();
+        });
+      }
+    }
+  });
+
+  // Section 1: Launch Type switch
+  document.querySelectorAll('input[name="ecs-launch-type"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      const mixedPanel = document.getElementById('ecs-mixed-weights-panel');
+      if (mixedPanel) mixedPanel.style.display = e.target.value === 'MIXED' ? 'block' : 'none';
+      runEcsPreflightChecks();
+    });
+  });
+  document.getElementById('ecs-fargate-weight').addEventListener('input', runEcsPreflightChecks);
+  document.getElementById('ecs-spot-weight').addEventListener('input', runEcsPreflightChecks);
+
+  // Section 2: Image Source Switch
+  document.querySelectorAll('input[name="ecs-image-source"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      const ecrPanel = document.getElementById('ecs-image-ecr-panel');
+      const hubPanel = document.getElementById('ecs-image-dockerhub-panel');
+      if (e.target.value === 'ECR') {
+        ecrPanel.style.display = 'block';
+        hubPanel.style.display = 'none';
+      } else {
+        ecrPanel.style.display = 'none';
+        hubPanel.style.display = 'block';
+      }
+      runEcsPreflightChecks();
+    });
+  });
+  document.getElementById('ecs-ecr-repo-select').addEventListener('change', runEcsPreflightChecks);
+  document.getElementById('ecs-image-tag').addEventListener('input', runEcsPreflightChecks);
+  document.getElementById('ecs-image-uri').addEventListener('input', runEcsPreflightChecks);
+
+  // Section 3: Port mappings add
+  document.getElementById('btn-add-port-mapping').addEventListener('click', () => {
+    portMappings.push({ containerPort: 80, hostPort: 0, protocol: 'tcp', name: '', appProtocol: '' });
+    renderPortMappings();
+    runEcsPreflightChecks();
+  });
+
+  // Section 4: IAM mode triggers
+  document.getElementById('ecs-execution-role-mode').addEventListener('change', (e) => {
+    document.getElementById('ecs-execution-role-select-wrapper').style.display = e.target.value === 'existing' ? 'block' : 'none';
+    runEcsPreflightChecks();
+  });
+  document.getElementById('ecs-task-role-mode').addEventListener('change', (e) => {
+    document.getElementById('ecs-task-role-select-wrapper').style.display = e.target.value === 'existing' ? 'block' : 'none';
+    document.getElementById('ecs-task-role-permissions-panel').style.display = e.target.value === 'create' ? 'block' : 'none';
+    updateIamPolicyPreview();
+    runEcsPreflightChecks();
+  });
+  ['s3', 'dynamo', 'ssm', 'secret', 'sqs', 'sns'].forEach(p => {
+    const chk = document.getElementById(`ecs-perm-${p}`);
+    if (chk) {
+      chk.addEventListener('change', () => {
+        const wrapper = document.getElementById(`ecs-perm-${p}-wrapper`);
+        if (wrapper) wrapper.style.display = chk.checked ? 'block' : 'none';
+        updateIamPolicyPreview();
+        runEcsPreflightChecks();
+      });
+    }
+  });
+  ['ecs-perm-dynamo-table', 'ecs-perm-ssm-path', 'ecs-perm-secret-arn', 'ecs-perm-sqs-url', 'ecs-perm-sns-topic'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', updateIamPolicyPreview);
+  });
+  document.getElementById('ecs-s3-bucket').addEventListener('change', updateIamPolicyPreview);
+
+  // Section 5: Add Env/Secret
+  document.getElementById('btn-add-env').addEventListener('click', () => {
+    envVars.push({ name: '', value: '' });
+    renderEnvVars();
+  });
+  document.getElementById('btn-add-secret').addEventListener('click', () => {
+    secrets.push({ name: '', valueFrom: '' });
+    renderSecrets();
+  });
+
+  // Section 6: SG Mode
+  document.getElementById('ecs-sg-mode').addEventListener('change', (e) => {
+    document.getElementById('ecs-existing-sgs-wrapper').style.display = e.target.value === 'existing' ? 'block' : 'none';
+    document.getElementById('ecs-new-sg-actions').style.display = e.target.value === 'create' ? 'block' : 'none';
+    runEcsPreflightChecks();
+  });
+
+  // Section 7: ALB Options
+  document.getElementById('ecs-alb-enabled').addEventListener('change', (e) => {
+    document.getElementById('ecs-alb-configuration-panel').style.display = e.target.checked ? 'block' : 'none';
+    runEcsPreflightChecks();
+  });
+  document.getElementById('ecs-alb-mode').addEventListener('change', (e) => {
+    document.getElementById('ecs-existing-alb-panel').style.display = e.target.value === 'existing' ? 'block' : 'none';
+    document.getElementById('ecs-new-alb-panel').style.display = e.target.value === 'create' ? 'block' : 'none';
+    runEcsPreflightChecks();
+  });
+  document.getElementById('ecs-existing-alb-select').addEventListener('change', runEcsPreflightChecks);
+  document.getElementById('ecs-new-alb-name').addEventListener('input', runEcsPreflightChecks);
+
+  // Section 11: Auto Scaling Target Sliders
+  document.getElementById('ecs-autoscaling-enabled').addEventListener('change', (e) => {
+    document.getElementById('ecs-autoscaling-panel').style.display = e.target.checked ? 'block' : 'none';
+  });
+  document.getElementById('ecs-autoscaling-target-cpu').addEventListener('input', (e) => {
+    document.getElementById('ecs-val-cpu').textContent = `${e.target.value}%`;
+  });
+  document.getElementById('ecs-autoscaling-target-mem').addEventListener('input', (e) => {
+    document.getElementById('ecs-val-mem').textContent = `${e.target.value}%`;
+  });
+
+  // Section 12: Ephemeral Storage Slider & EFS Add
+  document.getElementById('ecs-ephemeral-storage').addEventListener('input', (e) => {
+    document.getElementById('ecs-val-ephemeral').textContent = `${e.target.value} GB`;
+  });
+  document.getElementById('btn-add-efs').addEventListener('click', () => {
+    efsMounts.push({ name: `efs-vol-${efsMounts.length+1}`, fileSystemId: '', rootDir: '/', transitEncryption: true, containerPath: '/data', readOnly: false });
+    renderEfsMounts();
+  });
+
+  // Section 13: Add Tag
+  document.getElementById('btn-add-tag').addEventListener('click', () => {
+    ecsTags.push({ key: '', value: '' });
+    renderTags();
+  });
+
+  // Modals Actions
+  document.getElementById('btn-ecs-browser-close').addEventListener('click', closeBrowserModal);
+  document.getElementById('btn-ecs-sg-close').addEventListener('click', () => {
+    document.getElementById('ecs-sg-modal-overlay').style.display = 'none';
+  });
+  document.getElementById('btn-ecs-summary-close').addEventListener('click', () => {
+    document.getElementById('ecs-summary-modal-overlay').style.display = 'none';
+  });
+  document.getElementById('btn-ecs-summary-cancel').addEventListener('click', () => {
+    document.getElementById('ecs-summary-modal-overlay').style.display = 'none';
+  });
+  document.getElementById('btn-ecs-summary-deploy').addEventListener('click', deployEcsCluster);
+  
+  document.getElementById('btn-configure-sg-rules').addEventListener('click', () => {
+    document.getElementById('ecs-sg-modal-overlay').style.display = 'flex';
+    renderSgRules();
+  });
+  document.getElementById('btn-add-sg-rule').addEventListener('click', () => {
+    sgRules.push({ protocol: 'tcp', port: '80', cidr: '0.0.0.0/0', desc: '' });
+    renderSgRules();
+  });
+  document.getElementById('btn-save-sg-rules').addEventListener('click', () => {
+    document.getElementById('ecs-sg-modal-overlay').style.display = 'none';
+  });
+
+  // Action footer
+  document.getElementById('btn-ecs-action').addEventListener('click', () => {
+    const activeTab = document.querySelector('#svc-panel-ecs .ec2-tab.active').dataset.tab;
+    if (activeTab === 'ecs-preview') {
+      deployEcsCluster();
+    } else {
+      openEcsSummaryModal();
     }
   });
 
@@ -4244,19 +4494,21 @@ function initEcsUI() {
   if (vpcSelect) {
     vpcSelect.addEventListener('change', () => {
       updateSubnetOptionsForEcs();
+      loadRegionSpecificEcsOptions();
     });
   }
 
-  document.getElementById('btn-ecs-action').addEventListener('click', () => {
-    const activeTab = document.querySelector('#svc-panel-ecs .ec2-tab.active').dataset.tab;
-    if (activeTab === 'ecs-preview') {
-      deployEcsCluster();
-    } else {
-      if (validateEcsForm()) {
-        document.querySelector('#svc-panel-ecs [data-tab="ecs-preview"]').click();
-      }
-    }
-  });
+  // Set default render
+  renderPortMappings();
+  renderEnvVars();
+  renderSecrets();
+  renderEfsMounts();
+  renderTags();
+
+  setTimeout(() => {
+    loadRegionSpecificEcsOptions();
+    runEcsPreflightChecks();
+  }, 1000);
 
   updateEcsSummary();
 }
@@ -4266,7 +4518,7 @@ function updateEcsSummary() {
   const env = document.getElementById('ecs-env').value;
   const cpu = document.getElementById('ecs-cpu').value;
   const memory = document.getElementById('ecs-memory').value;
-  const port = document.getElementById('ecs-port').value;
+  const port = portMappings[0] ? portMappings[0].containerPort : '80';
   const tasks = document.getElementById('ecs-tasks').value;
   const vpc = document.getElementById('ecs-vpc').value;
 
@@ -4305,7 +4557,7 @@ function updateSubnetOptionsForEcs() {
   if (Array.isArray(vpc.publicSubnetIds) && vpc.publicSubnetIds.length > 0) {
     pubContainer.innerHTML = vpc.publicSubnetIds.map((id, idx) => `
       <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;">
-        <input type="checkbox" name="ecs-pub-sub" value="${id}" checked onchange="updateEcsSummary()">
+        <input type="checkbox" name="ecs-pub-sub" value="${id}" checked onchange="updateEcsSummary(); runEcsPreflightChecks();">
         <span>Pub Subnet ${idx+1} (${id})</span>
       </label>
     `).join('');
@@ -4316,7 +4568,7 @@ function updateSubnetOptionsForEcs() {
   if (Array.isArray(vpc.privateSubnetIds) && vpc.privateSubnetIds.length > 0) {
     privContainer.innerHTML = vpc.privateSubnetIds.map((id, idx) => `
       <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;">
-        <input type="checkbox" name="ecs-priv-sub" value="${id}" checked onchange="updateEcsSummary()">
+        <input type="checkbox" name="ecs-priv-sub" value="${id}" checked onchange="updateEcsSummary(); runEcsPreflightChecks();">
         <span>Priv Subnet ${idx+1} (${id})</span>
       </label>
     `).join('');
@@ -4324,6 +4576,7 @@ function updateSubnetOptionsForEcs() {
     privContainer.innerHTML = '<p style="margin:0;color:#ff7b72;">No private subnets</p>';
   }
   updateEcsSummary();
+  runEcsPreflightChecks();
 }
 
 async function fetchS3BucketOptionsForEcs() {
@@ -4357,120 +4610,914 @@ async function fetchVpcOptionsForEcs() {
   updateSubnetOptionsForEcs();
 }
 
-function validateEcsForm() {
+// Global toggles/search helper for SSM/Secrets modal
+function openBrowserModal(title, items, callback) {
+  document.getElementById('ecs-browser-title').textContent = title;
+  document.getElementById('ecs-ssm-secrets-modal-overlay').style.display = 'flex';
+  document.getElementById('ecs-browser-search').value = '';
+  
+  const resultsContainer = document.getElementById('ecs-browser-results');
+  resultsContainer.innerHTML = '';
+  
+  const renderItems = (filter = '') => {
+    const filtered = items.filter(item => item.toLowerCase().includes(filter.toLowerCase()));
+    if (filtered.length === 0) {
+      resultsContainer.innerHTML = '<div style="padding:12px;color:#8b949e;text-align:center;">No results found</div>';
+      return;
+    }
+    resultsContainer.innerHTML = filtered.map(item => `
+      <div class="ecs-search-item" onclick="selectBrowserItem('${encodeURIComponent(item)}')">${item}</div>
+    `).join('');
+  };
+  
+  window.selectBrowserItem = (val) => {
+    callback(decodeURIComponent(val));
+    closeBrowserModal();
+  };
+  
+  document.getElementById('ecs-browser-search').oninput = (e) => {
+    renderItems(e.target.value);
+  };
+  
+  renderItems();
+}
+
+function closeBrowserModal() {
+  document.getElementById('ecs-ssm-secrets-modal-overlay').style.display = 'none';
+}
+
+window.toggleEcsAccordion = function(sectionNum) {
+  const items = document.querySelectorAll('.ecs-accordion-item');
+  items.forEach((item, idx) => {
+    if (idx + 1 === sectionNum) {
+      item.classList.toggle('active');
+    } else {
+      item.classList.remove('active');
+    }
+  });
+};
+
+window.switchEcsConfigTab = function(type) {
+  const envBtn = document.getElementById('ecs-env-tab-btn');
+  const secBtn = document.getElementById('ecs-secrets-tab-btn');
+  const envPanel = document.getElementById('ecs-env-panel');
+  const secPanel = document.getElementById('ecs-secrets-panel');
+  if (type === 'env') {
+    envBtn.classList.add('active');
+    secBtn.classList.remove('active');
+    envPanel.style.display = 'block';
+    secPanel.style.display = 'none';
+  } else {
+    envBtn.classList.remove('active');
+    secBtn.classList.add('active');
+    envPanel.style.display = 'none';
+    secPanel.style.display = 'block';
+  }
+};
+
+async function loadRegionSpecificEcsOptions() {
+  const vpcName = document.getElementById('ecs-vpc').value;
+  const vpc = activeVpcs.find(v => v.name === vpcName);
+  const region = vpc ? vpc.region : 'us-east-1';
+  const profile = vpc ? vpc.awsProfile : 'default';
+
+  fetchEcsRoles(profile);
+  fetchEcsRepositories(profile, region);
+  fetchEcsSecurityGroups(profile, region);
+  fetchEcsLoadBalancers(profile, region);
+  fetchEcsCertificates(profile, region);
+  fetchEcsFileSystems(profile, region);
+  fetchEcsSsmParameters(profile, region);
+  fetchEcsSecrets(profile, region);
+  
+  updateRouteWarningForSubnets();
+}
+
+async function fetchEcsRoles(profile) {
+  try {
+    const res = await fetch(`/api/ecs/roles?profile=${profile}`);
+    ecsRoles = await res.json();
+    populateEcsRoleDropdowns();
+  } catch (err) {
+    console.error('Failed to fetch ECS roles:', err);
+  }
+}
+
+async function fetchEcsRepositories(profile, region) {
+  try {
+    const res = await fetch(`/api/ecs/repositories?profile=${profile}&region=${region}`);
+    ecsRepos = await res.json();
+    populateEcsRepoDropdown();
+  } catch (err) {
+    console.error('Failed to fetch repositories:', err);
+  }
+}
+
+async function fetchEcsSecurityGroups(profile, region) {
+  try {
+    const res = await fetch(`/api/ecs/security-groups?profile=${profile}&region=${region}`);
+    ecsSgs = await res.json();
+    populateEcsSgDropdowns();
+  } catch (err) {
+    console.error('Failed to fetch security groups:', err);
+  }
+}
+
+async function fetchEcsLoadBalancers(profile, region) {
+  try {
+    const res = await fetch(`/api/ecs/load-balancers?profile=${profile}&region=${region}`);
+    ecsAlbs = await res.json();
+    populateEcsAlbDropdown();
+  } catch (err) {
+    console.error('Failed to fetch load balancers:', err);
+  }
+}
+
+async function fetchEcsCertificates(profile, region) {
+  try {
+    const res = await fetch(`/api/ecs/certificates?profile=${profile}&region=${region}`);
+    ecsCerts = await res.json();
+    populateEcsCertDropdowns();
+  } catch (err) {
+    console.error('Failed to fetch certificates:', err);
+  }
+}
+
+async function fetchEcsFileSystems(profile, region) {
+  try {
+    const res = await fetch(`/api/ecs/file-systems?profile=${profile}&region=${region}`);
+    ecsEfs = await res.json();
+    populateEcsEfsDropdowns();
+  } catch (err) {
+    console.error('Failed to fetch EFS:', err);
+  }
+}
+
+async function fetchEcsSsmParameters(profile, region) {
+  try {
+    const res = await fetch(`/api/ecs/ssm-parameters?profile=${profile}&region=${region}`);
+    ecsSsmParams = await res.json();
+  } catch (err) {
+    console.error('Failed to fetch SSM parameters:', err);
+  }
+}
+
+async function fetchEcsSecrets(profile, region) {
+  try {
+    const res = await fetch(`/api/ecs/secrets?profile=${profile}&region=${region}`);
+    ecsSecretsList = await res.json();
+  } catch (err) {
+    console.error('Failed to fetch secrets:', err);
+  }
+}
+
+function populateEcsRoleDropdowns() {
+  const execSelect = document.getElementById('ecs-execution-role-select');
+  const taskSelect = document.getElementById('ecs-task-role-select');
+  if (!execSelect || !taskSelect) return;
+
+  execSelect.innerHTML = '<option value="">-- Select Existing Role --</option>';
+  taskSelect.innerHTML = '<option value="">-- Select Existing Role --</option>';
+
+  ecsRoles.forEach(r => {
+    const suffix = r.isEcsTrusted ? '' : ' (Untrusted)';
+    const execOpt = document.createElement('option');
+    execOpt.value = r.arn;
+    execOpt.textContent = r.roleName + suffix;
+    execSelect.appendChild(execOpt);
+
+    const taskOpt = document.createElement('option');
+    taskOpt.value = r.arn;
+    taskOpt.textContent = r.roleName + suffix;
+    taskSelect.appendChild(taskOpt);
+  });
+}
+
+function populateEcsRepoDropdown() {
+  const select = document.getElementById('ecs-ecr-repo-select');
+  if (!select) return;
+  select.innerHTML = '<option value="">-- Select ECR Repo --</option>';
+  ecsRepos.forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = r.repositoryUri;
+    opt.textContent = r.repositoryName;
+    select.appendChild(opt);
+  });
+}
+
+function populateEcsSgDropdowns() {
+  const container = document.getElementById('ecs-existing-sgs-container');
+  if (!container) return;
+  if (ecsSgs.length === 0) {
+    container.innerHTML = '<p style="margin:0;color:#8b949e;">No Security Groups found</p>';
+    return;
+  }
+  container.innerHTML = ecsSgs.map(sg => `
+    <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;">
+      <input type="checkbox" name="ecs-existing-sg" value="${sg.GroupId}" onchange="runEcsPreflightChecks()">
+      <span>${sg.GroupName} (${sg.GroupId})</span>
+    </label>
+  `).join('');
+}
+
+function populateEcsAlbDropdown() {
+  const select = document.getElementById('ecs-existing-alb-select');
+  if (!select) return;
+  select.innerHTML = '<option value="">-- Select ALB --</option>';
+  ecsAlbs.forEach(alb => {
+    const opt = document.createElement('option');
+    opt.value = alb.LoadBalancerArn;
+    opt.textContent = alb.LoadBalancerName;
+    select.appendChild(opt);
+  });
+}
+
+function populateEcsCertDropdowns() {
+  const newSelect = document.getElementById('ecs-new-alb-cert');
+  const existingSelect = document.getElementById('ecs-existing-cert-select');
+  if (!newSelect || !existingSelect) return;
+
+  newSelect.innerHTML = '<option value="">None (HTTP)</option>';
+  existingSelect.innerHTML = '<option value="">Select Certificate</option>';
+
+  ecsCerts.forEach(c => {
+    const optNew = document.createElement('option');
+    optNew.value = c.CertificateArn;
+    optNew.textContent = c.DomainName;
+    newSelect.appendChild(optNew);
+
+    const optExist = document.createElement('option');
+    optExist.value = c.CertificateArn;
+    optExist.textContent = c.DomainName;
+    existingSelect.appendChild(optExist);
+  });
+}
+
+function populateEcsEfsDropdowns() {
+  // Configured inline during EFS mounts table render
+}
+
+window.renderPortMappings = function() {
+  const tbody = document.getElementById('ecs-ports-tbody');
+  if (!tbody) return;
+  
+  if (portMappings.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state-msg">No port mappings defined.</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = portMappings.map((pm, idx) => `
+    <tr>
+      <td><input type="number" class="ec2-input pm-container-port" value="${pm.containerPort}" min="1" max="65535" style="width:90px;" onchange="updatePortMapping(${idx}, 'containerPort', this.value)"></td>
+      <td><input type="number" class="ec2-input pm-host-port" value="${pm.hostPort}" min="0" max="65535" style="width:90px;" onchange="updatePortMapping(${idx}, 'hostPort', this.value)"></td>
+      <td>
+        <select class="ec2-select pm-protocol" style="width:80px;padding-right:20px;" onchange="updatePortMapping(${idx}, 'protocol', this.value)">
+          <option value="tcp" ${pm.protocol === 'tcp' ? 'selected' : ''}>TCP</option>
+          <option value="udp" ${pm.protocol === 'udp' ? 'selected' : ''}>UDP</option>
+        </select>
+      </td>
+      <td><input type="text" class="ec2-input pm-name" value="${pm.name || ''}" placeholder="http" style="width:90px;" onchange="updatePortMapping(${idx}, 'name', this.value)"></td>
+      <td>
+        <select class="ec2-select pm-app-protocol" style="width:90px;padding-right:20px;" onchange="updatePortMapping(${idx}, 'appProtocol', this.value)">
+          <option value="" ${!pm.appProtocol ? 'selected' : ''}>None</option>
+          <option value="http" ${pm.appProtocol === 'http' ? 'selected' : ''}>http</option>
+          <option value="http2" ${pm.appProtocol === 'http2' ? 'selected' : ''}>http2</option>
+          <option value="grpc" ${pm.appProtocol === 'grpc' ? 'selected' : ''}>grpc</option>
+        </select>
+      </td>
+      <td><button type="button" class="ec2-btn-danger" onclick="deletePortMapping(${idx})">Delete</button></td>
+    </tr>
+  `).join('');
+};
+
+window.updatePortMapping = function(idx, field, value) {
+  if (field === 'containerPort' || field === 'hostPort') {
+    portMappings[idx][field] = parseInt(value, 10) || 0;
+  } else {
+    portMappings[idx][field] = value;
+  }
+  if (idx === 0 && field === 'containerPort') {
+    document.getElementById('ecs-port').value = value;
+  }
+  runEcsPreflightChecks();
+};
+
+window.deletePortMapping = function(idx) {
+  portMappings.splice(idx, 1);
+  renderPortMappings();
+  runEcsPreflightChecks();
+};
+
+window.renderEnvVars = function() {
+  const tbody = document.getElementById('ecs-env-tbody');
+  if (!tbody) return;
+  
+  if (envVars.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" class="empty-state-msg">No environment variables defined.</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = envVars.map((ev, idx) => `
+    <tr>
+      <td><input type="text" class="ec2-input ev-name" value="${ev.name}" placeholder="KEY" onchange="updateEnvVar(${idx}, 'name', this.value)"></td>
+      <td><input type="text" class="ec2-input ev-value" value="${ev.value}" placeholder="VALUE" onchange="updateEnvVar(${idx}, 'value', this.value)"></td>
+      <td><button type="button" class="ec2-btn-danger" onclick="deleteEnvVar(${idx})">Delete</button></td>
+    </tr>
+  `).join('');
+};
+
+window.updateEnvVar = function(idx, field, value) {
+  envVars[idx][field] = value;
+};
+
+window.deleteEnvVar = function(idx) {
+  envVars.splice(idx, 1);
+  renderEnvVars();
+};
+
+window.addEcsEnvPreset = function(key, val) {
+  if (!envVars.some(ev => ev.name === key)) {
+    envVars.push({ name: key, value: val });
+    renderEnvVars();
+  }
+};
+
+window.renderSecrets = function() {
+  const tbody = document.getElementById('ecs-secrets-tbody');
+  if (!tbody) return;
+  
+  if (secrets.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" class="empty-state-msg">No secrets defined.</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = secrets.map((s, idx) => `
+    <tr>
+      <td><input type="text" class="ec2-input sec-name" value="${s.name}" placeholder="SECRET_KEY" onchange="updateSecret(${idx}, 'name', this.value)"></td>
+      <td>
+        <div style="display:flex;">
+          <input type="text" class="ec2-input sec-val-from" id="secret-val-from-${idx}" value="${s.valueFrom}" placeholder="SSM parameter path or Secret ARN" onchange="updateSecret(${idx}, 'valueFrom', this.value)" style="flex-grow:1;">
+          <button type="button" class="ec2-btn-outline ssm-browse-btn" onclick="browseSsmForSecret(${idx})">SSM</button>
+          <button type="button" class="ec2-btn-outline ssm-browse-btn" onclick="browseSecretsForSecret(${idx})">Secret</button>
+        </div>
+      </td>
+      <td><button type="button" class="ec2-btn-danger" onclick="deleteSecret(${idx})">Delete</button></td>
+    </tr>
+  `).join('');
+};
+
+window.updateSecret = function(idx, field, value) {
+  secrets[idx][field] = value;
+};
+
+window.deleteSecret = function(idx) {
+  secrets.splice(idx, 1);
+  renderSecrets();
+};
+
+window.browseSsmForSecret = function(idx) {
+  const list = ecsSsmParams.map(p => p.Name || p.name || '');
+  openBrowserModal("Browse SSM Parameters", list, (val) => {
+    document.getElementById(`secret-val-from-${idx}`).value = val;
+    secrets[idx].valueFrom = val;
+  });
+};
+
+window.browseSecretsForSecret = function(idx) {
+  const list = ecsSecretsList.map(s => s.ARN || s.arn || '');
+  openBrowserModal("Browse Secrets Manager", list, (val) => {
+    document.getElementById(`secret-val-from-${idx}`).value = val;
+    secrets[idx].valueFrom = val;
+  });
+};
+
+window.renderEfsMounts = function() {
+  const tbody = document.getElementById('ecs-efs-tbody');
+  if (!tbody) return;
+  
+  if (efsMounts.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state-msg">No EFS mounts configured.</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = efsMounts.map((em, idx) => {
+    const efsOpts = ecsEfs.map(ef => `
+      <option value="${ef.FileSystemId}" ${em.fileSystemId === ef.FileSystemId ? 'selected' : ''}>${ef.Name || ef.FileSystemId} (${ef.FileSystemId})</option>
+    `).join('');
+    
+    return `
+      <tr>
+        <td><input type="text" class="ec2-input" value="${em.name}" placeholder="vol-name" style="width:80px;" onchange="updateEfsMount(${idx}, 'name', this.value)"></td>
+        <td>
+          <select class="ec2-select" style="width:130px;padding-right:20px;" onchange="updateEfsMount(${idx}, 'fileSystemId', this.value)">
+            <option value="">Select EFS</option>
+            ${efsOpts}
+          </select>
+        </td>
+        <td><input type="text" class="ec2-input" value="${em.rootDir || '/'}" style="width:50px;" onchange="updateEfsMount(${idx}, 'rootDir', this.value)"></td>
+        <td><input type="checkbox" ${em.transitEncryption ? 'checked' : ''} onchange="updateEfsMount(${idx}, 'transitEncryption', this.checked)"></td>
+        <td><input type="text" class="ec2-input" value="${em.containerPath}" placeholder="/data" style="width:90px;" onchange="updateEfsMount(${idx}, 'containerPath', this.value)"></td>
+        <td><input type="checkbox" ${em.readOnly ? 'checked' : ''} onchange="updateEfsMount(${idx}, 'readOnly', this.checked)"></td>
+        <td><button type="button" class="ec2-btn-danger" onclick="deleteEfsMount(${idx})">Delete</button></td>
+      </tr>
+    `;
+  }).join('');
+};
+
+window.updateEfsMount = function(idx, field, value) {
+  efsMounts[idx][field] = value;
+};
+
+window.deleteEfsMount = function(idx) {
+  efsMounts.splice(idx, 1);
+  renderEfsMounts();
+};
+
+window.renderTags = function() {
+  const tbody = document.getElementById('ecs-tags-tbody');
+  if (!tbody) return;
+  
+  if (ecsTags.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" class="empty-state-msg">No tags added.</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = ecsTags.map((t, idx) => `
+    <tr>
+      <td><input type="text" class="ec2-input" value="${t.key}" placeholder="Key" onchange="updateTag(${idx}, 'key', this.value)"></td>
+      <td><input type="text" class="ec2-input" value="${t.value}" placeholder="Value" onchange="updateTag(${idx}, 'value', this.value)"></td>
+      <td><button type="button" class="ec2-btn-danger" onclick="deleteTag(${idx})">Delete</button></td>
+    </tr>
+  `).join('');
+};
+
+window.updateTag = function(idx, field, value) {
+  ecsTags[idx][field] = value;
+};
+
+window.deleteTag = function(idx) {
+  ecsTags.splice(idx, 1);
+  renderTags();
+};
+
+window.renderSgRules = function() {
+  const tbody = document.getElementById('ecs-sg-rules-tbody');
+  if (!tbody) return;
+  
+  if (sgRules.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-state-msg">No ingress rules defined.</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = sgRules.map((rule, idx) => `
+    <tr>
+      <td>
+        <select class="ec2-select" style="padding-right:20px;" onchange="updateSgRule(${idx}, 'protocol', this.value)">
+          <option value="tcp" ${rule.protocol === 'tcp' ? 'selected' : ''}>TCP</option>
+          <option value="udp" ${rule.protocol === 'udp' ? 'selected' : ''}>UDP</option>
+          <option value="icmp" ${rule.protocol === 'icmp' ? 'selected' : ''}>ICMP</option>
+          <option value="-1" ${rule.protocol === '-1' ? 'selected' : ''}>All Traffic</option>
+        </select>
+      </td>
+      <td><input type="text" class="ec2-input" value="${rule.port}" placeholder="80 or 80-90" onchange="updateSgRule(${idx}, 'port', this.value)"></td>
+      <td><input type="text" class="ec2-input" value="${rule.cidr}" placeholder="0.0.0.0/0" onchange="updateSgRule(${idx}, 'cidr', this.value)"></td>
+      <td><input type="text" class="ec2-input" value="${rule.desc || ''}" placeholder="Description" onchange="updateSgRule(${idx}, 'desc', this.value)"></td>
+      <td><button type="button" class="ec2-btn-danger" onclick="deleteSgRule(${idx})">Delete</button></td>
+    </tr>
+  `).join('');
+};
+
+window.updateSgRule = function(idx, field, value) {
+  sgRules[idx][field] = value;
+};
+
+window.deleteSgRule = function(idx) {
+  sgRules.splice(idx, 1);
+  renderSgRules();
+};
+
+function updateRouteWarningForSubnets() {
+  const warningEl = document.getElementById('ecs-route-warning');
+  if (!warningEl) return;
+
+  const privChecked = Array.from(document.querySelectorAll('input[name="ecs-priv-sub"]:checked')).length;
+  if (privChecked > 0) {
+    warningEl.innerHTML = "⚠️ <strong>VPC Route Notice:</strong> Fargate tasks in private subnets require a NAT Gateway or VPC Endpoints for ECR image pull, SSM parameters, and CloudWatch logs. Verify your selected VPC provides route configuration for outbound internet or private endpoints.";
+    warningEl.style.display = 'block';
+  } else {
+    warningEl.style.display = 'none';
+  }
+}
+
+function updateIamPolicyPreview() {
+  const previewEl = document.getElementById('ecs-policy-preview');
+  if (!previewEl) return;
+
+  const policy = {
+    Version: "2012-10-17",
+    Statement: []
+  };
+
+  if (document.getElementById('ecs-perm-s3').checked) {
+    const bucket = document.getElementById('ecs-s3-bucket').value || 'my-bucket';
+    policy.Statement.push({
+      Effect: "Allow",
+      Action: [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:ListBucket",
+        "s3:DeleteObject"
+      ],
+      Resource: [
+        `arn:aws:s3:::${bucket}`,
+        `arn:aws:s3:::${bucket}/*`
+      ]
+    });
+  }
+
+  if (document.getElementById('ecs-perm-dynamo').checked) {
+    const table = document.getElementById('ecs-perm-dynamo-table').value || '*';
+    policy.Statement.push({
+      Effect: "Allow",
+      Action: [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:Query",
+        "dynamodb:Scan"
+      ],
+      Resource: `arn:aws:dynamodb:*:*:table/${table}`
+    });
+  }
+
+  if (document.getElementById('ecs-perm-ssm').checked) {
+    const path = document.getElementById('ecs-perm-ssm-path').value || '*';
+    policy.Statement.push({
+      Effect: "Allow",
+      Action: [
+        "ssm:GetParameters",
+        "ssm:GetParameter",
+        "ssm:GetParametersByPath"
+      ],
+      Resource: `arn:aws:ssm:*:*:parameter/${path}`
+    });
+  }
+
+  if (document.getElementById('ecs-perm-secret').checked) {
+    const arn = document.getElementById('ecs-perm-secret-arn').value || '*';
+    policy.Statement.push({
+      Effect: "Allow",
+      Action: ["secretsmanager:GetSecretValue"],
+      Resource: arn
+    });
+  }
+
+  if (document.getElementById('ecs-perm-sqs').checked) {
+    const url = document.getElementById('ecs-perm-sqs-url').value || '*';
+    policy.Statement.push({
+      Effect: "Allow",
+      Action: [
+        "sqs:SendMessage",
+        "sqs:ReceiveMessage",
+        "sqs:DeleteMessage",
+        "sqs:GetQueueAttributes"
+      ],
+      Resource: url
+    });
+  }
+
+  if (document.getElementById('ecs-perm-sns').checked) {
+    const arn = document.getElementById('ecs-perm-sns-topic').value || '*';
+    policy.Statement.push({
+      Effect: "Allow",
+      Action: ["sns:Publish"],
+      Resource: arn
+    });
+  }
+
+  if (policy.Statement.length === 0) {
+    policy.Statement.push({
+      Effect: "Allow",
+      Action: "sts:GetCallerIdentity",
+      Resource: "*"
+    });
+  }
+
+  previewEl.textContent = JSON.stringify(policy, null, 2);
+}
+
+window.runEcsPreflightChecks = function() {
+  const checks = {
+    projectName: false,
+    vpcSubnets: false,
+    imageSource: false,
+    portMappings: false,
+    iamRoles: true,
+    albConfig: true
+  };
+
+  // 1. Project Name
   const name = document.getElementById('ecs-name').value.trim();
   const nameErr = document.getElementById('err-ecs-name');
-  nameErr.style.display = 'none';
-  document.getElementById('ecs-name').classList.remove('err');
-  if (!name) {
-    nameErr.textContent = 'Cluster name is required';
-    nameErr.style.display = 'block';
-    document.getElementById('ecs-name').classList.add('err');
-    return false;
-  }
-  if (!/^[a-zA-Z0-9-]+$/.test(name)) {
-    nameErr.textContent = 'Cluster name must be alphanumeric and dashes only';
-    nameErr.style.display = 'block';
-    document.getElementById('ecs-name').classList.add('err');
-    return false;
+  if (name && /^[a-zA-Z0-9-]+$/.test(name)) {
+    checks.projectName = true;
+    if (nameErr) nameErr.style.display = 'none';
+    setSectionStatus(1, 'valid');
+  } else {
+    checks.projectName = false;
+    setSectionStatus(1, 'invalid');
   }
 
-  const vpc = document.getElementById('ecs-vpc').value;
-  if (!vpc) {
-    alert('Please select a VPC network');
-    return false;
-  }
-
+  // 2. VPC & Subnets
+  const vpcSelect = document.getElementById('ecs-vpc');
+  const vpcVal = vpcSelect ? vpcSelect.value : '';
   const pubChecked = Array.from(document.querySelectorAll('input[name="ecs-pub-sub"]:checked')).map(el => el.value);
   const privChecked = Array.from(document.querySelectorAll('input[name="ecs-priv-sub"]:checked')).map(el => el.value);
-  
-  if (pubChecked.length === 0) {
-    alert('Please select at least one public subnet for the load balancer');
-    return false;
+  const albEnabled = document.getElementById('ecs-alb-enabled').checked;
+
+  if (vpcVal) {
+    if (privChecked.length >= 1) {
+      if (albEnabled) {
+        checks.vpcSubnets = pubChecked.length >= 2;
+      } else {
+        checks.vpcSubnets = true;
+      }
+    }
   }
-  if (privChecked.length === 0) {
-    alert('Please select at least one private subnet for Fargate tasks');
-    return false;
+  setSectionStatus(6, checks.vpcSubnets ? 'valid' : 'invalid');
+
+  // 3. Container Image Source
+  const imageSource = document.querySelector('input[name="ecs-image-source"]:checked').value;
+  if (imageSource === 'ECR') {
+    const ecrRepo = document.getElementById('ecs-ecr-repo-select').value;
+    const tag = document.getElementById('ecs-image-tag').value.trim();
+    checks.imageSource = !!ecrRepo && !!tag;
+  } else {
+    const uri = document.getElementById('ecs-image-uri').value.trim();
+    checks.imageSource = !!uri;
+  }
+  setSectionStatus(2, checks.imageSource ? 'valid' : 'invalid');
+
+  // 4. Port Mappings
+  checks.portMappings = portMappings.length > 0 && portMappings.every(pm => pm.containerPort > 0);
+  setSectionStatus(3, checks.portMappings ? 'valid' : 'invalid');
+
+  // 5. IAM Roles
+  const execMode = document.getElementById('ecs-execution-role-mode').value;
+  const execRole = document.getElementById('ecs-execution-role-select').value;
+  if (execMode === 'existing' && !execRole) checks.iamRoles = false;
+
+  const taskMode = document.getElementById('ecs-task-role-mode').value;
+  const taskRole = document.getElementById('ecs-task-role-select').value;
+  if (taskMode === 'existing' && !taskRole) checks.iamRoles = false;
+  setSectionStatus(4, checks.iamRoles ? 'valid' : 'invalid');
+
+  // 6. ALB & Health Checks
+  if (albEnabled) {
+    const albMode = document.getElementById('ecs-alb-mode').value;
+    if (albMode === 'existing') {
+      const existingAlb = document.getElementById('ecs-existing-alb-select').value;
+      if (!existingAlb) checks.albConfig = false;
+    } else {
+      const newAlbName = document.getElementById('ecs-new-alb-name').value.trim();
+      if (!newAlbName) checks.albConfig = false;
+    }
+  }
+  setSectionStatus(7, checks.albConfig ? 'valid' : 'invalid');
+
+  const updatePreflightItem = (id, isValid) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (isValid) {
+      el.className = 'preflight-item valid';
+    } else {
+      el.className = 'preflight-item invalid';
+    }
+  };
+
+  updatePreflightItem('pf-project-name', checks.projectName);
+  updatePreflightItem('pf-vpc-subnets', checks.vpcSubnets);
+  updatePreflightItem('pf-image-source', checks.imageSource);
+  updatePreflightItem('pf-port-mappings', checks.portMappings);
+  updatePreflightItem('pf-iam-roles', checks.iamRoles);
+  updatePreflightItem('pf-alb-config', checks.albConfig);
+
+  const hasErrors = !checks.projectName || !checks.vpcSubnets || !checks.imageSource || !checks.portMappings || !checks.iamRoles || !checks.albConfig;
+  
+  const badge = document.getElementById('ecs-preflight-badge');
+  if (badge) {
+    if (hasErrors) {
+      badge.textContent = 'Invalid Configuration';
+      badge.className = 'preflight-badge has-errors';
+    } else {
+      badge.textContent = 'Ready for Preview';
+      badge.className = 'preflight-badge all-clear';
+    }
   }
 
-  return true;
+  calculateEcsCost();
+
+  const previewBtn = document.getElementById('btn-ecs-action');
+  if (previewBtn) {
+    previewBtn.disabled = hasErrors;
+    previewBtn.title = hasErrors ? 'Please resolve all pre-flight checklist errors first' : '';
+  }
+
+  return !hasErrors;
+};
+
+function setSectionStatus(sectionNum, status) {
+  const el = document.getElementById(`ecs-status-${sectionNum}`);
+  if (el) {
+    el.className = `ecs-accordion-status ${status}`;
+  }
+}
+
+function calculateEcsCost() {
+  const cpu = parseInt(document.getElementById('ecs-cpu').value, 10) || 1024;
+  const memory = parseInt(document.getElementById('ecs-memory').value, 10) || 2048;
+  const tasks = parseInt(document.getElementById('ecs-tasks').value, 10) || 1;
+  const launchType = document.querySelector('input[name="ecs-launch-type"]:checked') ? document.querySelector('input[name="ecs-launch-type"]:checked').value : 'FARGATE';
+  const fargateWeight = parseInt(document.getElementById('ecs-fargate-weight').value, 10) || 1;
+  const spotWeight = parseInt(document.getElementById('ecs-spot-weight').value, 10) || 0;
+  const albEnabled = document.getElementById('ecs-alb-enabled').checked;
+
+  const cpuVcpu = cpu / 1024;
+  const memGb = memory / 1024;
+
+  const fargateCpuHour = 0.04048;
+  const fargateMemHour = 0.004445;
+  const hoursPerMonth = 730;
+
+  let fargateFraction = 1;
+  let spotFraction = 0;
+
+  if (launchType === 'FARGATE_SPOT') {
+    fargateFraction = 0;
+    spotFraction = 1;
+  } else if (launchType === 'MIXED') {
+    const totalWeight = fargateWeight + spotWeight;
+    fargateFraction = totalWeight > 0 ? (fargateWeight / totalWeight) : 1;
+    spotFraction = totalWeight > 0 ? (spotWeight / totalWeight) : 0;
+  }
+
+  const baseCpuCost = tasks * (cpuVcpu * fargateCpuHour * fargateFraction) * hoursPerMonth;
+  const baseMemCost = tasks * (memGb * fargateMemHour * fargateFraction) * hoursPerMonth;
+
+  const spotCpuCost = tasks * (cpuVcpu * fargateCpuHour * 0.3 * spotFraction) * hoursPerMonth;
+  const spotMemCost = tasks * (memGb * fargateMemHour * 0.3 * spotFraction) * hoursPerMonth;
+
+  const totalComputeCost = baseCpuCost + baseMemCost + spotCpuCost + spotMemCost;
+  const spotSavings = (baseCpuCost + baseMemCost) * 0.7 * spotFraction;
+
+  const albCost = albEnabled ? 16.20 : 0.0;
+  const logsCost = 0.30;
+
+  const totalCost = totalComputeCost + albCost + logsCost;
+
+  const setLabelText = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  };
+
+  setLabelText('cost-compute-val', `$${(baseCpuCost + baseMemCost).toFixed(2)}`);
+  
+  const savingsRow = document.getElementById('cost-spot-savings-row');
+  if (savingsRow) {
+    if (spotFraction > 0) {
+      savingsRow.style.display = 'flex';
+      setLabelText('cost-spot-savings-val', `-$${spotSavings.toFixed(2)}`);
+    } else {
+      savingsRow.style.display = 'none';
+    }
+  }
+
+  setLabelText('cost-alb-val', `$${albCost.toFixed(2)}`);
+  setLabelText('cost-logs-val', `$${logsCost.toFixed(2)}`);
+  setLabelText('cost-total-val', `$${totalCost.toFixed(2)}`);
+}
+
+async function openEcsSummaryModal() {
+  if (!runEcsPreflightChecks()) {
+    alert('Please correct validation errors before previewing configuration.');
+    return;
+  }
+
+  const ecsName = document.getElementById('ecs-name').value.trim();
+  const launchType = document.querySelector('input[name="ecs-launch-type"]:checked').value;
+  const tasks = document.getElementById('ecs-tasks').value;
+  const cpu = document.getElementById('ecs-cpu').value;
+  const mem = document.getElementById('ecs-memory').value;
+  const albEnabled = document.getElementById('ecs-alb-enabled').checked;
+
+  const portRow = portMappings[0] || { containerPort: 80, protocol: 'tcp' };
+  document.getElementById('diag-task-meta').textContent = `${launchType} (${tasks} tasks, ${cpu} CPU, ${mem} MB) Port ${portRow.containerPort}/${portRow.protocol}`;
+
+  if (albEnabled) {
+    document.getElementById('diag-arrow-1').style.display = 'flex';
+    document.getElementById('diag-arrow-2').style.display = 'flex';
+    document.querySelector('#ecs-summary-modal-overlay .diagram-node:nth-child(3)').style.display = 'block';
+    document.querySelector('#ecs-summary-modal-overlay .diagram-node:nth-child(5)').style.display = 'block';
+    
+    const albMode = document.getElementById('ecs-alb-mode').value;
+    if (albMode === 'existing') {
+      const albName = document.getElementById('ecs-existing-alb-select').options[document.getElementById('ecs-existing-alb-select').selectedIndex]?.text || 'Existing ALB';
+      const listenerPort = document.getElementById('ecs-existing-listener-select').value;
+      document.getElementById('diag-alb-meta').textContent = `${albName} : ${listenerPort}`;
+    } else {
+      const albName = document.getElementById('ecs-new-alb-name').value.trim() || 'New ALB';
+      const listenerPort = document.getElementById('ecs-new-alb-port').value;
+      document.getElementById('diag-alb-meta').textContent = `${albName} : ${listenerPort}`;
+    }
+
+    const tgName = document.getElementById('ecs-target-group-name').value.trim() || `${ecsName}-tg`;
+    const path = document.getElementById('ecs-alb-path-pattern').value || '/';
+    document.getElementById('diag-tg-meta').textContent = `${tgName} (${path})`;
+  } else {
+    document.getElementById('diag-arrow-1').style.display = 'none';
+    document.getElementById('diag-arrow-2').style.display = 'none';
+    document.querySelector('#ecs-summary-modal-overlay .diagram-node:nth-child(3)').style.display = 'none';
+    document.querySelector('#ecs-summary-modal-overlay .diagram-node:nth-child(5)').style.display = 'none';
+    document.getElementById('diag-arrow-3').style.display = 'flex';
+  }
+
+  const steps = ['sg', 'alb', 'iam', 'taskdef', 'service'];
+  steps.forEach(s => {
+    const el = document.getElementById(`step-timeline-${s}`);
+    if (el) el.className = 'timeline-step pending';
+  });
+
+  document.getElementById('ecs-summary-modal-overlay').style.display = 'flex';
+}
+
+function validateEcsForm() {
+  return runEcsPreflightChecks();
 }
 
 async function fetchEcsPreview() {
-  const ecsName = document.getElementById('ecs-name').value.trim();
-  const env = document.getElementById('ecs-env').value;
-  const cpu = document.getElementById('ecs-cpu').value;
-  const memory = document.getElementById('ecs-memory').value;
-  const port = document.getElementById('ecs-port').value;
-  const tasks = document.getElementById('ecs-tasks').value;
-  const vpcName = document.getElementById('ecs-vpc').value;
-  const vpc = activeVpcs.find(v => v.name === vpcName);
-  const vpcId = vpc ? vpc.vpcId : '';
-  const s3Bucket = document.getElementById('ecs-s3-bucket').value;
-
-  const publicSubnets = Array.from(document.querySelectorAll('input[name="ecs-pub-sub"]:checked')).map(el => el.value);
-  const privateSubnets = Array.from(document.querySelectorAll('input[name="ecs-priv-sub"]:checked')).map(el => el.value);
-
+  const payload = buildEcsFormPayload();
   const preMain = document.getElementById('ecs-preview-main-tf');
   const preVars = document.getElementById('ecs-preview-tfvars');
-  preMain.textContent = 'Generating preview...';
-  preVars.textContent = 'Generating preview...';
+  if (preMain) preMain.textContent = 'Generating preview...';
+  if (preVars) preVars.textContent = 'Generating preview...';
 
   try {
     const res = await fetch('/api/ecs/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ecsName, env, cpu, memory, port, tasks, vpcId, publicSubnets, privateSubnets, s3Bucket })
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Preview failed');
-    preMain.textContent = data.mainTf;
-    preVars.textContent = data.tfVarsJson;
+    if (preMain) preMain.textContent = data.mainTf;
+    if (preVars) preVars.textContent = data.tfVarsJson;
   } catch (err) {
-    preMain.textContent = `Error: ${err.message}`;
-    preVars.textContent = '';
+    if (preMain) preMain.textContent = `Error: ${err.message}`;
+    if (preVars) preVars.textContent = '';
   }
 }
 
 async function deployEcsCluster() {
-  if (!validateEcsForm()) return;
-  const ecsName = document.getElementById('ecs-name').value.trim();
-  const env = document.getElementById('ecs-env').value;
-  const cpu = document.getElementById('ecs-cpu').value;
-  const memory = document.getElementById('ecs-memory').value;
-  const port = document.getElementById('ecs-port').value;
-  const tasks = document.getElementById('ecs-tasks').value;
-  const vpcName = document.getElementById('ecs-vpc').value;
-  const vpc = activeVpcs.find(v => v.name === vpcName);
-  const vpcId = vpc ? vpc.vpcId : '';
-  const s3Bucket = document.getElementById('ecs-s3-bucket').value;
-  const awsProfile = vpc ? vpc.awsProfile : 'default';
+  if (!runEcsPreflightChecks()) return;
+  const payload = buildEcsFormPayload();
+  const ecsName = payload.ecsName;
 
-  const publicSubnets = Array.from(document.querySelectorAll('input[name="ecs-pub-sub"]:checked')).map(el => el.value);
-  const privateSubnets = Array.from(document.querySelectorAll('input[name="ecs-priv-sub"]:checked')).map(el => el.value);
-
-  const btn = document.getElementById('btn-ecs-action');
-  const btnText = document.getElementById('btn-ecs-text');
-  btn.disabled = true;
-  btnText.innerHTML = `<svg class="spinning" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> Deploying Cluster…`;
+  const btn = document.getElementById('btn-ecs-summary-deploy');
+  const cancelBtn = document.getElementById('btn-ecs-summary-cancel');
+  const closeBtn = document.getElementById('btn-ecs-summary-close');
   
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<svg class="spinning" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> Deploying Service…`;
+  }
+  if (cancelBtn) cancelBtn.style.display = 'none';
+  if (closeBtn) closeBtn.style.display = 'none';
+
   startLogStream(ecsName);
 
   try {
     const res = await fetch('/api/ecs/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ecsName, env, cpu, memory, port, tasks, vpcId, publicSubnets, privateSubnets, s3Bucket, awsProfile })
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'ECS deployment failed');
+    
     document.querySelector('#svc-panel-ecs [data-tab="ecs-list"]').click();
     fetchEcsClusters();
+    document.getElementById('ecs-summary-modal-overlay').style.display = 'none';
   } catch (err) {
     appendLogLine(`[ERROR] ECS Deploy Error: ${err.message}`);
+    alert('Deployment failed. Review Terraform logs in the terminal on the right.');
   } finally {
-    btn.disabled = false;
-    btnText.textContent = '🚀 Deploy ECS Cluster';
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = 'Confirm & Deploy Service';
+    }
+    if (cancelBtn) cancelBtn.style.display = 'block';
+    if (closeBtn) closeBtn.style.display = 'block';
   }
 }
 
@@ -4494,11 +5541,11 @@ function renderEcsList() {
   }
   container.innerHTML = '';
   activeEcsClusters.forEach(cluster => {
-    const card = document.createElement('div');
-    card.className = 'deployment-card resource-card-ecs';
     const badgeClass = `status-badge ${cluster.status === 'active' ? 'active' : cluster.status === 'creating' ? 'creating' : cluster.status === 'destroying' ? 'destroying' : 'failed'}`;
     const repoUrlValue = cluster.repositoryUrl !== 'N/A' ? cluster.repositoryUrl : 'N/A';
     const albDnsValue = cluster.albDnsName !== 'N/A' ? `<a href="http://${cluster.albDnsName}" target="_blank" style="color:#f78166;text-decoration:none;">${cluster.albDnsName}</a>` : 'N/A';
+    const card = document.createElement('div');
+    card.className = 'deployment-card resource-card-ecs';
     card.innerHTML = `
       <div class="deployment-header">
         <span class="deployment-name">${cluster.name} (${cluster.env})</span>

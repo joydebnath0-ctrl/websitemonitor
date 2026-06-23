@@ -3030,6 +3030,11 @@ variable "project_name" {
   type = string
 }
 
+variable "service_name" {
+  type    = string
+  default = ""
+}
+
 variable "environment" {
   type    = string
   default = "dev"
@@ -3047,9 +3052,92 @@ variable "private_subnet_ids" {
   type = list(string)
 }
 
-variable "app_port" {
+variable "launch_type" {
+  type    = string
+  default = "FARGATE"
+}
+
+variable "platform_version" {
+  type    = string
+  default = "LATEST"
+}
+
+variable "capacity_provider" {
+  type    = string
+  default = "FARGATE"
+}
+
+variable "fargate_weight" {
   type    = number
-  default = 80
+  default = 1
+}
+
+variable "spot_weight" {
+  type    = number
+  default = 0
+}
+
+variable "container_insights" {
+  type    = string
+  default = "disabled"
+}
+
+variable "service_discovery_namespace" {
+  type    = string
+  default = ""
+}
+
+variable "image_uri" {
+  type = string
+}
+
+variable "container_name" {
+  type = string
+}
+
+variable "image_tag" {
+  type    = string
+  default = "latest"
+}
+
+variable "working_directory" {
+  type    = string
+  default = ""
+}
+
+variable "entrypoint" {
+  type    = list(string)
+  default = []
+}
+
+variable "command" {
+  type    = list(string)
+  default = []
+}
+
+variable "essential_container" {
+  type    = bool
+  default = true
+}
+
+variable "port_mappings" {
+  type = list(object({
+    container_port = number
+    host_port      = number
+    protocol       = string
+    name           = string
+    app_protocol   = string
+  }))
+}
+
+variable "task_cpu" {
+  type    = number
+  default = 1024
+}
+
+variable "task_memory" {
+  type    = number
+  default = 2048
 }
 
 variable "desired_count" {
@@ -3057,91 +3145,1049 @@ variable "desired_count" {
   default = 1
 }
 
-variable "task_cpu" {
-  type    = number
-  default = 256
-}
-
-variable "task_memory" {
-  type    = number
-  default = 512
-}
-
-variable "s3_bucket_name" {
+variable "task_execution_role_arn" {
   type    = string
   default = ""
 }
 
-module "ecr" {
-  source       = "./modules/ecr"
-  project_name = var.project_name
-  environment  = var.environment
+variable "task_role_arn" {
+  type    = string
+  default = ""
 }
 
-module "ecs" {
-  source             = "./modules/ecs"
-  project_name       = var.project_name
-  environment        = var.environment
-  vpc_id             = var.vpc_id
-  public_subnet_ids   = var.public_subnet_ids
-  private_subnet_ids  = var.private_subnet_ids
-  ecr_repo_url       = module.ecr.repository_url
-  image_tag          = "latest"
-  app_port           = var.app_port
-  desired_count      = var.desired_count
-  task_cpu           = var.task_cpu
-  task_memory        = var.task_memory
-  s3_bucket_name     = var.s3_bucket_name != "" ? var.s3_bucket_name : "none-bucket"
+variable "create_task_execution_role" {
+  type    = bool
+  default = false
 }
 
-output "ecr_repository_url" {
-  value = module.ecr.repository_url
+variable "create_task_role" {
+  type    = bool
+  default = false
 }
 
-output "ecs_cluster_name" {
-  value = module.ecs.cluster_name
+variable "task_role_permissions" {
+  type    = list(string)
+  default = []
 }
 
-output "ecs_service_name" {
-  value = module.ecs.service_name
+variable "task_role_s3_bucket" {
+  type    = string
+  default = ""
+}
+
+variable "task_role_dynamo_table" {
+  type    = string
+  default = ""
+}
+
+variable "task_role_ssm_path" {
+  type    = string
+  default = ""
+}
+
+variable "task_role_secret_arn" {
+  type    = string
+  default = ""
+}
+
+variable "task_role_sqs_url" {
+  type    = string
+  default = ""
+}
+
+variable "task_role_sns_topic" {
+  type    = string
+  default = ""
+}
+
+variable "env_vars" {
+  type = list(object({
+    name  = string
+    value = string
+  }))
+  default = []
+}
+
+variable "secrets" {
+  type = list(object({
+    name       = string
+    value_from = string
+  }))
+  default = []
+}
+
+variable "use_existing_alb" {
+  type    = bool
+  default = false
+}
+
+variable "alb_arn" {
+  type    = string
+  default = ""
+}
+
+variable "alb_name" {
+  type    = string
+  default = ""
+}
+
+variable "alb_scheme" {
+  type    = string
+  default = "internet-facing"
+}
+
+variable "alb_listener_port" {
+  type    = number
+  default = 80
+}
+
+variable "alb_certificate_arn" {
+  type    = string
+  default = ""
+}
+
+variable "target_group_arn" {
+  type    = string
+  default = ""
+}
+
+variable "target_group_name" {
+  type    = string
+  default = ""
+}
+
+variable "container_health_check" {
+  type = object({
+    command      = list(string)
+    interval     = number
+    timeout      = number
+    retries      = number
+    start_period = number
+  })
+}
+
+variable "tg_health_check" {
+  type = object({
+    path                = string
+    protocol            = string
+    port                = string
+    healthy_threshold   = number
+    unhealthy_threshold = number
+    timeout             = number
+    interval            = number
+    matcher             = string
+  })
+}
+
+variable "log_driver" {
+  type    = string
+  default = "awslogs"
+}
+
+variable "log_group_name" {
+  type    = string
+  default = ""
+}
+
+variable "log_stream_prefix" {
+  type    = string
+  default = "ecs"
+}
+
+variable "log_retention_days" {
+  type    = number
+  default = 30
+}
+
+variable "log_auto_create" {
+  type    = bool
+  default = true
+}
+
+variable "log_mode" {
+  type    = string
+  default = "blocking"
+}
+
+variable "deployment_type" {
+  type    = string
+  default = "rolling"
+}
+
+variable "min_healthy_percent" {
+  type    = number
+  default = 100
+}
+
+variable "max_percent" {
+  type    = number
+  default = 200
+}
+
+variable "circuit_breaker_enabled" {
+  type    = bool
+  default = true
+}
+
+variable "circuit_breaker_rollback" {
+  type    = bool
+  default = true
+}
+
+variable "autoscaling_enabled" {
+  type    = bool
+  default = false
+}
+
+variable "autoscaling_min" {
+  type    = number
+  default = 1
+}
+
+variable "autoscaling_max" {
+  type    = number
+  default = 10
+}
+
+variable "autoscaling_target_cpu" {
+  type    = number
+  default = 70
+}
+
+variable "autoscaling_target_mem" {
+  type    = number
+  default = 70
+}
+
+variable "ephemeral_storage_gb" {
+  type    = number
+  default = 21
+}
+
+variable "efs_volumes" {
+  type = list(object({
+    name               = string
+    file_system_id     = string
+    root_directory     = string
+    transit_encryption = string
+    access_point_id    = string
+  }))
+  default = []
+}
+
+variable "efs_mount_points" {
+  type = list(object({
+    container_path = string
+    source_volume  = string
+    read_only      = bool
+  }))
+  default = []
+}
+
+variable "tags" {
+  type    = map(string)
+  default = {}
+}
+
+variable "tag_cluster" {
+  type    = bool
+  default = true
+}
+
+variable "tag_service" {
+  type    = bool
+  default = true
+}
+
+variable "tag_task" {
+  type    = bool
+  default = true
+}
+
+variable "propagate_tags" {
+  type    = string
+  default = "NONE"
+}
+
+# --- ECS CLUSTER ---
+resource "aws_ecs_cluster" "cluster" {
+  name = "\${var.project_name}-cluster"
+
+  setting {
+    name  = "containerInsights"
+    value = var.container_insights
+  }
+
+  tags = var.tag_cluster ? var.tags : {}
+}
+
+# --- CAPACITY PROVIDER ---
+resource "aws_ecs_cluster_capacity_providers" "providers" {
+  count        = var.capacity_provider != "FARGATE" ? 1 : 0
+  cluster_name = aws_ecs_cluster.cluster.name
+  capacity_providers = ["FARGATE", "FARGATE_SPOT"]
+
+  default_capacity_provider_strategy {
+    capacity_provider = var.capacity_provider == "FARGATE_SPOT" ? "FARGATE_SPOT" : "FARGATE"
+    weight            = var.capacity_provider == "FARGATE_SPOT" ? 1 : var.fargate_weight
+    base              = var.capacity_provider == "FARGATE_SPOT" ? 0 : 1
+  }
+
+  dynamic "default_capacity_provider_strategy" {
+    for_each = var.capacity_provider == "Mixed" ? [1] : []
+    content {
+      capacity_provider = "FARGATE_SPOT"
+      weight            = var.spot_weight
+    }
+  }
+}
+
+# --- SERVICE DISCOVERY ---
+resource "aws_service_discovery_private_dns_namespace" "namespace" {
+  count       = var.service_discovery_namespace != "" ? 1 : 0
+  name        = var.service_discovery_namespace
+  description = "Service discovery namespace for \${var.project_name}"
+  vpc         = var.vpc_id
+}
+
+# --- SECURITY GROUPS ---
+resource "aws_security_group" "alb_sg" {
+  count       = (!var.use_existing_alb) ? 1 : 0
+  name        = "\${var.project_name}-alb-sg"
+  description = "ALB security group"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    from_port   = var.alb_listener_port
+    to_port     = var.alb_listener_port
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "\${var.project_name}-alb-sg" }
+}
+
+resource "aws_security_group" "tasks_sg" {
+  name        = "\${var.project_name}-tasks-sg"
+  description = "ECS tasks security group"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    security_groups = var.use_existing_alb ? [] : [aws_security_group.alb_sg[0].id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "\${var.project_name}-tasks-sg" }
+}
+
+# --- ALB ---
+resource "aws_lb" "alb" {
+  count              = (!var.use_existing_alb) ? 1 : 0
+  name               = var.alb_name != "" ? var.alb_name : "\${var.project_name}-alb"
+  internal           = var.alb_scheme == "internal"
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb_sg[0].id]
+  subnets            = var.public_subnet_ids
+
+  tags = { Name = "\${var.project_name}-alb" }
+}
+
+resource "aws_lb_target_group" "tg" {
+  count       = var.target_group_arn == "" ? 1 : 0
+  name        = var.target_group_name != "" ? var.target_group_name : "\${var.project_name}-tg"
+  port        = var.port_mappings[0].container_port
+  protocol    = var.tg_health_check.protocol
+  vpc_id      = var.vpc_id
+  target_type = "ip"
+
+  health_check {
+    path                = var.tg_health_check.path
+    protocol            = var.tg_health_check.protocol
+    port                = var.tg_health_check.port
+    healthy_threshold   = var.tg_health_check.healthy_threshold
+    unhealthy_threshold = var.tg_health_check.unhealthy_threshold
+    timeout             = var.tg_health_check.timeout
+    interval            = var.tg_health_check.interval
+    matcher             = var.tg_health_check.matcher
+  }
+}
+
+resource "aws_lb_listener" "listener" {
+  count             = (!var.use_existing_alb) ? 1 : 0
+  load_balancer_arn = aws_lb.alb[0].arn
+  port              = var.alb_listener_port
+  protocol          = var.alb_certificate_arn != "" ? "HTTPS" : "HTTP"
+  ssl_policy        = var.alb_certificate_arn != "" ? "ELBSecurityPolicy-2016-08" : null
+  certificate_arn   = var.alb_certificate_arn != "" ? var.alb_certificate_arn : null
+
+  default_action {
+    type             = "forward"
+    target_group_arn = var.target_group_arn != "" ? var.target_group_arn : aws_lb_target_group.tg[0].arn
+  }
+}
+
+# --- CLOUDWATCH LOG GROUP ---
+resource "aws_cloudwatch_log_group" "log_group" {
+  count             = var.log_auto_create ? 1 : 0
+  name              = var.log_group_name != "" ? var.log_group_name : "/ecs/\${var.project_name}"
+  retention_in_days = var.log_retention_days
+}
+
+# --- IAM ROLES ---
+resource "aws_iam_role" "execution_role" {
+  count = var.create_task_execution_role ? 1 : 0
+  name  = "\${var.project_name}-ecs-exec-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Action    = "sts:AssumeRole"
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "exec_attachment" {
+  count      = var.create_task_execution_role ? 1 : 0
+  role       = aws_iam_role.execution_role[0].name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+resource "aws_iam_role_policy" "exec_custom" {
+  count = var.create_task_execution_role ? 1 : 0
+  name  = "ecs-exec-custom-policy"
+  role  = aws_iam_role.execution_role[0].id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = [
+          "ecr:GetAuthorizationToken",
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role" "task_role" {
+  count = var.create_task_role ? 1 : 0
+  name  = "\${var.project_name}-ecs-task-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Action    = "sts:AssumeRole"
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "task_custom" {
+  count = var.create_task_role && length(var.task_role_permissions) > 0 ? 1 : 0
+  name  = "ecs-task-custom-policy"
+  role  = aws_iam_role.task_role[0].id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = flatten([
+      contains(var.task_role_permissions, "s3-read") && var.task_role_s3_bucket != "" ? [
+        {
+          Effect   = "Allow"
+          Action   = ["s3:GetObject", "s3:ListBucket"]
+          Resource = ["arn:aws:s3:::\${var.task_role_s3_bucket}", "arn:aws:s3:::\${var.task_role_s3_bucket}/*"]
+        }
+      ] : [],
+      contains(var.task_role_permissions, "s3-write") && var.task_role_s3_bucket != "" ? [
+        {
+          Effect   = "Allow"
+          Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"]
+          Resource = ["arn:aws:s3:::\${var.task_role_s3_bucket}", "arn:aws:s3:::\${var.task_role_s3_bucket}/*"]
+        }
+      ] : [],
+      contains(var.task_role_permissions, "dynamo") && var.task_role_dynamo_table != "" ? [
+        {
+          Effect   = "Allow"
+          Action   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Scan", "dynamodb:Query"]
+          Resource = "arn:aws:dynamodb:*:*:table/\${var.task_role_dynamo_table}"
+        }
+      ] : [],
+      contains(var.task_role_permissions, "ssm") && var.task_role_ssm_path != "" ? [
+        {
+          Effect   = "Allow"
+          Action   = ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"]
+          Resource = "arn:aws:ssm:*:*:parameter\${var.task_role_ssm_path}*"
+        }
+      ] : [],
+      contains(var.task_role_permissions, "secrets") && var.task_role_secret_arn != "" ? [
+        {
+          Effect   = "Allow"
+          Action   = ["secretsmanager:GetSecretValue"]
+          Resource = var.task_role_secret_arn
+        }
+      ] : [],
+      contains(var.task_role_permissions, "sqs") && var.task_role_sqs_url != "" ? [
+        {
+          Effect   = "Allow"
+          Action   = ["sqs:SendMessage", "sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
+          Resource = "arn:aws:sqs:*:*:\${split("/", var.task_role_sqs_url)[length(split("/", var.task_role_sqs_url)) - 1]}"
+        }
+      ] : [],
+      contains(var.task_role_permissions, "sns") && var.task_role_sns_topic != "" ? [
+        {
+          Effect   = "Allow"
+          Action   = ["sns:Publish"]
+          Resource = var.task_role_sns_topic
+        }
+      ] : []
+    ])
+  })
+}
+
+# --- TASK DEFINITION ---
+resource "aws_ecs_task_definition" "task" {
+  family                   = var.project_name
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = var.task_cpu
+  memory                   = var.task_memory
+  execution_role_arn       = var.create_task_execution_role ? aws_iam_role.execution_role[0].arn : var.task_execution_role_arn
+  task_role_arn            = var.create_task_role ? aws_iam_role.task_role[0].arn : var.task_role_arn
+
+  container_definitions = jsonencode([
+    {
+      name         = var.container_name
+      image        = var.image_uri
+      essential    = var.essential_container
+      workingDirectory = var.working_directory != "" ? var.working_directory : null
+      entryPoint   = length(var.entrypoint) > 0 ? var.entrypoint : null
+      command      = length(var.command) > 0 ? var.command : null
+
+      portMappings = [
+        for pm in var.port_mappings : {
+          containerPort = pm.container_port
+          hostPort      = pm.container_port
+          protocol      = pm.protocol
+          name          = pm.name != "" ? pm.name : null
+          appProtocol   = pm.app_protocol != "" ? pm.app_protocol : null
+        }
+      ]
+
+      environment = [
+        for ev in var.env_vars : {
+          name  = ev.name
+          value = ev.value
+        }
+      ]
+
+      secrets = length(var.secrets) > 0 ? [
+        for sec in var.secrets : {
+          name      = sec.name
+          valueFrom = sec.value_from
+        }
+      ] : null
+
+      logConfiguration = {
+        logDriver = var.log_driver
+        options = var.log_driver == "awslogs" ? {
+          "awslogs-group"         = var.log_auto_create ? aws_cloudwatch_log_group.log_group[0].name : var.log_group_name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = var.log_stream_prefix
+          "awslogs-mode"          = var.log_mode
+        } : null
+      }
+
+      healthCheck = {
+        command     = var.container_health_check.command
+        interval    = var.container_health_check.interval
+        timeout     = var.container_health_check.timeout
+        retries     = var.container_health_check.retries
+        startPeriod = var.container_health_check.start_period
+      }
+
+      mountPoints = length(var.efs_mount_points) > 0 ? [
+        for mp in var.efs_mount_points : {
+          containerPath = mp.container_path
+          sourceVolume  = mp.source_volume
+          readOnly      = mp.read_only
+        }
+      ] : null
+    }
+  ])
+
+  ephemeral_storage {
+    size_in_gib = var.ephemeral_storage_gb
+  }
+
+  dynamic "volume" {
+    for_each = var.efs_volumes
+    content {
+      name = volume.value.name
+      efs_volume_configuration {
+        file_system_id     = volume.value.file_system_id
+        root_directory     = volume.value.root_directory != "" ? volume.value.root_directory : "/"
+        transit_encryption = volume.value.transit_encryption == "true" ? "ENABLED" : "DISABLED"
+        authorization_config {
+          access_point_id = volume.value.access_point_id != "" ? volume.value.access_point_id : null
+          iam             = volume.value.transit_encryption == "true" ? "ENABLED" : "DISABLED"
+        }
+      }
+    }
+  }
+
+  tags = var.tag_task ? var.tags : {}
+}
+
+# --- SERVICE ---
+resource "aws_ecs_service" "service" {
+  name                               = var.service_name != "" ? var.service_name : "\${var.project_name}-service"
+  cluster                            = aws_ecs_cluster.cluster.id
+  task_definition                    = aws_ecs_task_definition.task.arn
+  desired_count                      = var.desired_count
+  launch_type                        = var.capacity_provider == "FARGATE" || var.capacity_provider == "FARGATE_SPOT" || var.capacity_provider == "Mixed" ? null : var.launch_type
+  platform_version                   = var.launch_type == "FARGATE" || var.capacity_provider == "FARGATE" || var.capacity_provider == "FARGATE_SPOT" || var.capacity_provider == "Mixed" ? var.platform_version : null
+  propagate_tags                     = var.propagate_tags
+
+  min_healthy_percent                = var.deployment_type == "rolling" ? var.min_healthy_percent : null
+  max_percent                        = var.deployment_type == "rolling" ? var.max_percent : null
+
+  dynamic "deployment_circuit_breaker" {
+    for_each = var.deployment_type == "rolling" && var.circuit_breaker_enabled ? [1] : []
+    content {
+      enable   = true
+      rollback = var.circuit_breaker_rollback
+    }
+  }
+
+  network_configuration {
+    subnets          = var.private_subnet_ids
+    security_groups  = [aws_security_group.tasks_sg.id]
+    assign_public_ip = false
+  }
+
+  load_balancer {
+    target_group_arn = var.target_group_arn != "" ? var.target_group_arn : aws_lb_target_group.tg[0].arn
+    container_name   = var.container_name
+    container_port   = var.port_mappings[0].container_port
+  }
+
+  dynamic "capacity_provider_strategy" {
+    for_each = var.capacity_provider == "FARGATE" ? [1] : []
+    content {
+      capacity_provider = "FARGATE"
+      weight            = 1
+      base              = 1
+    }
+  }
+
+  dynamic "capacity_provider_strategy" {
+    for_each = var.capacity_provider == "FARGATE_SPOT" ? [1] : []
+    content {
+      capacity_provider = "FARGATE_SPOT"
+      weight            = 1
+      base              = 0
+    }
+  }
+
+  dynamic "capacity_provider_strategy" {
+    for_each = var.capacity_provider == "Mixed" ? [1] : []
+    content {
+      capacity_provider = "FARGATE"
+      weight            = var.fargate_weight
+      base              = 1
+    }
+  }
+
+  dynamic "capacity_provider_strategy" {
+    for_each = var.capacity_provider == "Mixed" ? [1] : []
+    content {
+      capacity_provider = "FARGATE_SPOT"
+      weight            = var.spot_weight
+      base              = 0
+    }
+  }
+
+  tags = var.tag_service ? var.tags : {}
+
+  depends_on = [aws_lb_listener.listener]
+}
+
+# --- AUTO SCALING ---
+resource "aws_appautoscaling_target" "ecs" {
+  count              = var.autoscaling_enabled ? 1 : 0
+  max_capacity       = var.autoscaling_max
+  min_capacity       = var.autoscaling_min
+  resource_id        = "service/\${aws_ecs_cluster.cluster.name}/\${aws_ecs_service.service.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "cpu" {
+  count              = var.autoscaling_enabled ? 1 : 0
+  name               = "\${var.project_name}-cpu-scaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.ecs[0].resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs[0].scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs[0].service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value       = var.autoscaling_target_cpu
+    scale_in_cooldown  = 300
+    scale_out_cooldown = 60
+  }
+}
+
+resource "aws_appautoscaling_policy" "memory" {
+  count              = var.autoscaling_enabled ? 1 : 0
+  name               = "\${var.project_name}-memory-scaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.ecs[0].resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs[0].scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs[0].service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageMemoryUtilization"
+    }
+    target_value       = var.autoscaling_target_mem
+    scale_in_cooldown  = 300
+    scale_out_cooldown = 60
+  }
 }
 
 output "alb_dns_name" {
-  value = module.ecs.alb_dns_name
+  value = var.use_existing_alb ? var.alb_arn : (length(aws_lb.alb) > 0 ? aws_lb.alb[0].dns_name : "")
+}
+
+output "ecs_cluster_name" {
+  value = aws_ecs_cluster.cluster.name
+}
+
+output "ecs_service_name" {
+  value = aws_ecs_service.service.name
 }
 `;
+
+async function runCliJson(args, profileName = null) {
+  try {
+    const output = await runCliCapture('aws', args, profileName);
+    return JSON.parse(output);
+  } catch (err) {
+    console.error('CLI call failed:', args, err.message);
+    throw err;
+  }
+}
+
+app.get('/api/ecs/roles', requirePermission('ecs', 'read'), async (req, res) => {
+  const profile = req.query.profile || 'default';
+  try {
+    const data = await runCliJson(['iam', 'list-roles', '--max-items', '100'], profile);
+    const roles = (data.Roles || []).map(r => {
+      let isEcsTrusted = false;
+      if (r.AssumeRolePolicyDocument && Array.isArray(r.AssumeRolePolicyDocument.Statement)) {
+        isEcsTrusted = r.AssumeRolePolicyDocument.Statement.some(stmt => {
+          if (stmt.Effect === 'Allow' && stmt.Action === 'sts:AssumeRole') {
+            const service = stmt.Principal && stmt.Principal.Service;
+            if (Array.isArray(service)) {
+              return service.includes('ecs-tasks.amazonaws.com');
+            }
+            return service === 'ecs-tasks.amazonaws.com';
+          }
+          return false;
+        });
+      }
+      return {
+        roleName: r.RoleName,
+        arn: r.Arn,
+        isEcsTrusted
+      };
+    });
+    res.json(roles);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to list IAM roles: ' + err.message });
+  }
+});
+
+app.get('/api/ecs/repositories', requirePermission('ecs', 'read'), async (req, res) => {
+  const profile = req.query.profile || 'default';
+  const region = req.query.region || 'us-east-1';
+  try {
+    const data = await runCliJson(['ecr', 'describe-repositories', '--region', region], profile);
+    res.json(data.repositories || []);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to list ECR repositories: ' + err.message });
+  }
+});
+
+app.get('/api/ecs/security-groups', requirePermission('ecs', 'read'), async (req, res) => {
+  const profile = req.query.profile || 'default';
+  const region = req.query.region || 'us-east-1';
+  try {
+    const data = await runCliJson(['ec2', 'describe-security-groups', '--region', region], profile);
+    res.json(data.SecurityGroups || []);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to list Security Groups: ' + err.message });
+  }
+});
+
+app.get('/api/ecs/load-balancers', requirePermission('ecs', 'read'), async (req, res) => {
+  const profile = req.query.profile || 'default';
+  const region = req.query.region || 'us-east-1';
+  try {
+    const data = await runCliJson(['elbv2', 'describe-load-balancers', '--region', region], profile);
+    res.json(data.LoadBalancers || []);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to list Load Balancers: ' + err.message });
+  }
+});
+
+app.get('/api/ecs/target-groups', requirePermission('ecs', 'read'), async (req, res) => {
+  const profile = req.query.profile || 'default';
+  const region = req.query.region || 'us-east-1';
+  try {
+    const data = await runCliJson(['elbv2', 'describe-target-groups', '--region', region], profile);
+    res.json(data.TargetGroups || []);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to list Target Groups: ' + err.message });
+  }
+});
+
+app.get('/api/ecs/certificates', requirePermission('ecs', 'read'), async (req, res) => {
+  const profile = req.query.profile || 'default';
+  const region = req.query.region || 'us-east-1';
+  try {
+    const data = await runCliJson(['acm', 'list-certificates', '--region', region], profile);
+    res.json(data.CertificateSummaryList || []);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to list Certificates: ' + err.message });
+  }
+});
+
+app.get('/api/ecs/ssm-parameters', requirePermission('ecs', 'read'), async (req, res) => {
+  const profile = req.query.profile || 'default';
+  const region = req.query.region || 'us-east-1';
+  try {
+    const data = await runCliJson(['ssm', 'describe-parameters', '--region', region], profile);
+    res.json(data.Parameters || []);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to list SSM Parameters: ' + err.message });
+  }
+});
+
+app.get('/api/ecs/secrets', requirePermission('ecs', 'read'), async (req, res) => {
+  const profile = req.query.profile || 'default';
+  const region = req.query.region || 'us-east-1';
+  try {
+    const data = await runCliJson(['secretsmanager', 'list-secrets', '--region', region], profile);
+    res.json(data.SecretList || []);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to list Secrets: ' + err.message });
+  }
+});
+
+app.get('/api/ecs/file-systems', requirePermission('ecs', 'read'), async (req, res) => {
+  const profile = req.query.profile || 'default';
+  const region = req.query.region || 'us-east-1';
+  try {
+    const data = await runCliJson(['efs', 'describe-file-systems', '--region', region], profile);
+    res.json(data.FileSystems || []);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to list EFS File Systems: ' + err.message });
+  }
+});
 
 app.get('/api/ecs-clusters', requirePermission('ecs', 'read'), (req, res) => {
   res.json(readEcsDB());
 });
 
+function buildEcsTfVars(body) {
+  const {
+    ecsName, env, cpu, memory, tasks, vpcId, publicSubnets, privateSubnets, awsProfile,
+    serviceName, launchType, platformVersion, capacityProvider, fargateWeight, spotWeight,
+    containerInsights, serviceDiscoveryNamespace,
+    imageSource, imageUri, containerName, imageTag, workingDirectory, entrypoint, command, essentialContainer,
+    portMappings,
+    taskExecutionRoleMode, taskExecutionRoleArn,
+    taskRoleMode, taskRoleArn, taskRolePermissions, taskRoleS3Bucket, taskRoleDynamoTable, taskRoleSsmPath, taskRoleSecretArn, taskRoleSqsUrl, taskRoleSnsTopic,
+    envVars, secrets,
+    albMode, albName, albArn, albScheme, albListenerPort, albCertificateArn,
+    targetGroupMode, targetGroupArn, targetGroupName, targetGroupProtocol, targetGroupPath, targetGroupMatcher,
+    containerHealthCheck, tgHealthCheck,
+    logDriver, logGroupName, logStreamPrefix, logRetentionDays, logAutoCreate, logMode,
+    deploymentType, minHealthyPercent, maxPercent, circuitBreakerEnabled, circuitBreakerRollback,
+    autoscalingEnabled, autoscalingMin, autoscalingMax, autoscalingTargetCpu, autoscalingTargetMem,
+    ephemeralStorageGb, efsVolumes, efsMountPoints,
+    tags, propagateTags
+  } = body;
+
+  const vpcDb = readVpcDB();
+  const matchedVpc = vpcDb.find(v => v.vpcId === vpcId);
+  const region = matchedVpc ? matchedVpc.region : 'us-east-1';
+
+  const parseCmd = (val) => {
+    if (!val) return [];
+    if (Array.isArray(val)) return val;
+    return val.split(',').map(s => s.trim()).filter(Boolean);
+  };
+
+  return {
+    aws_region: region,
+    aws_profile: awsProfile || 'default',
+    project_name: ecsName,
+    service_name: serviceName || `${ecsName}-service`,
+    environment: env || 'dev',
+    vpc_id: vpcId,
+    public_subnet_ids: publicSubnets || [],
+    private_subnet_ids: privateSubnets || [],
+    launch_type: launchType || 'FARGATE',
+    platform_version: platformVersion || 'LATEST',
+    capacity_provider: capacityProvider || 'FARGATE',
+    fargate_weight: parseInt(fargateWeight, 10) || 1,
+    spot_weight: parseInt(spotWeight, 10) || 0,
+    container_insights: containerInsights ? 'enabled' : 'disabled',
+    service_discovery_namespace: serviceDiscoveryNamespace || '',
+    image_uri: imageUri || '',
+    container_name: containerName || ecsName,
+    image_tag: imageTag || 'latest',
+    working_directory: workingDirectory || '',
+    entrypoint: parseCmd(entrypoint),
+    command: parseCmd(command),
+    essential_container: essentialContainer !== false,
+    port_mappings: Array.isArray(portMappings) && portMappings.length > 0 ? portMappings.map(pm => ({
+      container_port: parseInt(pm.containerPort, 10) || 80,
+      host_port: parseInt(pm.hostPort, 10) || 0,
+      protocol: pm.protocol || 'tcp',
+      name: pm.name || '',
+      app_protocol: pm.appProtocol || ''
+    })) : [{ container_port: 80, host_port: 0, protocol: 'tcp', name: 'http', app_protocol: 'http' }],
+    task_cpu: parseInt(cpu, 10) || 1024,
+    task_memory: parseInt(memory, 10) || 2048,
+    desired_count: parseInt(tasks, 10) || 1,
+    task_execution_role_arn: taskExecutionRoleArn || '',
+    task_role_arn: taskRoleArn || '',
+    create_task_execution_role: taskExecutionRoleMode === 'auto',
+    create_task_role: taskRoleMode === 'create',
+    task_role_permissions: Array.isArray(taskRolePermissions) ? taskRolePermissions : [],
+    task_role_s3_bucket: taskRoleS3Bucket || '',
+    task_role_dynamo_table: taskRoleDynamoTable || '',
+    task_role_ssm_path: taskRoleSsmPath || '',
+    task_role_secret_arn: taskRoleSecretArn || '',
+    task_role_sqs_url: taskRoleSqsUrl || '',
+    task_role_sns_topic: taskRoleSnsTopic || '',
+    env_vars: Array.isArray(envVars) ? envVars : [],
+    secrets: Array.isArray(secrets) ? secrets : [],
+    use_existing_alb: albMode === 'existing',
+    alb_arn: albArn || '',
+    alb_name: albName || '',
+    alb_scheme: albScheme || 'internet-facing',
+    alb_listener_port: parseInt(albListenerPort, 10) || 80,
+    alb_certificate_arn: albCertificateArn || '',
+    target_group_arn: targetGroupArn || '',
+    target_group_name: targetGroupName || '',
+    container_health_check: containerHealthCheck ? {
+      command: parseCmd(containerHealthCheck.command).length > 0 ? parseCmd(containerHealthCheck.command) : ["CMD-SHELL", "curl -f http://localhost/ || exit 1"],
+      interval: parseInt(containerHealthCheck.interval, 10) || 30,
+      timeout: parseInt(containerHealthCheck.timeout, 10) || 5,
+      retries: parseInt(containerHealthCheck.retries, 10) || 3,
+      start_period: parseInt(containerHealthCheck.startPeriod, 10) || 60
+    } : {
+      command: ["CMD-SHELL", "curl -f http://localhost/ || exit 1"],
+      interval: 30,
+      timeout: 5,
+      retries: 3,
+      start_period: 60
+    },
+    tg_health_check: tgHealthCheck ? {
+      path: tgHealthCheck.path || '/',
+      protocol: tgHealthCheck.protocol || 'HTTP',
+      port: tgHealthCheck.port || 'traffic-port',
+      healthy_threshold: parseInt(tgHealthCheck.healthyThreshold, 10) || 2,
+      unhealthy_threshold: parseInt(tgHealthCheck.unhealthyThreshold, 10) || 5,
+      timeout: parseInt(tgHealthCheck.timeout, 10) || 5,
+      interval: parseInt(tgHealthCheck.interval, 10) || 30,
+      matcher: tgHealthCheck.matcher || '200'
+    } : {
+      path: '/',
+      protocol: 'HTTP',
+      port: 'traffic-port',
+      healthy_threshold: 2,
+      unhealthy_threshold: 5,
+      timeout: 5,
+      interval: 30,
+      matcher: '200'
+    },
+    log_driver: logDriver || 'awslogs',
+    log_group_name: logGroupName || '',
+    log_stream_prefix: logStreamPrefix || 'ecs',
+    log_retention_days: parseInt(logRetentionDays, 10) || 30,
+    log_auto_create: logAutoCreate !== false,
+    log_mode: logMode || 'blocking',
+    deployment_type: deploymentType || 'rolling',
+    min_healthy_percent: parseInt(minHealthyPercent, 10) || 100,
+    max_percent: parseInt(maxPercent, 10) || 200,
+    circuit_breaker_enabled: circuitBreakerEnabled !== false,
+    circuit_breaker_rollback: circuitBreakerRollback !== false,
+    autoscaling_enabled: !!autoscalingEnabled,
+    autoscaling_min: parseInt(autoscalingMin, 10) || 1,
+    autoscaling_max: parseInt(autoscalingMax, 10) || 10,
+    autoscaling_target_cpu: parseInt(autoscalingTargetCpu, 10) || 70,
+    autoscaling_target_mem: parseInt(autoscalingTargetMem, 10) || 70,
+    ephemeral_storage_gb: parseInt(ephemeralStorageGb, 10) || 21,
+    efs_volumes: Array.isArray(efsVolumes) ? efsVolumes.map(v => ({
+      name: v.name || '',
+      file_system_id: v.fileSystemId || '',
+      root_directory: v.rootDir || '/',
+      transit_encryption: v.transitEncryption ? 'true' : 'false',
+      access_point_id: v.accessPointId || ''
+    })) : [],
+    efs_mount_points: Array.isArray(efsMountPoints) ? efsMountPoints.map(m => ({
+      container_path: m.containerPath || '',
+      source_volume: m.sourceVolume || '',
+      read_only: !!m.readOnly
+    })) : [],
+    tags: typeof tags === 'object' && tags !== null ? tags : {},
+    tag_cluster: tags ? (tags.cluster !== false) : true,
+    tag_service: tags ? (tags.service !== false) : true,
+    tag_task: tags ? (tags.task !== false) : true,
+    propagate_tags: propagateTags || 'NONE'
+  };
+}
+
 app.post('/api/ecs/preview', requirePermission('ecs', 'write'), (req, res) => {
-  const { ecsName, env, cpu, memory, port, tasks, vpcId, publicSubnets, privateSubnets, s3Bucket } = req.body;
-  if (!ecsName || !cpu || !memory || !port || !tasks || !vpcId || !publicSubnets || !privateSubnets) {
+  const { ecsName, vpcId } = req.body;
+  if (!ecsName || !vpcId) {
     return res.status(400).json({ error: 'Missing required parameters' });
   }
   if (!/^[a-zA-Z0-9-]+$/.test(ecsName)) {
     return res.status(400).json({ error: 'Cluster/Project name must be alphanumeric and dashes only' });
   }
-  // Retrieve region from selected VPC profile
-  const vpcDb = readVpcDB();
-  const matchedVpc = vpcDb.find(v => v.vpcId === vpcId);
-  const region = matchedVpc ? matchedVpc.region : 'us-east-1';
-
-  const tfVars = {
-    aws_region: region,
-    project_name: ecsName,
-    environment: env || 'dev',
-    vpc_id: vpcId,
-    public_subnet_ids: publicSubnets,
-    private_subnet_ids: privateSubnets,
-    app_port: parseInt(port, 10),
-    desired_count: parseInt(tasks, 10),
-    task_cpu: parseInt(cpu, 10),
-    task_memory: parseInt(memory, 10),
-    s3_bucket_name: s3Bucket || ''
-  };
-
+  const tfVars = buildEcsTfVars(req.body);
   res.json({
     mainTf: ECS_TERRAFORM_TEMPLATE,
     tfVarsJson: JSON.stringify(tfVars, null, 2)
@@ -3149,8 +4195,8 @@ app.post('/api/ecs/preview', requirePermission('ecs', 'write'), (req, res) => {
 });
 
 app.post('/api/ecs/create', requirePermission('ecs', 'write'), (req, res) => {
-  const { ecsName, env, cpu, memory, port, tasks, vpcId, publicSubnets, privateSubnets, s3Bucket, awsProfile } = req.body;
-  if (!ecsName || !cpu || !memory || !port || !tasks || !vpcId || !publicSubnets || !privateSubnets) {
+  const { ecsName, env, vpcId, awsProfile } = req.body;
+  if (!ecsName || !vpcId) {
     return res.status(400).json({ error: 'Missing required parameters' });
   }
   if (!/^[a-zA-Z0-9-]+$/.test(ecsName)) {
@@ -3162,54 +4208,32 @@ app.post('/api/ecs/create', requirePermission('ecs', 'write'), (req, res) => {
     return res.status(400).json({ error: `ECS cluster "${ecsName}" already exists` });
   }
 
-  const vpcDb = readVpcDB();
-  const matchedVpc = vpcDb.find(v => v.vpcId === vpcId);
-  const region = matchedVpc ? matchedVpc.region : 'us-east-1';
-
+  const tfVars = buildEcsTfVars(req.body);
   const targetDir = path.join(ECS_DEPLOYMENTS_DIR, ecsName);
   if (!fs.existsSync(targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true });
   }
 
-  // Copy modules folder recursively
-  const modulesDir = path.join(targetDir, 'modules');
-  if (!fs.existsSync(modulesDir)) {
-    fs.mkdirSync(modulesDir, { recursive: true });
-  }
-
-  // Write main.tf and terraform.tfvars.json
   fs.writeFileSync(path.join(targetDir, 'main.tf'), ECS_TERRAFORM_TEMPLATE);
-  const tfVars = {
-    aws_region: region,
-    project_name: ecsName,
-    environment: env || 'dev',
-    vpc_id: vpcId,
-    public_subnet_ids: publicSubnets,
-    private_subnet_ids: privateSubnets,
-    app_port: parseInt(port, 10),
-    desired_count: parseInt(tasks, 10),
-    task_cpu: parseInt(cpu, 10),
-    task_memory: parseInt(memory, 10),
-    s3_bucket_name: s3Bucket || ''
-  };
   fs.writeFileSync(path.join(targetDir, 'terraform.tfvars.json'), JSON.stringify(tfVars, null, 2));
 
   // Add ECS deployment to DB
   const newDeployment = {
     name: ecsName,
-    region,
+    region: tfVars.aws_region,
     env: env || 'dev',
-    cpu: parseInt(cpu, 10),
-    memory: parseInt(memory, 10),
-    port: parseInt(port, 10),
-    tasks: parseInt(tasks, 10),
+    cpu: tfVars.task_cpu,
+    memory: tfVars.task_memory,
+    port: tfVars.port_mappings[0].container_port,
+    tasks: tfVars.desired_count,
     vpcId,
-    s3Bucket: s3Bucket || 'none',
+    s3Bucket: tfVars.task_role_s3_bucket || 'none',
     status: 'creating',
     repositoryUrl: 'N/A',
     albDnsName: 'N/A',
     awsProfile: awsProfile || 'default',
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    config: req.body
   };
   db.push(newDeployment);
   writeEcsDB(db);
@@ -3219,42 +4243,25 @@ app.post('/api/ecs/create', requirePermission('ecs', 'write'), (req, res) => {
 
   const execute = async () => {
     try {
-      sendLog(ecsName, `=== Copying Terraform Modules to Local Workspace ===`);
-      // Run Linux shell execution to copy /home/ubuntu/modules/ecr and /home/ubuntu/modules/ecs into targetDir/modules
-      await new Promise((resolve, reject) => {
-        const cpEcr = spawn('cp', ['-r', '/home/ubuntu/modules/ecr', path.join(modulesDir, 'ecr')]);
-        cpEcr.on('close', code => {
-          if (code !== 0) reject(new Error('Failed to copy ECR module'));
-          else {
-            const cpEcs = spawn('cp', ['-r', '/home/ubuntu/modules/ecs', path.join(modulesDir, 'ecs')]);
-            cpEcs.on('close', codeEcs => {
-              if (codeEcs !== 0) reject(new Error('Failed to copy ECS module'));
-              else resolve();
-            });
-          }
-        });
-      });
-
-      sendLog(ecsName, `=== Initializing ECS/ECR Terraform Workspace for ${ecsName} ===`);
+      sendLog(ecsName, `=== Initializing ECS Workspace for ${ecsName} ===`);
       await runCmd('terraform', ['init', '-no-color'], targetDir, ecsName, awsProfile);
 
-      sendLog(ecsName, `=== Deploying ECS Cluster and ECR Registry (Fargate) ===`);
+      sendLog(ecsName, `=== Deploying ECS Service resources ===`);
       await runCmd('terraform', ['apply', '-auto-approve', '-no-color'], targetDir, ecsName, awsProfile);
 
-      sendLog(ecsName, `=== Fetching ECS Terraform Output ===`);
+      sendLog(ecsName, `=== Fetching ECS Outputs ===`);
       const outputs = await getOutput(targetDir, awsProfile);
 
       const currentDB = readEcsDB();
       const match = currentDB.find(c => c.name === ecsName);
       if (match) {
         match.status = 'active';
-        match.repositoryUrl = outputs.ecr_repository_url ? outputs.ecr_repository_url.value : 'N/A';
+        match.repositoryUrl = tfVars.image_uri || 'N/A';
         match.albDnsName = outputs.alb_dns_name ? outputs.alb_dns_name.value : 'N/A';
         writeEcsDB(currentDB);
       }
 
       sendLog(ecsName, `=== ECS Cluster Successfully Deployed ===`);
-      sendLog(ecsName, `Repository URL: ${outputs.ecr_repository_url ? outputs.ecr_repository_url.value : 'N/A'}`);
       sendLog(ecsName, `Load Balancer DNS Name: ${outputs.alb_dns_name ? outputs.alb_dns_name.value : 'N/A'}`);
     } catch (err) {
       sendLog(ecsName, `=== ECS DEPLOYMENT FAILED ===\nError: ${err.message}`);
