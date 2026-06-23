@@ -712,6 +712,7 @@
             <button type="button" class="ec2-tab active" data-tab="s3-config">Config</button>
             <button type="button" class="ec2-tab" data-tab="s3-preview">Code Preview</button>
             <button type="button" class="ec2-tab" data-tab="s3-list">S3 Buckets</button>
+            <button type="button" class="ec2-tab" data-tab="s3-policy">Policy Generator</button>
           </div>
 
           <div class="ec2-tab-contents-container">
@@ -794,6 +795,15 @@
                     <input type="checkbox" id="s3-force-destroy">
                     <span class="toggle-slider"></span>
                   </div>
+                <label class="toggle-row">
+                  <span class="toggle-info">
+                    <span class="toggle-title">Attach Generated Policy</span>
+                    <span class="toggle-desc">Automatically attach bucket policy from Generator tab</span>
+                  </span>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="s3-attach-policy">
+                    <span class="toggle-slider"></span>
+                  </div>
                 </label>
               </div>
 
@@ -805,6 +815,7 @@
                   <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Encryption</span><span style="color:#e2e8f0;font-weight:500;" id="s3-summary-encryption">AES-256</span></div>
                   <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Public Access</span><span style="color:#e2e8f0;font-weight:500;" id="s3-summary-public">Blocked</span></div>
                   <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Versioning</span><span style="color:#e2e8f0;font-weight:500;" id="s3-summary-versioning">Disabled</span></div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">Bucket Policy</span><span style="color:#e2e8f0;font-weight:500;" id="s3-summary-policy">Not Attached</span></div>
                 </div>
               </div>
             </div>
@@ -828,6 +839,158 @@
               <h3 class="section-heading">Managed S3 Buckets</h3>
               <div id="s3-resources-list" style="display:flex;flex-direction:column;gap:14px;">
                 <div class="empty-state-msg">No S3 buckets found.</div>
+              </div>
+            </div>
+
+            <!-- S3 POLICY GENERATOR TAB -->
+            <div class="ec2-tab-content" id="tab-content-s3-policy">
+              <div class="policy-inner-tabs" style="display:flex;gap:8px;margin-bottom:14px;border-bottom:1px solid #30363d;padding-bottom:8px;">
+                <button type="button" class="inner-tab active" data-inner-tab="policy-builder" style="background:none;border:none;color:#58a6ff;font-weight:600;padding:4px 8px;cursor:pointer;outline:none;border-bottom:2px solid #58a6ff;border-radius:0;">Builder</button>
+                <button type="button" class="inner-tab" data-inner-tab="policy-json" style="background:none;border:none;color:#8b949e;font-weight:600;padding:4px 8px;cursor:pointer;outline:none;border-radius:0;">JSON Policy</button>
+                <button type="button" class="inner-tab" data-inner-tab="policy-tf" style="background:none;border:none;color:#8b949e;font-weight:600;padding:4px 8px;cursor:pointer;outline:none;border-radius:0;">Terraform HCL</button>
+                <button type="button" class="inner-tab" data-inner-tab="policy-templates" style="background:none;border:none;color:#8b949e;font-weight:600;padding:4px 8px;cursor:pointer;outline:none;border-radius:0;">Templates</button>
+              </div>
+
+              <!-- TAB 1: Policy Builder -->
+              <div class="policy-inner-tab-content active" id="inner-content-policy-builder">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                  <div>
+                    <label class="ec2-label">Bucket Name</label>
+                    <input type="text" id="policy-bucket-name" class="ec2-input" placeholder="Pre-filled from S3 list">
+                  </div>
+                  <div>
+                    <label class="ec2-label">AWS Account ID</label>
+                    <input type="text" id="policy-account-id" class="ec2-input" placeholder="e.g. 123456789012" maxlength="12" pattern="\d{12}">
+                  </div>
+                </div>
+
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                  <h4 style="margin:0;font-size:11px;color:#8b949e;text-transform:uppercase;letter-spacing:0.05em;font-weight:700;">Policy Statements</h4>
+                  <button type="button" class="ec2-btn-secondary" id="btn-policy-add-statement" style="padding:4px 10px;font-size:11px;margin:0;height:26px;">
+                    ➕ Add Statement
+                  </button>
+                </div>
+
+                <!-- Statements Card Container -->
+                <div id="policy-statements-list" style="display:flex;flex-direction:column;gap:14px;margin-bottom:18px;">
+                  <!-- Statements dynamically injected here -->
+                </div>
+
+                <!-- Bucket Options Card -->
+                <div class="options-card" style="margin-bottom:18px;">
+                  <p class="options-card-title">Bucket Options</p>
+                  
+                  <label class="toggle-row">
+                    <span class="toggle-info">
+                      <span class="toggle-title">Block Public Access</span>
+                      <span class="toggle-desc">Prevent public ACLs and bucket policies</span>
+                    </span>
+                    <div class="toggle-switch">
+                      <input type="checkbox" id="policy-opt-block-public" checked>
+                      <span class="toggle-slider"></span>
+                    </div>
+                  </label>
+
+                  <label class="toggle-row">
+                    <span class="toggle-info">
+                      <span class="toggle-title">Enable Versioning</span>
+                      <span class="toggle-desc">Keep historical versions of bucket objects</span>
+                    </span>
+                    <div class="toggle-switch">
+                      <input type="checkbox" id="policy-opt-versioning">
+                      <span class="toggle-slider"></span>
+                    </div>
+                  </label>
+
+                  <label class="toggle-row">
+                    <span class="toggle-info">
+                      <span class="toggle-title">Server-side Encryption (SSE-S3)</span>
+                      <span class="toggle-desc">Automatically encrypt new objects with AES-256</span>
+                    </span>
+                    <div class="toggle-switch">
+                      <input type="checkbox" id="policy-opt-sse" checked>
+                      <span class="toggle-slider"></span>
+                    </div>
+                  </label>
+
+                  <label class="toggle-row">
+                    <span class="toggle-info">
+                      <span class="toggle-title">Enforce HTTPS Only</span>
+                      <span class="toggle-desc">Enforce secure transport (adds Deny HTTP statement)</span>
+                    </span>
+                    <div class="toggle-switch">
+                      <input type="checkbox" id="policy-opt-https-only">
+                      <span class="toggle-slider"></span>
+                    </div>
+                  </label>
+
+                  <label class="toggle-row">
+                    <span class="toggle-info">
+                      <span class="toggle-title">Require MFA Delete</span>
+                      <span class="toggle-desc">Require multi-factor authentication for object deletion</span>
+                    </span>
+                    <div class="toggle-switch">
+                      <input type="checkbox" id="policy-opt-mfa-delete">
+                      <span class="toggle-slider"></span>
+                    </div>
+                  </label>
+                </div>
+
+                <div style="display:flex;gap:10px;">
+                  <button type="button" class="ec2-btn-outline" id="btn-policy-view-json" style="flex:1;">View JSON</button>
+                  <button type="button" class="ec2-btn-outline" id="btn-policy-view-tf" style="flex:1;">View Terraform</button>
+                </div>
+              </div>
+
+              <!-- TAB 2: JSON Policy -->
+              <div class="policy-inner-tab-content" id="inner-content-policy-json" style="display:none;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                  <span style="font-size:11px;color:#8b949e;">Live-generated S3 Bucket Policy JSON</span>
+                  <div style="display:flex;gap:8px;">
+                    <button type="button" class="ec2-btn-secondary" id="btn-policy-copy-json" style="padding:4px 8px;font-size:11px;margin:0;height:26px;">Copy JSON</button>
+                    <button type="button" class="ec2-btn-s3" id="btn-policy-apply" style="padding:4px 10px;font-size:11px;margin:0;height:26px;">Apply Policy</button>
+                  </div>
+                </div>
+
+                <div id="policy-json-warnings" style="display:none;background:rgba(248,81,73,0.1);border:1px solid rgba(248,81,73,0.2);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:#f85149;">
+                  <!-- Conflicts/Warnings go here -->
+                </div>
+
+                <pre id="policy-json-code" class="code-preview-block" style="max-height:400px;overflow:auto;margin:0;font-family:'JetBrains Mono',monospace;font-size:11px;background:#161b22;border:1px solid #30363d;padding:10px;border-radius:6px;"></pre>
+              </div>
+
+              <!-- TAB 3: Terraform HCL -->
+              <div class="policy-inner-tab-content" id="inner-content-policy-tf" style="display:none;">
+                <!-- Stat cards -->
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px;">
+                  <div class="monitor-stat-card" style="padding:6px 10px;gap:2px;background:#161b22;border:1px solid #30363d;border-radius:6px;">
+                    <div class="monitor-stat-value" id="policy-stat-statements" style="font-size:15px;color:#f0f6fc;">0</div>
+                    <div class="monitor-stat-label" style="font-size:8px;color:#8b949e;">Statements</div>
+                  </div>
+                  <div class="monitor-stat-card" style="padding:6px 10px;gap:2px;background:#161b22;border:1px solid #30363d;border-radius:6px;">
+                    <div class="monitor-stat-value" id="policy-stat-effects" style="font-size:15px;color:#f0f6fc;">Allow</div>
+                    <div class="monitor-stat-label" style="font-size:8px;color:#8b949e;">Primary Effect</div>
+                  </div>
+                  <div class="monitor-stat-card" style="padding:6px 10px;gap:2px;background:#161b22;border:1px solid #30363d;border-radius:6px;">
+                    <div class="monitor-stat-value" id="policy-stat-encryption" style="font-size:15px;color:#f0f6fc;">SSE-S3</div>
+                    <div class="monitor-stat-label" style="font-size:8px;color:#8b949e;">Encryption</div>
+                  </div>
+                </div>
+
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                  <span style="font-size:11px;color:#8b949e;">Generated Terraform HCL</span>
+                  <button type="button" class="ec2-btn-secondary" id="btn-policy-copy-tf" style="padding:4px 8px;font-size:11px;margin:0;height:26px;">Copy HCL</button>
+                </div>
+
+                <pre id="policy-tf-code" class="code-preview-block" style="max-height:350px;overflow:auto;margin:0;font-family:'JetBrains Mono',monospace;font-size:11px;background:#161b22;border:1px solid #30363d;padding:10px;border-radius:6px;"></pre>
+              </div>
+
+              <!-- TAB 4: Quick Templates -->
+              <div class="policy-inner-tab-content" id="inner-content-policy-templates" style="display:none;">
+                <p style="font-size:11px;color:#8b949e;margin-top:0;margin-bottom:12px;line-height:1.4;">Select a template to pre-populate the Policy Builder. Any current configuration will be overwritten.</p>
+                <div style="display:flex;flex-direction:column;gap:8px;" id="policy-templates-list">
+                  <!-- Presets buttons -->
+                </div>
               </div>
             </div>
           </div>

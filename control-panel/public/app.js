@@ -855,7 +855,7 @@ function initS3UI() {
       tab.classList.add('active');
       tabContents.forEach(c => c.classList.toggle('active', c.id === `tab-content-${targetTab}`));
       const btnText = document.getElementById('btn-s3-text');
-      if (targetTab === 's3-list') {
+      if (targetTab === 's3-list' || targetTab === 's3-policy') {
         deployBtnWrapper.style.display = 'none';
       } else {
         deployBtnWrapper.style.display = 'block';
@@ -869,7 +869,7 @@ function initS3UI() {
     });
   });
 
-  ['s3-name','s3-encryption','s3-block-public','s3-versioning','s3-force-destroy','s3-namespace'].forEach(id => {
+  ['s3-name','s3-encryption','s3-block-public','s3-versioning','s3-force-destroy','s3-namespace','s3-attach-policy'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', updateS3Summary);
     if (el && el.tagName === 'INPUT' && el.type === 'text') el.addEventListener('input', updateS3Summary);
@@ -891,7 +891,866 @@ function initS3UI() {
   });
 
   updateS3Summary();
+  initS3PolicyGenerator();
 }
+
+// ===== S3 BUCKET POLICY GENERATOR =====
+const POLICY_TEMPLATES = [
+  {
+    name: "🌐 Static Website Hosting (public read)",
+    desc: "Allows everyone to read objects in the bucket. Required for hosting static HTML/assets.",
+    statements: [
+      {
+        sid: "PublicReadGetObject",
+        effect: "Allow",
+        principalType: "Everyone",
+        principalArn: "",
+        actionsPreset: "Read Only",
+        customActions: "",
+        resourceTarget: "Objects only",
+        prefix: "",
+        condRequireHttps: false,
+        condRequireMfa: false,
+        condIpWhitelistEnabled: false,
+        condIpWhitelistCidr: ""
+      }
+    ],
+    options: { blockPublic: false, versioning: false, sse: true, httpsOnly: false, mfaDelete: false }
+  },
+  {
+    name: "🔒 Private - Specific IAM Role Only",
+    desc: "Allow only a specific IAM Role or Administrator access. Standard for secure internal app datastores.",
+    statements: [
+      {
+        sid: "IAMRoleFullAccess",
+        effect: "Allow",
+        principalType: "IAM Role",
+        principalArn: "arn:aws:iam::123456789012:role/app-backend-role",
+        actionsPreset: "Read+Write+Delete",
+        resourceTarget: "Entire bucket",
+        prefix: "",
+        condRequireHttps: true,
+        condRequireMfa: false,
+        condIpWhitelistEnabled: false,
+        condIpWhitelistCidr: ""
+      }
+    ],
+    options: { blockPublic: true, versioning: true, sse: true, httpsOnly: true, mfaDelete: false }
+  },
+  {
+    name: "⚡ CloudFront Origin Access (OAC)",
+    desc: "Allows a specific CloudFront Distribution OAC to read objects, keeping the bucket private.",
+    statements: [
+      {
+        sid: "AllowCloudFrontServicePrincipal",
+        effect: "Allow",
+        principalType: "CloudFront OAC",
+        principalArn: "cloudfront.amazonaws.com",
+        actionsPreset: "Read Only",
+        resourceTarget: "Objects only",
+        prefix: "",
+        condRequireHttps: true,
+        condRequireMfa: false,
+        condIpWhitelistEnabled: false,
+        condIpWhitelistCidr: ""
+      }
+    ],
+    options: { blockPublic: true, versioning: false, sse: true, httpsOnly: true, mfaDelete: false }
+  },
+  {
+    name: "🔄 Cross-Account Access",
+    desc: "Allow another external AWS Account full Read and Write permissions.",
+    statements: [
+      {
+        sid: "CrossAccountDelegation",
+        effect: "Allow",
+        principalType: "AWS Account",
+        principalArn: "987654321098",
+        actionsPreset: "Read+Write",
+        resourceTarget: "Entire bucket",
+        prefix: "",
+        condRequireHttps: true,
+        condRequireMfa: false,
+        condIpWhitelistEnabled: false,
+        condIpWhitelistCidr: ""
+      }
+    ],
+    options: { blockPublic: true, versioning: true, sse: true, httpsOnly: true, mfaDelete: false }
+  },
+  {
+    name: "🏥 HIPAA - Deny Unencrypted Uploads",
+    desc: "Enforce server-side encryption and deny unencrypted requests to satisfy strict compliance audits.",
+    statements: [
+      {
+        sid: "DenyUnencryptedUploads",
+        effect: "Deny",
+        principalType: "Everyone",
+        principalArn: "",
+        actionsPreset: "Write Only",
+        resourceTarget: "Objects only",
+        prefix: "",
+        condRequireHttps: true,
+        condRequireMfa: false,
+        condIpWhitelistEnabled: false,
+        condIpWhitelistCidr: ""
+      }
+    ],
+    options: { blockPublic: true, versioning: true, sse: true, httpsOnly: true, mfaDelete: true }
+  },
+  {
+    name: "💻 EC2 Instance Profile Access",
+    desc: "Grant an EC2 instance's associated IAM Role full bucket read and write permissions.",
+    statements: [
+      {
+        sid: "EC2InstanceProfileAccess",
+        effect: "Allow",
+        principalType: "IAM Role",
+        principalArn: "arn:aws:iam::123456789012:role/web-server-profile",
+        actionsPreset: "Read+Write",
+        resourceTarget: "Entire bucket",
+        prefix: "",
+        condRequireHttps: true,
+        condRequireMfa: false,
+        condIpWhitelistEnabled: false,
+        condIpWhitelistCidr: ""
+      }
+    ],
+    options: { blockPublic: true, versioning: false, sse: true, httpsOnly: true, mfaDelete: false }
+  },
+  {
+    name: "🛡️ Enforce HTTPS Only",
+    desc: "Simple baseline policy to Deny all non-SSL requests to the bucket.",
+    statements: [],
+    options: { blockPublic: true, versioning: false, sse: true, httpsOnly: true, mfaDelete: false }
+  }
+];
+
+let policyStatements = [];
+let selectedPolicyBucketName = '';
+
+window.addPolicyStatement = function() {
+  const index = policyStatements.length;
+  policyStatements.push({
+    sid: `Statement${index + 1}`,
+    effect: "Allow",
+    principalType: "Everyone",
+    principalArn: "",
+    actionsPreset: "Read Only",
+    customActions: "",
+    resourceTarget: "Entire bucket",
+    prefix: "",
+    condRequireHttps: false,
+    condRequireMfa: false,
+    condIpWhitelistEnabled: false,
+    condIpWhitelistCidr: ""
+  });
+  renderPolicyStatements();
+  generatePolicyOutputs();
+};
+
+window.removePolicyStatement = function(index) {
+  policyStatements.splice(index, 1);
+  renderPolicyStatements();
+  generatePolicyOutputs();
+};
+
+window.updateStatementField = function(index, field, value) {
+  if (policyStatements[index]) {
+    policyStatements[index][field] = value;
+    generatePolicyOutputs();
+  }
+};
+
+window.updateStatementEffect = function(index, val) {
+  updateStatementField(index, 'effect', val);
+  renderPolicyStatements();
+};
+
+window.updateStatementPrincipalType = function(index, val) {
+  updateStatementField(index, 'principalType', val);
+  renderPolicyStatements();
+};
+
+window.updateStatementActions = function(index, val) {
+  updateStatementField(index, 'actionsPreset', val);
+  renderPolicyStatements();
+};
+
+window.updateStatementResourceTarget = function(index, val) {
+  updateStatementField(index, 'resourceTarget', val);
+  renderPolicyStatements();
+};
+
+window.updateStatementCondIpEnabled = function(index, checked) {
+  updateStatementField(index, 'condIpWhitelistEnabled', checked);
+  renderPolicyStatements();
+};
+
+window.renderPolicyStatements = function() {
+  const container = document.getElementById('policy-statements-list');
+  if (!container) return;
+
+  if (policyStatements.length === 0) {
+    container.innerHTML = `<div style="text-align:center;padding:20px;border:1px dashed #30363d;border-radius:6px;color:#8b949e;font-size:12px;">No statements configured. Click 'Add Statement' to begin.</div>`;
+    return;
+  }
+
+  container.innerHTML = policyStatements.map((stmt, index) => {
+    const isAllow = stmt.effect === 'Allow';
+    const borderStyle = `border: 1px solid ${isAllow ? '#2ea44f' : '#f85149'}; padding: 12px; border-radius: 8px; background: rgba(255,255,255,0.01); display:flex; flex-direction:column; gap:10px;`;
+    
+    return `
+      <div class="policy-statement-card" style="${borderStyle}">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:11px;font-weight:700;color:#f0f6fc;">Statement #${index + 1}</span>
+            <div style="display:flex;background:#21262d;border:1px solid #30363d;border-radius:4px;overflow:hidden;height:24px;">
+              <button type="button" class="policy-effect-btn" onclick="updateStatementEffect(${index}, 'Allow')" style="padding:2px 8px;font-size:10px;font-weight:700;border:none;cursor:pointer;background:${isAllow ? '#2ea44f' : 'transparent'};color:${isAllow ? '#ffffff' : '#8b949e'};outline:none;">Allow</button>
+              <button type="button" class="policy-effect-btn" onclick="updateStatementEffect(${index}, 'Deny')" style="padding:2px 8px;font-size:10px;font-weight:700;border:none;cursor:pointer;background:${!isAllow ? '#f85149' : 'transparent'};color:${!isAllow ? '#ffffff' : '#8b949e'};outline:none;">Deny</button>
+            </div>
+          </div>
+          <button type="button" onclick="removePolicyStatement(${index})" style="background:none;border:none;color:#f85149;font-size:11px;cursor:pointer;font-weight:600;outline:none;">Remove</button>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr;gap:8px;">
+          <div>
+            <label class="ec2-label" style="font-size:10px;margin-bottom:2px;">Statement ID (Sid)</label>
+            <input type="text" class="ec2-input" style="height:28px;font-size:11px;padding:4px 8px;" value="${stmt.sid || ''}" oninput="updateStatementField(${index}, 'sid', this.value)">
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div>
+              <label class="ec2-label" style="font-size:10px;margin-bottom:2px;">Principal Type</label>
+              <select class="ec2-select" style="height:28px;font-size:11px;padding:2px;" onchange="updateStatementPrincipalType(${index}, this.value)">
+                <option value="Everyone" ${stmt.principalType === 'Everyone' ? 'selected' : ''}>Everyone (*)</option>
+                <option value="IAM Role" ${stmt.principalType === 'IAM Role' ? 'selected' : ''}>IAM Role</option>
+                <option value="AWS Account" ${stmt.principalType === 'AWS Account' ? 'selected' : ''}>AWS Account</option>
+                <option value="AWS Service" ${stmt.principalType === 'AWS Service' ? 'selected' : ''}>AWS Service</option>
+                <option value="CloudFront OAC" ${stmt.principalType === 'CloudFront OAC' ? 'selected' : ''}>CloudFront OAC</option>
+              </select>
+            </div>
+            <div>
+              <label class="ec2-label" style="font-size:10px;margin-bottom:2px;">Principal ARN / Service</label>
+              <input type="text" class="ec2-input" style="height:28px;font-size:11px;padding:4px 8px;" value="${stmt.principalArn || ''}" ${stmt.principalType === 'Everyone' ? 'disabled placeholder="Everyone (*)"' : stmt.principalType === 'CloudFront OAC' ? 'disabled placeholder="cloudfront.amazonaws.com"' : 'placeholder="arn:aws:iam::..."'} oninput="updateStatementField(${index}, 'principalArn', this.value)">
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div>
+              <label class="ec2-label" style="font-size:10px;margin-bottom:2px;">Actions</label>
+              <select class="ec2-select" style="height:28px;font-size:11px;padding:2px;" onchange="updateStatementActions(${index}, this.value)">
+                <option value="Read Only" ${stmt.actionsPreset === 'Read Only' ? 'selected' : ''}>Read Only</option>
+                <option value="Read+List" ${stmt.actionsPreset === 'Read+List' ? 'selected' : ''}>Read+List</option>
+                <option value="Write Only" ${stmt.actionsPreset === 'Write Only' ? 'selected' : ''}>Write Only</option>
+                <option value="Read+Write" ${stmt.actionsPreset === 'Read+Write' ? 'selected' : ''}>Read+Write</option>
+                <option value="Full Access" ${stmt.actionsPreset === 'Full Access' ? 'selected' : ''}>Full Access (s3:*)</option>
+                <option value="Delete" ${stmt.actionsPreset === 'Delete' ? 'selected' : ''}>Delete</option>
+                <option value="Read+Write+Delete" ${stmt.actionsPreset === 'Read+Write+Delete' ? 'selected' : ''}>Read+Write+Delete</option>
+                <option value="Custom" ${stmt.actionsPreset === 'Custom' ? 'selected' : ''}>Custom</option>
+              </select>
+            </div>
+            <div>
+              <label class="ec2-label" style="font-size:10px;margin-bottom:2px;">Resource Target</label>
+              <select class="ec2-select" style="height:28px;font-size:11px;padding:2px;" onchange="updateStatementResourceTarget(${index}, this.value)">
+                <option value="Entire bucket" ${stmt.resourceTarget === 'Entire bucket' ? 'selected' : ''}>Entire bucket</option>
+                <option value="Bucket only" ${stmt.resourceTarget === 'Bucket only' ? 'selected' : ''}>Bucket only</option>
+                <option value="Objects only" ${stmt.resourceTarget === 'Objects only' ? 'selected' : ''}>Objects only</option>
+                <option value="Specific prefix" ${stmt.resourceTarget === 'Specific prefix' ? 'selected' : ''}>Specific prefix</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="custom-actions-wrap" style="display:${stmt.actionsPreset === 'Custom' ? 'block' : 'none'};">
+            <label class="ec2-label" style="font-size:10px;margin-bottom:2px;">Custom Actions (comma-separated)</label>
+            <input type="text" class="ec2-input" style="height:28px;font-size:11px;padding:4px 8px;" value="${stmt.customActions || ''}" placeholder="s3:GetObject, s3:PutObject" oninput="updateStatementField(${index}, 'customActions', this.value)">
+          </div>
+
+          <div class="prefix-input-wrap" style="display:${stmt.resourceTarget === 'Specific prefix' ? 'block' : 'none'};">
+            <label class="ec2-label" style="font-size:10px;margin-bottom:2px;">Specific Prefix (e.g. uploads/)</label>
+            <input type="text" class="ec2-input" style="height:28px;font-size:11px;padding:4px 8px;" value="${stmt.prefix || ''}" placeholder="uploads" oninput="updateStatementField(${index}, 'prefix', this.value)">
+          </div>
+
+          <div style="background:rgba(0,0,0,0.15);border:1px solid rgba(255,255,255,0.03);border-radius:6px;padding:8px;margin-top:6px;">
+            <div style="font-size:9px;font-weight:700;color:#ffb703;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.3px;">Conditions</div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:11px;color:#c9d1d9;margin:0;">
+                <span>Require HTTPS</span>
+                <input type="checkbox" ${stmt.condRequireHttps ? 'checked' : ''} onchange="updateStatementField(${index}, 'condRequireHttps', this.checked)" style="accent-color:#a371f7;">
+              </label>
+              <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:11px;color:#c9d1d9;margin:0;">
+                <span>Require MFA</span>
+                <input type="checkbox" ${stmt.condRequireMfa ? 'checked' : ''} onchange="updateStatementField(${index}, 'condRequireMfa', this.checked)" style="accent-color:#a371f7;">
+              </label>
+              <div style="display:flex;flex-direction:column;gap:4px;">
+                <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:11px;color:#c9d1d9;margin:0;">
+                  <span>IP Whitelist</span>
+                  <input type="checkbox" ${stmt.condIpWhitelistEnabled ? 'checked' : ''} onchange="updateStatementCondIpEnabled(${index}, this.checked)" style="accent-color:#a371f7;">
+                </label>
+                <input type="text" class="ec2-input" style="height:24px;font-size:10px;margin-top:2px;display:${stmt.condIpWhitelistEnabled ? 'block' : 'none'};padding:2px 6px;" value="${stmt.condIpWhitelistCidr || ''}" placeholder="e.g. 192.168.1.0/24" oninput="updateStatementField(${index}, 'condIpWhitelistCidr', this.value)">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+};
+
+window.selectBucketForPolicy = function(name) {
+  selectedPolicyBucketName = name;
+  const inputEl = document.getElementById('policy-bucket-name');
+  if (inputEl) {
+    inputEl.value = name;
+  }
+  
+  const bucket = (activeS3Buckets || []).find(b => b.name === name);
+  if (bucket) {
+    if (bucket.blockPublicAccess !== undefined) {
+      document.getElementById('policy-opt-block-public').checked = bucket.blockPublicAccess;
+    }
+    if (bucket.versioningEnabled !== undefined) {
+      document.getElementById('policy-opt-versioning').checked = bucket.versioningEnabled;
+    }
+    if (bucket.encryptionAlgorithm !== undefined) {
+      document.getElementById('policy-opt-sse').checked = (bucket.encryptionAlgorithm === 'AES256');
+    }
+  }
+
+  const policyTab = document.querySelector('#svc-panel-s3 .ec2-tab[data-tab="s3-policy"]');
+  if (policyTab) policyTab.click();
+  generatePolicyOutputs();
+};
+
+window.generatePolicyJSON = function() {
+  const bucketName = document.getElementById('policy-bucket-name').value.trim() || 'my-bucket';
+  const accountId = document.getElementById('policy-account-id').value.trim() || '123456789012';
+
+  const policy = {
+    Version: "2012-10-17",
+    Statement: []
+  };
+
+  policyStatements.forEach((stmt, idx) => {
+    const s = {
+      Sid: stmt.sid || `Statement${idx + 1}`,
+      Effect: stmt.effect,
+      Principal: {}
+    };
+
+    if (stmt.principalType === 'Everyone') {
+      s.Principal = "*";
+    } else if (stmt.principalType === 'IAM Role') {
+      s.Principal = { AWS: stmt.principalArn || `arn:aws:iam::${accountId}:role/role-name` };
+    } else if (stmt.principalType === 'AWS Account') {
+      let arn = stmt.principalArn || accountId;
+      if (!arn.startsWith('arn:aws:')) {
+        arn = `arn:aws:iam::${arn}:root`;
+      }
+      s.Principal = { AWS: arn };
+    } else if (stmt.principalType === 'AWS Service') {
+      s.Principal = { Service: stmt.principalArn || 'ec2.amazonaws.com' };
+    } else if (stmt.principalType === 'CloudFront OAC') {
+      s.Principal = { Service: 'cloudfront.amazonaws.com' };
+    }
+
+    if (stmt.actionsPreset === 'Read Only') {
+      s.Action = ["s3:GetObject"];
+    } else if (stmt.actionsPreset === 'Read+List') {
+      s.Action = ["s3:GetObject", "s3:ListBucket"];
+    } else if (stmt.actionsPreset === 'Write Only') {
+      s.Action = ["s3:PutObject"];
+    } else if (stmt.actionsPreset === 'Read+Write') {
+      s.Action = ["s3:GetObject", "s3:PutObject", "s3:ListBucket"];
+    } else if (stmt.actionsPreset === 'Full Access') {
+      s.Action = ["s3:*"];
+    } else if (stmt.actionsPreset === 'Delete') {
+      s.Action = ["s3:DeleteObject"];
+    } else if (stmt.actionsPreset === 'Read+Write+Delete') {
+      s.Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"];
+    } else if (stmt.actionsPreset === 'Custom') {
+      s.Action = (stmt.customActions || '').split(',').map(x => x.trim()).filter(Boolean);
+      if (s.Action.length === 0) s.Action = ["s3:GetObject"];
+    }
+
+    const bucketArn = `arn:aws:s3:::${bucketName}`;
+    if (stmt.resourceTarget === 'Entire bucket') {
+      s.Resource = [bucketArn, `${bucketArn}/*`];
+    } else if (stmt.resourceTarget === 'Bucket only') {
+      s.Resource = [bucketArn];
+    } else if (stmt.resourceTarget === 'Objects only') {
+      s.Resource = [`${bucketArn}/*`];
+    } else if (stmt.resourceTarget === 'Specific prefix') {
+      const prefix = (stmt.prefix || '').replace(/^\/+|\/+$/g, '');
+      s.Resource = [`${bucketArn}/${prefix}/*`];
+    }
+
+    const cond = {};
+    if (stmt.condRequireHttps) {
+      cond.Bool = cond.Bool || {};
+      cond.Bool["aws:SecureTransport"] = "true";
+    }
+    if (stmt.condRequireMfa) {
+      cond.Bool = cond.Bool || {};
+      cond.Bool["aws:MultiFactorAuthPresent"] = "true";
+    }
+    if (stmt.condIpWhitelistEnabled && stmt.condIpWhitelistCidr) {
+      cond.IpAddress = cond.IpAddress || {};
+      cond.IpAddress["aws:SourceIp"] = stmt.condIpWhitelistCidr.trim();
+    }
+
+    if (Object.keys(cond).length > 0) {
+      s.Condition = cond;
+    }
+
+    policy.Statement.push(s);
+  });
+
+  if (document.getElementById('policy-opt-https-only').checked) {
+    const hasHttpsSid = policy.Statement.some(s => s.Sid === 'EnforceHTTPS');
+    policy.Statement.push({
+      Sid: hasHttpsSid ? 'EnforceHTTPSOnly' : 'EnforceHTTPS',
+      Effect: "Deny",
+      Principal: "*",
+      Action: "s3:*",
+      Resource: [
+        `arn:aws:s3:::${bucketName}`,
+        `arn:aws:s3:::${bucketName}/*`
+      ],
+      Condition: {
+        Bool: {
+          "aws:SecureTransport": "false"
+        }
+      }
+    });
+  }
+
+  return policy;
+};
+
+window.validatePolicyJSON = function(policyObj) {
+  const warnings = [];
+  const blockPublic = document.getElementById('policy-opt-block-public').checked;
+
+  if (blockPublic) {
+    const hasPublicAllow = policyObj.Statement.some(stmt => {
+      if (stmt.Effect !== 'Allow') return false;
+      return stmt.Principal === '*' || (stmt.Principal && stmt.Principal.AWS === '*');
+    });
+
+    if (hasPublicAllow) {
+      warnings.push("⚠️ WARNING: 'Block Public Access' is active, but your policy allows 'Everyone (*)'. Apply will fail on AWS unless Block Public Access is disabled.");
+    }
+  }
+
+  if (policyObj.Statement.length === 0) {
+    warnings.push("💡 NOTE: Add at least one statement or toggle 'Enforce HTTPS Only' to generate a valid policy.");
+  }
+
+  return warnings;
+};
+
+window.generateTerraformHCL = function() {
+  const bucketName = document.getElementById('policy-bucket-name').value.trim() || 'my-bucket';
+  const accountId = document.getElementById('policy-account-id').value.trim() || '123456789012';
+  const blockPublic = document.getElementById('policy-opt-block-public').checked;
+  const versioning = document.getElementById('policy-opt-versioning').checked;
+  const sse = document.getElementById('policy-opt-sse').checked;
+  const httpsOnly = document.getElementById('policy-opt-https-only').checked;
+  const mfaDelete = document.getElementById('policy-opt-mfa-delete').checked;
+
+  let hcl = `# Terraform S3 Configuration with IAM Policy Document
+
+resource "aws_s3_bucket" "this" {
+  bucket = "${bucketName}"
+}
+`;
+
+  if (versioning || mfaDelete) {
+    hcl += `
+resource "aws_s3_bucket_versioning" "this" {
+  bucket = aws_s3_bucket.this.id
+  versioning_configuration {
+    status     = "${versioning ? 'Enabled' : 'Disabled'}"
+    mfa_delete = "${mfaDelete ? 'Enabled' : 'Disabled'}"
+  }
+}
+`;
+  }
+
+  if (sse) {
+    hcl += `
+resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
+  bucket = aws_s3_bucket.this.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+`;
+  }
+
+  if (blockPublic) {
+    hcl += `
+resource "aws_s3_bucket_public_access_block" "this" {
+  bucket = aws_s3_bucket.this.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+`;
+  }
+
+  let statementsTf = '';
+  policyStatements.forEach((stmt, idx) => {
+    const sid = stmt.sid || `Statement${idx + 1}`;
+    statementsTf += `
+  statement {
+    sid     = "${sid}"
+    effect  = "${stmt.effect}"
+`;
+
+    if (stmt.principalType === 'Everyone') {
+      statementsTf += `    principals {
+      type        = "AWS"
+      identifiers = ["*"]
+    }
+`;
+    } else if (stmt.principalType === 'IAM Role') {
+      const arn = stmt.principalArn || `arn:aws:iam::${accountId}:role/role-name`;
+      statementsTf += `    principals {
+      type        = "AWS"
+      identifiers = ["${arn}"]
+    }
+`;
+    } else if (stmt.principalType === 'AWS Account') {
+      let arn = stmt.principalArn || accountId;
+      if (!arn.startsWith('arn:aws:')) {
+        arn = `arn:aws:iam::${arn}:root`;
+      }
+      statementsTf += `    principals {
+      type        = "AWS"
+      identifiers = ["${arn}"]
+    }
+`;
+    } else if (stmt.principalType === 'AWS Service') {
+      const svc = stmt.principalArn || 'ec2.amazonaws.com';
+      statementsTf += `    principals {
+      type        = "Service"
+      identifiers = ["${svc}"]
+    }
+`;
+    } else if (stmt.principalType === 'CloudFront OAC') {
+      statementsTf += `    principals {
+      type        = "Service"
+      identifiers = ["cloudfront.amazonaws.com"]
+    }
+`;
+    }
+
+    let actionsArr = [];
+    if (stmt.actionsPreset === 'Read Only') {
+      actionsArr = ["s3:GetObject"];
+    } else if (stmt.actionsPreset === 'Read+List') {
+      actionsArr = ["s3:GetObject", "s3:ListBucket"];
+    } else if (stmt.actionsPreset === 'Write Only') {
+      actionsArr = ["s3:PutObject"];
+    } else if (stmt.actionsPreset === 'Read+Write') {
+      actionsArr = ["s3:GetObject", "s3:PutObject", "s3:ListBucket"];
+    } else if (stmt.actionsPreset === 'Full Access') {
+      actionsArr = ["s3:*"];
+    } else if (stmt.actionsPreset === 'Delete') {
+      actionsArr = ["s3:DeleteObject"];
+    } else if (stmt.actionsPreset === 'Read+Write+Delete') {
+      actionsArr = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"];
+    } else if (stmt.actionsPreset === 'Custom') {
+      actionsArr = (stmt.customActions || '').split(',').map(x => x.trim()).filter(Boolean);
+      if (actionsArr.length === 0) actionsArr = ["s3:GetObject"];
+    }
+    statementsTf += `    actions = [${actionsArr.map(a => `"${a}"`).join(', ')}]
+`;
+
+    if (stmt.resourceTarget === 'Entire bucket') {
+      statementsTf += `    resources = [
+      aws_s3_bucket.this.arn,
+      "\${aws_s3_bucket.this.arn}/*"
+    ]
+`;
+    } else if (stmt.resourceTarget === 'Bucket only') {
+      statementsTf += `    resources = [aws_s3_bucket.this.arn]
+`;
+    } else if (stmt.resourceTarget === 'Objects only') {
+      statementsTf += `    resources = ["\${aws_s3_bucket.this.arn}/*"]
+`;
+    } else if (stmt.resourceTarget === 'Specific prefix') {
+      const prefix = (stmt.prefix || '').replace(/^\/+|\/+$/g, '');
+      statementsTf += `    resources = ["\${aws_s3_bucket.this.arn}/${prefix}/*"]
+`;
+    }
+
+    if (stmt.condRequireHttps) {
+      statementsTf += `    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["true"]
+    }
+`;
+    }
+    if (stmt.condRequireMfa) {
+      statementsTf += `    condition {
+      test     = "Bool"
+      variable = "aws:MultiFactorAuthPresent"
+      values   = ["true"]
+    }
+`;
+    }
+    if (stmt.condIpWhitelistEnabled && stmt.condIpWhitelistCidr) {
+      statementsTf += `    condition {
+      test     = "IpAddress"
+      variable = "aws:SourceIp"
+      values   = ["${stmt.condIpWhitelistCidr.trim()}"]
+    }
+`;
+    }
+
+    statementsTf += `  }
+`;
+  });
+
+  if (httpsOnly) {
+    statementsTf += `
+  statement {
+    sid     = "EnforceHTTPS"
+    effect  = "Deny"
+    principals {
+      type        = "AWS"
+      identifiers = ["*"]
+    }
+    actions   = ["s3:*"]
+    resources = [
+      aws_s3_bucket.this.arn,
+      "\${aws_s3_bucket.this.arn}/*"
+    ]
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+`;
+  }
+
+  hcl += `
+data "aws_iam_policy_document" "this" {${statementsTf}}
+
+resource "aws_s3_bucket_policy" "this" {
+  bucket = aws_s3_bucket.this.id
+  policy = data.aws_iam_policy_document.this.json
+}
+`;
+
+  return hcl;
+};
+
+window.highlightSyntax = function(code, lang) {
+  const escaped = code
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  if (lang === 'json') {
+    return escaped
+      .replace(/(".*?")\s*:/g, '<span style="color:#79c0ff;">$1</span>:')
+      .replace(/:\s*(".*?")/g, ': <span style="color:#a5d6ff;">$1</span>')
+      .replace(/\b(true|false|null)\b/g, '<span style="color:#ffab70;">$1</span>')
+      .replace(/\b(\d+)\b/g, '<span style="color:#ffab70;">$1</span>');
+  } else if (lang === 'hcl') {
+    return escaped
+      .replace(/(#.*|\/\/.*)/g, '<span style="color:#8b949e;">$1</span>')
+      .replace(/\b(resource|data|variable|output|locals|provider|terraform|statement|principals|condition)\b/g, '<span style="color:#ff7b72;font-weight:bold;">$1</span>')
+      .replace(/\b(true|false)\b/g, '<span style="color:#ffab70;">$1</span>')
+      .replace(/\b(\d+)\b/g, '<span style="color:#ffab70;">$1</span>')
+      .replace(/(".*?")/g, '<span style="color:#a5d6ff;">$1</span>');
+  }
+  return escaped;
+};
+
+window.generatePolicyOutputs = function() {
+  const policyObj = generatePolicyJSON();
+  const jsonStr = JSON.stringify(policyObj, null, 2);
+  const tfStr = generateTerraformHCL();
+
+  const jsonCodeEl = document.getElementById('policy-json-code');
+  if (jsonCodeEl) {
+    jsonCodeEl.innerHTML = highlightSyntax(jsonStr, 'json');
+  }
+
+  const tfCodeEl = document.getElementById('policy-tf-code');
+  if (tfCodeEl) {
+    tfCodeEl.innerHTML = highlightSyntax(tfStr, 'hcl');
+  }
+
+  const countVal = policyObj.Statement.length;
+  document.getElementById('policy-stat-statements').textContent = countVal;
+  
+  const hasDeny = policyObj.Statement.some(s => s.Effect === 'Deny');
+  document.getElementById('policy-stat-effects').textContent = hasDeny ? 'Allow & Deny' : 'Allow Only';
+
+  const sseActive = document.getElementById('policy-opt-sse').checked;
+  document.getElementById('policy-stat-encryption').textContent = sseActive ? 'SSE-S3' : 'None';
+
+  const warnings = validatePolicyJSON(policyObj);
+  const warnEl = document.getElementById('policy-json-warnings');
+  if (warnEl) {
+    if (warnings.length > 0) {
+      warnEl.innerHTML = warnings.map(w => `<div style="margin-bottom:4px;">${w}</div>`).join('');
+      warnEl.style.display = 'block';
+    } else {
+      warnEl.style.display = 'none';
+    }
+  }
+};
+
+window.initS3PolicyGenerator = function() {
+  const innerTabs = document.querySelectorAll('#svc-panel-s3 .inner-tab');
+  const innerContents = document.querySelectorAll('#svc-panel-s3 .policy-inner-tab-content');
+
+  innerTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const target = tab.dataset.innerTab;
+      innerTabs.forEach(t => {
+        t.classList.remove('active');
+        t.style.color = '#8b949e';
+        t.style.borderBottom = 'none';
+      });
+      tab.classList.add('active');
+      tab.style.color = '#58a6ff';
+      tab.style.borderBottom = '2px solid #58a6ff';
+      
+      innerContents.forEach(c => c.style.display = c.id === `inner-content-${target}` ? 'block' : 'none');
+      generatePolicyOutputs();
+    });
+  });
+
+  const addBtn = document.getElementById('btn-policy-add-statement');
+  if (addBtn) {
+    addBtn.addEventListener('click', addPolicyStatement);
+  }
+
+  const viewJsonBtn = document.getElementById('btn-policy-view-json');
+  if (viewJsonBtn) {
+    viewJsonBtn.addEventListener('click', () => {
+      const el = document.querySelector('#svc-panel-s3 .inner-tab[data-inner-tab="policy-json"]');
+      if (el) el.click();
+    });
+  }
+  const viewTfBtn = document.getElementById('btn-policy-view-tf');
+  if (viewTfBtn) {
+    viewTfBtn.addEventListener('click', () => {
+      const el = document.querySelector('#svc-panel-s3 .inner-tab[data-inner-tab="policy-tf"]');
+      if (el) el.click();
+    });
+  }
+
+  ['policy-bucket-name', 'policy-account-id'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', generatePolicyOutputs);
+  });
+
+  ['policy-opt-block-public', 'policy-opt-versioning', 'policy-opt-sse', 'policy-opt-https-only', 'policy-opt-mfa-delete'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', generatePolicyOutputs);
+  });
+
+  const copyJsonBtn = document.getElementById('btn-policy-copy-json');
+  if (copyJsonBtn) {
+    copyJsonBtn.addEventListener('click', () => {
+      const policyObj = generatePolicyJSON();
+      navigator.clipboard.writeText(JSON.stringify(policyObj, null, 2)).then(() => {
+        alert('JSON Policy copied to clipboard!');
+      });
+    });
+  }
+  const copyTfBtn = document.getElementById('btn-policy-copy-tf');
+  if (copyTfBtn) {
+    copyTfBtn.addEventListener('click', () => {
+      const tfStr = generateTerraformHCL();
+      navigator.clipboard.writeText(tfStr).then(() => {
+        alert('Terraform HCL copied to clipboard!');
+      });
+    });
+  }
+
+  const applyBtn = document.getElementById('btn-policy-apply');
+  if (applyBtn) {
+    applyBtn.addEventListener('click', async () => {
+      const bucketName = document.getElementById('policy-bucket-name').value.trim();
+      if (!bucketName) {
+        alert('Error: Please specify a bucket name first.');
+        return;
+      }
+      const policyObj = generatePolicyJSON();
+      if (policyObj.Statement.length === 0) {
+        alert('Error: Cannot apply an empty policy. Please add at least one statement or enable Enforce HTTPS.');
+        return;
+      }
+
+      applyBtn.disabled = true;
+      applyBtn.textContent = 'Applying...';
+      try {
+        const res = await fetch('/api/s3/apply-policy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bucketName, policy: JSON.stringify(policyObj) })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Apply policy failed.');
+        alert('Success: ' + data.message);
+      } catch (err) {
+        alert('Error applying policy: ' + err.message);
+      } finally {
+        applyBtn.disabled = false;
+        applyBtn.textContent = 'Apply Policy';
+      }
+    });
+  }
+
+  const templatesContainer = document.getElementById('policy-templates-list');
+  if (templatesContainer) {
+    templatesContainer.innerHTML = POLICY_TEMPLATES.map((tmpl, idx) => `
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px;cursor:pointer;transition:border-color 0.15s;" onmouseover="this.style.borderColor='#58a6ff'" onmouseout="this.style.borderColor='#30363d'" onclick="loadPolicyTemplate(${idx})">
+        <div style="font-weight:600;font-size:12px;color:#f0f6fc;margin-bottom:4px;">${tmpl.name}</div>
+        <div style="font-size:11px;color:#8b949e;line-height:1.4;">${tmpl.desc}</div>
+      </div>
+    `).join('');
+  }
+
+  policyStatements = [];
+  renderPolicyStatements();
+  generatePolicyOutputs();
+};
+
+window.loadPolicyTemplate = function(index) {
+  const tmpl = POLICY_TEMPLATES[index];
+  if (!tmpl) return;
+
+  document.getElementById('policy-opt-block-public').checked = tmpl.options.blockPublic;
+  document.getElementById('policy-opt-versioning').checked = tmpl.options.versioning;
+  document.getElementById('policy-opt-sse').checked = tmpl.options.sse;
+  document.getElementById('policy-opt-https-only').checked = tmpl.options.httpsOnly;
+  document.getElementById('policy-opt-mfa-delete').checked = tmpl.options.mfaDelete;
+
+  policyStatements = JSON.parse(JSON.stringify(tmpl.statements));
+
+  renderPolicyStatements();
+  
+  const el = document.querySelector('#svc-panel-s3 .inner-tab[data-inner-tab="policy-builder"]');
+  if (el) el.click();
+  generatePolicyOutputs();
+};
 
 // ===== CLOUDFRONT UI =====
 function initCfUI() {
@@ -1058,11 +1917,16 @@ function updateS3Summary() {
   const blockPub = document.getElementById('s3-block-public').checked;
   const versioning = document.getElementById('s3-versioning').checked;
   const namespace = document.getElementById('s3-namespace').value;
+  const attachPolicy = document.getElementById('s3-attach-policy') ? document.getElementById('s3-attach-policy').checked : false;
   document.getElementById('s3-summary-name').textContent = name || '—';
   document.getElementById('s3-summary-namespace').textContent = namespace === 'account-regional' ? 'Account Regional Namespace' : 'Global Namespace';
   document.getElementById('s3-summary-encryption').textContent = enc === 'aws:kms' ? 'AWS KMS' : 'AES-256';
   document.getElementById('s3-summary-public').textContent = blockPub ? 'Blocked ✓' : 'Public ⚠';
   document.getElementById('s3-summary-versioning').textContent = versioning ? 'Enabled' : 'Disabled';
+  const policyEl = document.getElementById('s3-summary-policy');
+  if (policyEl) {
+    policyEl.textContent = attachPolicy ? 'Attached ✓' : 'Not Attached';
+  }
 }
 
 const PORT_PROTOCOL_MAP = {
@@ -1353,12 +2217,26 @@ async function fetchS3Preview() {
   const encryptionAlgorithm = document.getElementById('s3-encryption').value;
   const forceDestroy = document.getElementById('s3-force-destroy').checked;
   const bucketNamespace = document.getElementById('s3-namespace').value;
+  const attachPolicy = document.getElementById('s3-attach-policy') ? document.getElementById('s3-attach-policy').checked : false;
   const preMain = document.getElementById('s3-preview-main-tf');
   const preVars = document.getElementById('s3-preview-tfvars');
   preMain.textContent = 'Generating preview...';
   preVars.textContent = 'Generating preview...';
+
+  let bucketPolicy = '';
+  if (attachPolicy && typeof generatePolicyJSON === 'function') {
+    try {
+      const policyObj = generatePolicyJSON();
+      if (policyObj && policyObj.Statement && policyObj.Statement.length > 0) {
+        bucketPolicy = JSON.stringify(policyObj);
+      }
+    } catch (e) {
+      console.error('Failed to generate policy JSON:', e);
+    }
+  }
+
   try {
-    const res = await fetch('/api/s3/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bucketName: bucketName || 'my-bucket', region, versioningEnabled, blockPublicAccess, encryptionAlgorithm, forceDestroy, bucketNamespace }) });
+    const res = await fetch('/api/s3/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bucketName: bucketName || 'my-bucket', region, versioningEnabled, blockPublicAccess, encryptionAlgorithm, forceDestroy, bucketNamespace, bucketPolicy }) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Preview failed');
     preMain.textContent = data.mainTf;
@@ -1476,13 +2354,27 @@ async function createS3Bucket() {
   const encryptionAlgorithm = document.getElementById('s3-encryption').value;
   const forceDestroy = document.getElementById('s3-force-destroy').checked;
   const bucketNamespace = document.getElementById('s3-namespace').value;
+  const attachPolicy = document.getElementById('s3-attach-policy') ? document.getElementById('s3-attach-policy').checked : false;
   const btn = document.getElementById('btn-s3-action');
   const btnText = document.getElementById('btn-s3-text');
   btn.disabled = true;
   btnText.innerHTML = `<svg class="spinning" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg> Creating Bucket…`;
   startLogStream(bucketName);
+
+  let bucketPolicy = '';
+  if (attachPolicy && typeof generatePolicyJSON === 'function') {
+    try {
+      const policyObj = generatePolicyJSON();
+      if (policyObj && policyObj.Statement && policyObj.Statement.length > 0) {
+        bucketPolicy = JSON.stringify(policyObj);
+      }
+    } catch (e) {
+      console.error('Failed to generate policy JSON:', e);
+    }
+  }
+
   try {
-    const res = await fetch('/api/s3/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bucketName, region, versioningEnabled, blockPublicAccess, encryptionAlgorithm, forceDestroy, awsProfile, bucketNamespace }) });
+    const res = await fetch('/api/s3/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bucketName, region, versioningEnabled, blockPublicAccess, encryptionAlgorithm, forceDestroy, awsProfile, bucketNamespace, bucketPolicy }) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'S3 creation failed');
     document.querySelector('#svc-panel-s3 [data-tab="s3-list"]').click();
@@ -1720,6 +2612,7 @@ function renderS3BucketList() {
       </div>
       <div class="deployment-actions-bar">
         <button type="button" class="ec2-btn-outline" onclick="startLogStream('${bucket.name}')">View Logs</button>
+        <button type="button" class="ec2-btn-outline" onclick="selectBucketForPolicy('${bucket.name}')">Generate Policy</button>
         ${bucket.status !== 'destroying' ? `<button type="button" class="ec2-btn-danger" onclick="triggerS3Destroy('${bucket.name}')" ${hasPermission('s3', 'execute') ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;" title="No execute permission"'}>Destroy</button>` : ''}
       </div>`;
     container.appendChild(card);

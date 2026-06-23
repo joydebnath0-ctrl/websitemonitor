@@ -1345,6 +1345,17 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "sse" {
   }
 }
 
+variable "bucket_policy" {
+  type    = string
+  default = ""
+}
+
+resource "aws_s3_bucket_policy" "bucket_policy" {
+  count  = var.bucket_policy != "" ? 1 : 0
+  bucket = aws_s3_bucket.bucket.id
+  policy = var.bucket_policy
+}
+
 output "bucket_id" {
   value = aws_s3_bucket.bucket.id
 }
@@ -2314,7 +2325,7 @@ app.get('/api/s3-buckets', requirePermission('s3','read'), (req, res) => {
 });
 
 app.post('/api/s3/preview', requirePermission('s3','write'), (req, res) => {
-  const { bucketName, region, versioningEnabled, blockPublicAccess, encryptionAlgorithm, forceDestroy, bucketNamespace } = req.body;
+  const { bucketName, region, versioningEnabled, blockPublicAccess, encryptionAlgorithm, forceDestroy, bucketNamespace, bucketPolicy } = req.body;
   if (!bucketName || !region) return res.status(400).json({ error: 'Missing required parameters' });
   if (!/^[a-z0-9-]+$/.test(bucketName)) return res.status(400).json({ error: 'Bucket name must be lowercase alphanumeric and dashes only' });
   const tfVars = {
@@ -2324,7 +2335,8 @@ app.post('/api/s3/preview', requirePermission('s3','write'), (req, res) => {
     block_public_access: blockPublicAccess !== false,
     encryption_algorithm: encryptionAlgorithm || 'AES256',
     force_destroy: !!forceDestroy,
-    bucket_namespace: bucketNamespace || 'global'
+    bucket_namespace: bucketNamespace || 'global',
+    bucket_policy: bucketPolicy || ''
   };
   let mainTf = S3_TERRAFORM_TEMPLATE;
   if (bucketNamespace === 'account-regional') {
@@ -2335,7 +2347,7 @@ app.post('/api/s3/preview', requirePermission('s3','write'), (req, res) => {
 });
 
 app.post('/api/s3/create', requirePermission('s3','write'), (req, res) => {
-  const { bucketName, region, versioningEnabled, blockPublicAccess, encryptionAlgorithm, forceDestroy, awsProfile, bucketNamespace } = req.body;
+  const { bucketName, region, versioningEnabled, blockPublicAccess, encryptionAlgorithm, forceDestroy, awsProfile, bucketNamespace, bucketPolicy } = req.body;
   if (!bucketName || !region) return res.status(400).json({ error: 'Missing required parameters' });
   if (!/^[a-z0-9-]+$/.test(bucketName)) return res.status(400).json({ error: 'Bucket name must be lowercase alphanumeric and dashes only' });
   const db = readS3DB();
@@ -2358,7 +2370,8 @@ app.post('/api/s3/create', requirePermission('s3','write'), (req, res) => {
     block_public_access: blockPublicAccess !== false,
     encryption_algorithm: encryptionAlgorithm || 'AES256',
     force_destroy: !!forceDestroy,
-    bucket_namespace: bucketNamespace || 'global'
+    bucket_namespace: bucketNamespace || 'global',
+    bucket_policy: bucketPolicy || ''
   };
   fs.writeFileSync(path.join(targetDir, 'terraform.tfvars.json'), JSON.stringify(tfVars, null, 2));
   const newBucket = { name: bucketName, region, versioningEnabled: tfVars.versioning_enabled, blockPublicAccess: tfVars.block_public_access, encryptionAlgorithm: tfVars.encryption_algorithm, forceDestroy: tfVars.force_destroy, bucketNamespace: tfVars.bucket_namespace, awsProfile: awsProfile || 'default', status: 'creating', bucketArn: 'N/A', bucketDomain: 'N/A', createdAt: new Date().toISOString() };
@@ -2441,6 +2454,50 @@ app.post('/api/s3/destroy', requirePermission('s3','execute'), (req, res) => {
     }
   };
   execute();
+});
+
+app.post('/api/s3/apply-policy', requirePermission('s3','write'), (req, res) => {
+  const { bucketName, policy } = req.body;
+  if (!bucketName || !policy) {
+    return res.status(400).json({ error: 'Bucket name and policy JSON are required' });
+  }
+
+  // Find bucket profile
+  const db = readS3DB();
+  const match = db.find(b => b.name === bucketName);
+  const awsProfile = match ? match.awsProfile : 'default';
+
+  // Ensure scratch dir exists
+  const scratchDir = path.join(__dirname, 'scratch');
+  if (!fs.existsSync(scratchDir)) {
+    fs.mkdirSync(scratchDir, { recursive: true });
+  }
+
+  const tempPath = path.join(scratchDir, `policy-${bucketName}-${Date.now()}.json`);
+  try {
+    fs.writeFileSync(tempPath, policy, 'utf8');
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to write temporary policy file: ' + err.message });
+  }
+
+  const args = ['s3api', 'put-bucket-policy', '--bucket', bucketName, '--policy', `file://${tempPath}`];
+  if (awsProfile && awsProfile !== 'default') {
+    args.push('--profile', awsProfile);
+  }
+
+  const { execFile } = require('child_process');
+  execFile('aws', args, (error, stdout, stderr) => {
+    try {
+      if (fs.existsSync(tempPath)) {
+        fs.unlinkSync(tempPath);
+      }
+    } catch (e) {}
+
+    if (error) {
+      return res.status(500).json({ error: stderr.trim() || error.message });
+    }
+    res.json({ message: `Successfully applied bucket policy to ${bucketName}.` });
+  });
 });
 
 function generateMockBillingData(startDate, endDate) {
