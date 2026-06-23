@@ -3111,31 +3111,53 @@
               </div>
 
               <div id="azure-vm-add-profile-container" style="display:none;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:14px;margin-bottom:18px;">
-                <h4 style="margin:0 0 12px;font-size:12px;text-transform:uppercase;color:#8b949e;letter-spacing:0.05em;font-family:'Inter',sans-serif;">Add Azure Profile</h4>
-                <div style="display:flex;flex-direction:column;gap:12px;">
-                  <div>
-                    <label class="ec2-label" style="font-size:10px;">Profile Name</label>
-                    <input type="text" id="azure-vm-new-profile-name" class="ec2-input" placeholder="e.g. prod-subscription">
-                    <p class="field-err" id="azure-vm-err-new-profile-name" style="display:none;"></p>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid #21262d; padding-bottom:8px;">
+                  <h4 style="margin:0;font-size:12px;text-transform:uppercase;color:#58a6ff;letter-spacing:0.05em;font-family:'Inter',sans-serif;font-weight:600;">Manage Azure Profiles</h4>
+                  <div style="display:flex; gap:8px;">
+                    <button type="button" id="azure-vm-tab-add-prof" class="ec2-btn-outline active" style="font-size:10px; padding:4px 8px; margin:0; line-height:1; height:auto; border-radius:4px;">Add</button>
+                    <button type="button" id="azure-vm-tab-delete-prof" class="ec2-btn-outline" style="font-size:10px; padding:4px 8px; margin:0; line-height:1; height:auto; border-radius:4px;">Delete</button>
                   </div>
-                  <div>
-                    <label class="ec2-label" style="font-size:10px;">Subscription ID</label>
-                    <input type="text" id="azure-vm-new-profile-subscription" class="ec2-input" placeholder="00000000-0000-0000-0000-000000000000">
+                </div>
+
+                <!-- Add Azure Profile Content -->
+                <div id="azure-vm-prof-add-section" style="display:block;">
+                  <div style="display:flex;flex-direction:column;gap:12px;">
+                    <div>
+                      <label class="ec2-label" style="font-size:10px;">Profile Name</label>
+                      <input type="text" id="azure-vm-new-profile-name" class="ec2-input" placeholder="e.g. prod-subscription">
+                      <p class="field-err" id="azure-vm-err-new-profile-name" style="display:none;"></p>
+                    </div>
+                    <div>
+                      <label class="ec2-label" style="font-size:10px;">Subscription ID</label>
+                      <input type="text" id="azure-vm-new-profile-subscription" class="ec2-input" placeholder="00000000-0000-0000-0000-000000000000">
+                    </div>
+                    <div>
+                      <label class="ec2-label" style="font-size:10px;">Tenant ID</label>
+                      <input type="text" id="azure-vm-new-profile-tenant" class="ec2-input" placeholder="00000000-0000-0000-0000-000000000000">
+                    </div>
+                    <div>
+                      <label class="ec2-label" style="font-size:10px;">Client ID (App ID)</label>
+                      <input type="text" id="azure-vm-new-profile-client" class="ec2-input" placeholder="00000000-0000-0000-0000-000000000000">
+                    </div>
+                    <div>
+                      <label class="ec2-label" style="font-size:10px;">Client Secret</label>
+                      <input type="password" id="azure-vm-new-profile-secret" class="ec2-input" placeholder="Client Secret Key...">
+                    </div>
+                    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px;">
+                      <button type="button" class="ec2-btn-primary" id="azure-vm-btn-save-profile" style="font-size:11px;padding:6px 12px;background:#0078d4;color:#fff;border-color:#0078d4;">Save Profile</button>
+                    </div>
                   </div>
-                  <div>
-                    <label class="ec2-label" style="font-size:10px;">Tenant ID</label>
-                    <input type="text" id="azure-vm-new-profile-tenant" class="ec2-input" placeholder="00000000-0000-0000-0000-000000000000">
-                  </div>
-                  <div>
-                    <label class="ec2-label" style="font-size:10px;">Client ID (App ID)</label>
-                    <input type="text" id="azure-vm-new-profile-client" class="ec2-input" placeholder="00000000-0000-0000-0000-000000000000">
-                  </div>
-                  <div>
-                    <label class="ec2-label" style="font-size:10px;">Client Secret</label>
-                    <input type="password" id="azure-vm-new-profile-secret" class="ec2-input" placeholder="Client Secret Key...">
+                </div>
+
+                <!-- Delete Azure Profile Content -->
+                <div id="azure-vm-prof-delete-section" style="display:none;">
+                  <p style="font-size:11px; color:#8b949e; margin:0 0 10px; line-height:1.4;">Choose an Azure profile to remove. The "default" profile cannot be deleted.</p>
+                  <div style="margin-bottom:10px;">
+                    <label class="ec2-label" style="font-size:10px;">Select Profile to Delete</label>
+                    <select id="azure-vm-delete-profile-select" class="ec2-select" style="margin:0;"></select>
                   </div>
                   <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px;">
-                    <button type="button" class="ec2-btn-primary" id="azure-vm-btn-save-profile" style="font-size:11px;padding:6px 12px;background:#0078d4;color:#fff;border-color:#0078d4;">Save Profile</button>
+                    <button type="button" class="ec2-btn-outline" id="azure-vm-btn-delete-profile" style="font-size:11px;padding:6px 12px; border-color:rgba(240,78,78,0.4); color:#ff7b72; border-radius:6px; cursor:pointer;">Delete Profile</button>
                   </div>
                 </div>
               </div>
@@ -3440,23 +3462,45 @@
               </div>
 
               <div id="gcp-vm-add-profile-container" style="display:none;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:14px;margin-bottom:18px;">
-                <h4 style="margin:0 0 12px;font-size:12px;text-transform:uppercase;color:#8b949e;letter-spacing:0.05em;font-family:'Inter',sans-serif;">Add GCP Profile</h4>
-                <div style="display:flex;flex-direction:column;gap:12px;">
-                  <div>
-                    <label class="ec2-label" style="font-size:10px;">Profile Name</label>
-                    <input type="text" id="gcp-vm-new-profile-name" class="ec2-input" placeholder="e.g. dev-gcp">
-                    <p class="field-err" id="gcp-vm-err-new-profile-name" style="display:none;"></p>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid #21262d; padding-bottom:8px;">
+                  <h4 style="margin:0;font-size:12px;text-transform:uppercase;color:#58a6ff;letter-spacing:0.05em;font-family:'Inter',sans-serif;font-weight:600;">Manage GCP Profiles</h4>
+                  <div style="display:flex; gap:8px;">
+                    <button type="button" id="gcp-vm-tab-add-prof" class="ec2-btn-outline active" style="font-size:10px; padding:4px 8px; margin:0; line-height:1; height:auto; border-radius:4px;">Add</button>
+                    <button type="button" id="gcp-vm-tab-delete-prof" class="ec2-btn-outline" style="font-size:10px; padding:4px 8px; margin:0; line-height:1; height:auto; border-radius:4px;">Delete</button>
                   </div>
-                  <div>
-                    <label class="ec2-label" style="font-size:10px;">Project ID</label>
-                    <input type="text" id="gcp-vm-new-profile-project" class="ec2-input" placeholder="e.g. my-project-id">
+                </div>
+
+                <!-- Add GCP Profile Content -->
+                <div id="gcp-vm-prof-add-section" style="display:block;">
+                  <div style="display:flex;flex-direction:column;gap:12px;">
+                    <div>
+                      <label class="ec2-label" style="font-size:10px;">Profile Name</label>
+                      <input type="text" id="gcp-vm-new-profile-name" class="ec2-input" placeholder="e.g. dev-gcp">
+                      <p class="field-err" id="gcp-vm-err-new-profile-name" style="display:none;"></p>
+                    </div>
+                    <div>
+                      <label class="ec2-label" style="font-size:10px;">Project ID</label>
+                      <input type="text" id="gcp-vm-new-profile-project" class="ec2-input" placeholder="e.g. my-project-id">
+                    </div>
+                    <div>
+                      <label class="ec2-label" style="font-size:10px;">Service Account Key (JSON)</label>
+                      <textarea id="gcp-vm-new-profile-key" class="ec2-input" placeholder='{ "type": "service_account", ... }' style="min-height:80px;font-family:monospace;font-size:11px;"></textarea>
+                    </div>
+                    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px;">
+                      <button type="button" class="ec2-btn-primary" id="gcp-vm-btn-save-profile" style="font-size:11px;padding:6px 12px;background:#ffcc00;color:#0d1117;border-color:#ffcc00;">Save Profile</button>
+                    </div>
                   </div>
-                  <div>
-                    <label class="ec2-label" style="font-size:10px;">Service Account Key (JSON)</label>
-                    <textarea id="gcp-vm-new-profile-key" class="ec2-input" placeholder='{ "type": "service_account", ... }' style="min-height:80px;font-family:monospace;font-size:11px;"></textarea>
+                </div>
+
+                <!-- Delete GCP Profile Content -->
+                <div id="gcp-vm-prof-delete-section" style="display:none;">
+                  <p style="font-size:11px; color:#8b949e; margin:0 0 10px; line-height:1.4;">Choose a GCP profile to remove. The "default" profile cannot be deleted.</p>
+                  <div style="margin-bottom:10px;">
+                    <label class="ec2-label" style="font-size:10px;">Select Profile to Delete</label>
+                    <select id="gcp-vm-delete-profile-select" class="ec2-select" style="margin:0;"></select>
                   </div>
                   <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px;">
-                    <button type="button" class="ec2-btn-primary" id="gcp-vm-btn-save-profile" style="font-size:11px;padding:6px 12px;background:#ffcc00;color:#0d1117;border-color:#ffcc00;">Save Profile</button>
+                    <button type="button" class="ec2-btn-outline" id="gcp-vm-btn-delete-profile" style="font-size:11px;padding:6px 12px; border-color:rgba(240,78,78,0.4); color:#ff7b72; border-radius:6px; cursor:pointer;">Delete Profile</button>
                   </div>
                 </div>
               </div>

@@ -433,11 +433,33 @@ function setupProfileControls(prefix) {
   const btnSave = getEl('btn-save-profile');
   const profileSelect = getEl('profile');
 
+  const tabAddProf = getEl('tab-add-prof');
+  const tabDeleteProf = getEl('tab-delete-prof');
+  const profAddSection = getEl('prof-add-section');
+  const profDeleteSection = getEl('prof-delete-section');
+  const delSelect = getEl('delete-profile-select');
+  const btnDelete = getEl('btn-delete-profile');
+
   if (btnToggleAdd && addContainer) {
     btnToggleAdd.addEventListener('click', () => {
       const open = addContainer.style.display === 'none';
       addContainer.style.display = open ? 'block' : 'none';
       btnToggleAdd.textContent = open ? '−' : '+';
+    });
+  }
+
+  if (tabAddProf && tabDeleteProf) {
+    tabAddProf.addEventListener('click', () => {
+      tabAddProf.classList.add('active');
+      tabDeleteProf.classList.remove('active');
+      if (profAddSection) profAddSection.style.display = 'block';
+      if (profDeleteSection) profDeleteSection.style.display = 'none';
+    });
+    tabDeleteProf.addEventListener('click', () => {
+      tabDeleteProf.classList.add('active');
+      tabAddProf.classList.remove('active');
+      if (profAddSection) profAddSection.style.display = 'none';
+      if (profDeleteSection) profDeleteSection.style.display = 'block';
     });
   }
 
@@ -454,10 +476,55 @@ function setupProfileControls(prefix) {
           profileSelect.appendChild(opt);
         });
       }
+      if (delSelect) {
+        delSelect.innerHTML = '';
+        const deletable = list.filter(p => p !== 'default');
+        if (deletable.length === 0) {
+          const opt = document.createElement('option');
+          opt.value = '';
+          opt.textContent = '-- No Custom Profiles --';
+          delSelect.appendChild(opt);
+        } else {
+          deletable.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p;
+            opt.textContent = p;
+            delSelect.appendChild(opt);
+          });
+        }
+      }
     } catch (err) {
       console.error(`Error loading profiles for ${prefix}:`, err);
     }
   };
+
+  if (btnDelete) {
+    btnDelete.addEventListener('click', async () => {
+      const profileName = delSelect ? delSelect.value : '';
+      if (!profileName) {
+        alert('Please select a profile to delete.');
+        return;
+      }
+      if (profileName === 'default') {
+        alert('The default profile cannot be deleted.');
+        return;
+      }
+      if (!confirm(`Are you sure you want to delete the profile "${profileName}"?`)) {
+        return;
+      }
+      try {
+        const res = await fetch(`/api/${isAzure ? 'azure' : 'gcp'}-profiles/${encodeURIComponent(profileName)}`, {
+          method: 'DELETE'
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to delete profile');
+        alert(`Profile "${profileName}" deleted successfully.`);
+        await fetchProfiles();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+  }
 
   if (btnSave) {
     btnSave.addEventListener('click', async () => {
