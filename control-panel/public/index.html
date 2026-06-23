@@ -474,23 +474,43 @@
               </div>
 
               <div id="add-profile-container" style="display:none;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:14px;margin-bottom:18px;">
-                <h4 style="margin:0 0 12px;font-size:12px;text-transform:uppercase;color:#8b949e;letter-spacing:0.05em;font-family:'Inter',sans-serif;">Add AWS Profile</h4>
-                <div style="display:flex;flex-direction:column;gap:12px;">
-                  <div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid #21262d; padding-bottom:8px;">
+                  <h4 style="margin:0;font-size:12px;text-transform:uppercase;color:#58a6ff;letter-spacing:0.05em;font-family:'Inter',sans-serif;font-weight:600;">Manage AWS Profiles</h4>
+                  <div style="display:flex; gap:8px;">
+                    <button type="button" id="tab-add-prof" class="ec2-btn-outline active" style="font-size:10px; padding:4px 8px; margin:0; line-height:1; height:auto; border-radius:4px;">Add</button>
+                    <button type="button" id="tab-delete-prof" class="ec2-btn-outline" style="font-size:10px; padding:4px 8px; margin:0; line-height:1; height:auto; border-radius:4px;">Delete</button>
+                  </div>
+                </div>
+                
+                <!-- Add Profile Content -->
+                <div id="prof-add-section" style="display:block;">
+                  <div style="margin-bottom:10px;">
                     <label class="ec2-label" style="font-size:10px;">Profile Name</label>
                     <input type="text" id="new-profile-name" class="ec2-input" placeholder="e.g. staging-admin">
                     <p class="field-err" id="err-new-profile-name" style="display:none;"></p>
                   </div>
-                  <div>
+                  <div style="margin-bottom:10px;">
                     <label class="ec2-label" style="font-size:10px;">AWS Access Key ID</label>
                     <input type="text" id="new-profile-key" class="ec2-input" placeholder="AKIA...">
                   </div>
-                  <div>
+                  <div style="margin-bottom:10px;">
                     <label class="ec2-label" style="font-size:10px;">AWS Secret Access Key</label>
                     <input type="password" id="new-profile-secret" class="ec2-input" placeholder="Secret Access Key...">
                   </div>
                   <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px;">
                     <button type="button" class="ec2-btn-primary" id="btn-save-profile" style="font-size:11px;padding:6px 12px;">Save Profile</button>
+                  </div>
+                </div>
+                
+                <!-- Delete Profile Content -->
+                <div id="prof-delete-section" style="display:none;">
+                  <p style="font-size:11px; color:#8b949e; margin:0 0 10px; line-height:1.4;">Choose a profile to remove from credentials. The "default" profile cannot be deleted.</p>
+                  <div style="margin-bottom:10px;">
+                    <label class="ec2-label" style="font-size:10px;">Select Profile to Delete</label>
+                    <select id="delete-profile-select" class="ec2-select" style="margin:0;"></select>
+                  </div>
+                  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px;">
+                    <button type="button" class="ec2-btn-outline" id="btn-delete-profile" style="font-size:11px;padding:6px 12px; border-color:rgba(240,78,78,0.4); color:#ff7b72; border-radius:6px; cursor:pointer;">Delete Profile</button>
                   </div>
                 </div>
               </div>
@@ -1462,16 +1482,35 @@
 
                     <!-- ECR Panel -->
                     <div id="ecs-image-ecr-panel" style="margin-bottom:14px;">
-                      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
                         <div>
-                          <label class="ec2-label">ECR Repository</label>
-                          <select id="ecs-ecr-repo-select" class="ec2-select">
-                            <option value="">Loading repos...</option>
+                          <label class="ec2-label">ECR Repository Mode</label>
+                          <select id="ecs-ecr-mode" class="ec2-select" onchange="toggleEcrMode()">
+                            <option value="existing" selected>Select Existing Repository</option>
+                            <option value="create">Create New Repository</option>
                           </select>
                         </div>
                         <div>
                           <label class="ec2-label">Image Tag <span style="font-weight:400;color:#ff7b72;">(Tag must exist in ECR)</span></label>
                           <input type="text" id="ecs-image-tag" class="ec2-input" value="latest" placeholder="latest">
+                        </div>
+                      </div>
+
+                      <div style="display:grid;grid-template-columns:1fr;gap:14px;">
+                        <div id="ecs-ecr-existing-wrapper">
+                          <label class="ec2-label">ECR Repository</label>
+                          <select id="ecs-ecr-repo-select" class="ec2-select">
+                            <option value="">Loading repos...</option>
+                          </select>
+                        </div>
+                        <div id="ecs-ecr-new-wrapper" style="display:none;">
+                          <label class="ec2-label">New ECR Repository Name</label>
+                          <div style="display:flex;gap:8px;">
+                            <input type="text" id="ecs-ecr-new-name" class="ec2-input" placeholder="my-app-repo" pattern="[a-z0-9-_./]+" title="Lowercase alphanumeric, underscores, hyphens, periods, or slashes only">
+                            <button type="button" id="btn-create-ecr-repo" class="ec2-btn" style="white-space:nowrap;padding:0 12px;height:34px;" onclick="createNewEcrRepo()">Create Repo</button>
+                          </div>
+                          <p class="field-success" id="success-ecs-ecr-new" style="display:none;color:#57ab5a;font-size:11px;margin-top:4px;"></p>
+                          <p class="field-err" id="err-ecs-ecr-new" style="display:none;color:#f85149;font-size:11px;margin-top:4px;"></p>
                         </div>
                       </div>
                     </div>

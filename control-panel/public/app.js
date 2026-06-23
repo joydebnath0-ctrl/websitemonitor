@@ -662,6 +662,27 @@ function initEC2UI() {
     btnToggleAddProfile.textContent = open ? '−' : '+';
   });
 
+  // Tab switching inside Manage AWS Profiles container
+  const tabAddProf = document.getElementById('tab-add-prof');
+  const tabDeleteProf = document.getElementById('tab-delete-prof');
+  const profAddSection = document.getElementById('prof-add-section');
+  const profDeleteSection = document.getElementById('prof-delete-section');
+
+  if (tabAddProf && tabDeleteProf) {
+    tabAddProf.addEventListener('click', () => {
+      tabAddProf.classList.add('active');
+      tabDeleteProf.classList.remove('active');
+      profAddSection.style.display = 'block';
+      profDeleteSection.style.display = 'none';
+    });
+    tabDeleteProf.addEventListener('click', () => {
+      tabDeleteProf.classList.add('active');
+      tabAddProf.classList.remove('active');
+      profAddSection.style.display = 'none';
+      profDeleteSection.style.display = 'block';
+    });
+  }
+
   document.getElementById('btn-save-profile').addEventListener('click', async () => {
     const profileName = document.getElementById('new-profile-name').value.trim();
     const accessKeyId = document.getElementById('new-profile-key').value.trim();
@@ -682,6 +703,36 @@ function initEC2UI() {
       btnToggleAddProfile.textContent = '+';
     } catch (err) { alert(err.message); }
   });
+
+  const btnDeleteProfile = document.getElementById('btn-delete-profile');
+  if (btnDeleteProfile) {
+    btnDeleteProfile.addEventListener('click', async () => {
+      const delSelect = document.getElementById('delete-profile-select');
+      const profileName = delSelect ? delSelect.value : '';
+      if (!profileName) {
+        alert('Please select a profile to delete.');
+        return;
+      }
+      if (profileName === 'default') {
+        alert('The default profile cannot be deleted.');
+        return;
+      }
+      if (!confirm(`Are you sure you want to delete the AWS profile "${profileName}"?`)) {
+        return;
+      }
+      try {
+        const res = await fetch(`/api/aws-profiles/${encodeURIComponent(profileName)}`, {
+          method: 'DELETE'
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to delete profile');
+        alert(`AWS Profile "${profileName}" deleted successfully.`);
+        await fetchAwsProfiles();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+  }
 
   osImageSelect.addEventListener('change', () => {
     document.getElementById('custom-ami-container').style.display = osImageSelect.value === 'custom' ? 'block' : 'none';
@@ -1828,6 +1879,26 @@ async function fetchAwsProfiles(selectProfileName = null) {
         sel.appendChild(opt);
       });
     });
+
+    const delSel = document.getElementById('delete-profile-select');
+    if (delSel) {
+      delSel.innerHTML = '';
+      const list = profiles.filter(p => p !== 'default');
+      if (list.length === 0) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = '-- No Custom Profiles --';
+        delSel.appendChild(opt);
+      } else {
+        list.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p;
+          opt.textContent = p;
+          delSel.appendChild(opt);
+        });
+      }
+    }
+
     updateEC2Summary();
     updateVpcSummary();
     updateS3Summary();

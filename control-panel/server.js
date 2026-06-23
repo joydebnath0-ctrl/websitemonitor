@@ -1425,6 +1425,66 @@ app.post('/api/aws-profiles', (req, res) => {
   }
 });
 
+app.delete('/api/aws-profiles/:name', (req, res) => {
+  const { name } = req.params;
+  if (!name) {
+    return res.status(400).json({ error: 'Missing profile name' });
+  }
+  if (name === 'default') {
+    return res.status(400).json({ error: 'The default profile cannot be deleted' });
+  }
+  const credPath = getAwsCredentialsPath();
+  if (!fs.existsSync(credPath)) {
+    return res.status(404).json({ error: 'Credentials file not found' });
+  }
+  try {
+    const content = fs.readFileSync(credPath, 'utf8');
+    const profiles = parseAwsCredentialsFile(content);
+    if (!profiles[name]) {
+      return res.status(404).json({ error: `Profile "${name}" not found` });
+    }
+    delete profiles[name];
+    const newContent = serializeAwsCredentials(profiles);
+    fs.writeFileSync(credPath, newContent, 'utf8');
+    res.json({ success: true, profiles: Object.keys(profiles) });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete AWS profile: ' + err.message });
+  }
+});
+
+app.delete('/api/azure-profiles/:name', (req, res) => {
+  const { name } = req.params;
+  if (!name) return res.status(400).json({ error: 'Missing profile name' });
+  try {
+    const profiles = readAzureProfiles();
+    if (!profiles[name]) {
+      return res.status(404).json({ error: `Profile "${name}" not found` });
+    }
+    delete profiles[name];
+    writeAzureProfiles(profiles);
+    res.json({ success: true, profiles: Object.keys(profiles) });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete Azure profile: ' + err.message });
+  }
+});
+
+app.delete('/api/gcp-profiles/:name', (req, res) => {
+  const { name } = req.params;
+  if (!name) return res.status(400).json({ error: 'Missing profile name' });
+  try {
+    const profiles = readGcpProfiles();
+    if (!profiles[name]) {
+      return res.status(404).json({ error: `Profile "${name}" not found` });
+    }
+    delete profiles[name];
+    writeGcpProfiles(profiles);
+    res.json({ success: true, profiles: Object.keys(profiles) });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete GCP profile: ' + err.message });
+  }
+});
+
+
 app.get('/api/azure-profiles', (req, res) => {
   try {
     const profiles = readAzureProfiles();
@@ -3942,6 +4002,21 @@ app.get('/api/ecs/repositories', requirePermission('ecs', 'read'), async (req, r
     res.json(data.repositories || []);
   } catch (err) {
     res.status(500).json({ error: 'Failed to list ECR repositories: ' + err.message });
+  }
+});
+
+app.post('/api/ecs/repositories/create', requirePermission('ecs', 'write'), async (req, res) => {
+  const profile = req.body.profile || 'default';
+  const region = req.body.region || 'us-east-1';
+  const repositoryName = req.body.repositoryName;
+  if (!repositoryName) {
+    return res.status(400).json({ error: 'Repository name is required' });
+  }
+  try {
+    const data = await runCliJson(['ecr', 'create-repository', '--repository-name', repositoryName, '--region', region], profile);
+    res.json(data.repository || {});
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create ECR repository: ' + err.message });
   }
 });
 
