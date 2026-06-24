@@ -469,7 +469,8 @@
                   <select id="aws-profile" class="ec2-select" style="flex:1;">
                     <option value="default">default</option>
                   </select>
-                  <button type="button" class="ec2-btn-primary" id="btn-toggle-add-profile" style="width:auto;padding:0 14px;font-size:16px;line-height:1;">+</button>
+                  <button type="button" class="ec2-btn-primary" id="btn-toggle-add-profile" style="width:auto;padding:0 14px;font-size:16px;line-height:1;" title="Add AWS Profile">+</button>
+                  <button type="button" class="ec2-btn-outline" id="btn-delete-current-profile" style="width:auto;padding:0 12px;font-size:14px;line-height:1;border-color:rgba(240,78,78,0.4);color:#ff7b72;border-radius:6px;cursor:pointer;" title="Delete Selected Profile">🗑️</button>
                 </div>
               </div>
 
@@ -2825,7 +2826,7 @@
               <div style="display:flex;gap:8px;align-items:center;">
                 <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#8b949e;cursor:pointer;">
                   <input type="checkbox" id="monitor-auto-refresh" checked style="accent-color:#58a6ff;">
-                  Auto-refresh (15s)
+                  Auto-refresh (10s)
                 </label>
 
                 <!-- Multi-select project dropdown -->
@@ -3106,7 +3107,8 @@
                   <select id="azure-vm-profile" class="ec2-select" style="flex:1;">
                     <option value="default">default</option>
                   </select>
-                  <button type="button" class="ec2-btn-primary" id="azure-vm-btn-toggle-add-profile" style="width:auto;padding:0 14px;font-size:16px;line-height:1;background:#0078d4;color:#fff;border-color:#0078d4;">+</button>
+                  <button type="button" class="ec2-btn-primary" id="azure-vm-btn-toggle-add-profile" style="width:auto;padding:0 14px;font-size:16px;line-height:1;background:#0078d4;color:#fff;border-color:#0078d4;" title="Add Azure Profile">+</button>
+                  <button type="button" class="ec2-btn-outline" id="azure-vm-btn-delete-current-profile" style="width:auto;padding:0 12px;font-size:14px;line-height:1;border-color:rgba(240,78,78,0.4);color:#ff7b72;border-radius:6px;cursor:pointer;" title="Delete Selected Profile">🗑️</button>
                 </div>
               </div>
 
@@ -3457,7 +3459,8 @@
                   <select id="gcp-vm-profile" class="ec2-select" style="flex:1;">
                     <option value="default">default</option>
                   </select>
-                  <button type="button" class="ec2-btn-primary" id="gcp-vm-btn-toggle-add-profile" style="width:auto;padding:0 14px;font-size:16px;line-height:1;background:#ffcc00;color:#0d1117;border-color:#ffcc00;">+</button>
+                  <button type="button" class="ec2-btn-primary" id="gcp-vm-btn-toggle-add-profile" style="width:auto;padding:0 14px;font-size:16px;line-height:1;background:#ffcc00;color:#0d1117;border-color:#ffcc00;" title="Add GCP Profile">+</button>
+                  <button type="button" class="ec2-btn-outline" id="gcp-vm-btn-delete-current-profile" style="width:auto;padding:0 12px;font-size:14px;line-height:1;border-color:rgba(240,78,78,0.4);color:#ff7b72;border-radius:6px;cursor:pointer;" title="Delete Selected Profile">🗑️</button>
                 </div>
               </div>
 

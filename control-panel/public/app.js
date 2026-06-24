@@ -439,6 +439,7 @@ function setupProfileControls(prefix) {
   const profDeleteSection = getEl('prof-delete-section');
   const delSelect = getEl('delete-profile-select');
   const btnDelete = getEl('btn-delete-profile');
+  const btnDeleteCurrent = getEl('btn-delete-current-profile');
 
   if (btnToggleAdd && addContainer) {
     btnToggleAdd.addEventListener('click', () => {
@@ -501,6 +502,34 @@ function setupProfileControls(prefix) {
   if (btnDelete) {
     btnDelete.addEventListener('click', async () => {
       const profileName = delSelect ? delSelect.value : '';
+      if (!profileName) {
+        alert('Please select a profile to delete.');
+        return;
+      }
+      if (profileName === 'default') {
+        alert('The default profile cannot be deleted.');
+        return;
+      }
+      if (!confirm(`Are you sure you want to delete the profile "${profileName}"?`)) {
+        return;
+      }
+      try {
+        const res = await fetch(`/api/${isAzure ? 'azure' : 'gcp'}-profiles/${encodeURIComponent(profileName)}`, {
+          method: 'DELETE'
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to delete profile');
+        alert(`Profile "${profileName}" deleted successfully.`);
+        await fetchProfiles();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+  }
+
+  if (btnDeleteCurrent) {
+    btnDeleteCurrent.addEventListener('click', async () => {
+      const profileName = profileSelect ? profileSelect.value : '';
       if (!profileName) {
         alert('Please select a profile to delete.');
         return;
@@ -776,6 +805,35 @@ function initEC2UI() {
     btnDeleteProfile.addEventListener('click', async () => {
       const delSelect = document.getElementById('delete-profile-select');
       const profileName = delSelect ? delSelect.value : '';
+      if (!profileName) {
+        alert('Please select a profile to delete.');
+        return;
+      }
+      if (profileName === 'default') {
+        alert('The default profile cannot be deleted.');
+        return;
+      }
+      if (!confirm(`Are you sure you want to delete the AWS profile "${profileName}"?`)) {
+        return;
+      }
+      try {
+        const res = await fetch(`/api/aws-profiles/${encodeURIComponent(profileName)}`, {
+          method: 'DELETE'
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to delete profile');
+        alert(`AWS Profile "${profileName}" deleted successfully.`);
+        await fetchAwsProfiles();
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+  }
+
+  const btnDeleteCurrentProfile = document.getElementById('btn-delete-current-profile');
+  if (btnDeleteCurrentProfile) {
+    btnDeleteCurrentProfile.addEventListener('click', async () => {
+      const profileName = profileSelect ? profileSelect.value : '';
       if (!profileName) {
         alert('Please select a profile to delete.');
         return;
@@ -7806,7 +7864,7 @@ function startMonitorAutoRefresh() {
       console.error('Monitor auto-check error:', e);
     }
     monitorIsChecking = false;
-  }, 15000);
+  }, 10000);
 }
 function stopMonitorAutoRefresh() {
   if (monitorAutoInterval) { clearInterval(monitorAutoInterval); monitorAutoInterval = null; }
