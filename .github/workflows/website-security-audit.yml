@@ -180,7 +180,7 @@ jobs:
         id: clean_remote
         uses: appleboy/ssh-action@master
         with:
-          host: 13.201.116.231
+          host: 56.68.120.78
           username: ubuntu
           key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
           script: |
@@ -190,7 +190,7 @@ jobs:
         id: deploy_remote
         uses: appleboy/scp-action@master
         with:
-          host: 13.201.116.231
+          host: 56.68.120.78
           username: ubuntu
           key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
           source: "audit-report/**"
