@@ -3022,11 +3022,63 @@ function renderCfList() {
       </div>` : ''}
       <div class="deployment-actions-bar">
         <button type="button" class="ec2-btn-outline" onclick="startLogStream('${dist.name}')">View Logs</button>
+        ${dist.status === 'active' ? `<button type="button" class="ec2-btn-outline" onclick="toggleCfDetails('${dist.name}', this)">📋 Integration Details</button>` : ''}
         ${dist.status !== 'destroying' ? `<button type="button" class="ec2-btn-danger" onclick="triggerCfDestroy('${dist.name}')" ${hasPermission('cf', 'execute') ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;" title="No execute permission"'}>Destroy</button>` : ''}
       </div>`;
     container.appendChild(card);
   });
 }
+
+async function toggleCfDetails(name, button) {
+  const card = button.closest('.deployment-card');
+  let detailsDiv = card.querySelector('.cf-integration-details');
+  if (detailsDiv) {
+    if (detailsDiv.style.display === 'none') {
+      detailsDiv.style.display = 'block';
+      button.textContent = '📋 Hide Integration Details';
+    } else {
+      detailsDiv.style.display = 'none';
+      button.textContent = '📋 Integration Details';
+    }
+    return;
+  }
+
+  detailsDiv = document.createElement('div');
+  detailsDiv.className = 'cf-integration-details';
+  detailsDiv.style.marginTop = '12px';
+  detailsDiv.style.background = '#0d1117';
+  detailsDiv.style.border = '1px solid #30363d';
+  detailsDiv.style.borderRadius = '6px';
+  detailsDiv.style.padding = '10px';
+  detailsDiv.innerHTML = '<div style="color:#8b949e;font-size:11px;">Loading integration details...</div>';
+  
+  const actionsBar = card.querySelector('.deployment-actions-bar');
+  card.insertBefore(detailsDiv, actionsBar);
+  button.textContent = '📋 Hide Integration Details';
+
+  try {
+    const res = await fetch(`/api/cf/connection-details?name=${encodeURIComponent(name)}`);
+    if (!res.ok) throw new Error('Failed to fetch details');
+    const data = await res.json();
+    const envString = `AWS_ACCESS_KEY_ID=${data.AWS_ACCESS_KEY_ID}
+AWS_SECRET_ACCESS_KEY=${data.AWS_SECRET_ACCESS_KEY}
+AWS_BUCKET_NAME=${data.AWS_BUCKET_NAME}
+AWS_REGION=${data.AWS_REGION}
+CLOUD_FONT_URL=${data.CLOUD_FONT_URL}
+AWS_S3_ENDPOINT=${data.AWS_S3_ENDPOINT}`;
+
+    detailsDiv.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span style="font-size:11px;font-weight:600;color:#58a6ff;">Environment Configuration</span>
+        <button type="button" class="copy-btn" onclick="navigator.clipboard.writeText(\`${envString.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`);alert('Copied to clipboard!');" style="background:#21262d;border:1px solid #30363d;color:#c9d1d9;font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;">Copy</button>
+      </div>
+      <pre style="margin:0;font-family:'SFMono-Regular',Consolas,monospace;font-size:11px;color:#c9d1d9;white-space:pre-wrap;word-break:break-all;background:rgba(0,0,0,0.3);padding:8px;border-radius:4px;">${envString}</pre>
+    `;
+  } catch (err) {
+    detailsDiv.innerHTML = `<div style="color:#f85149;font-size:11px;">Error: ${err.message}</div>`;
+  }
+}
+window.toggleCfDetails = toggleCfDetails;
 
 async function triggerCfDestroy(name) {
   if (!hasPermission('cf', 'execute')) {

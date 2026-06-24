@@ -2911,6 +2911,55 @@ app.get('/api/distributions', requirePermission('cf','read'), (req, res) => {
   res.json(readCfDB());
 });
 
+app.get('/api/cf/connection-details', requirePermission('cf','read'), (req, res) => {
+  const { name } = req.query;
+  if (!name) return res.status(400).json({ error: 'Name is required' });
+  const db = readCfDB();
+  const dist = db.find(d => d.name === name);
+  if (!dist) return res.status(404).json({ error: 'Distribution not found' });
+
+  let accessKeyId = '';
+  let secretAccessKey = '';
+  try {
+    const credPath = getAwsCredentialsPath();
+    if (fs.existsSync(credPath)) {
+      const content = fs.readFileSync(credPath, 'utf8');
+      const profiles = parseAwsCredentialsFile(content);
+      const prof = profiles[dist.awsProfile || 'default'];
+      if (prof) {
+        accessKeyId = prof.aws_access_key_id || '';
+        secretAccessKey = prof.aws_secret_access_key || '';
+      }
+    }
+  } catch (e) {
+    console.error('Failed to read credentials:', e);
+  }
+
+  let region = 'us-east-1';
+  try {
+    const s3Buckets = readS3DB();
+    const bucketObj = s3Buckets.find(b => b.name === dist.s3BucketName);
+    if (bucketObj && bucketObj.region) {
+      region = bucketObj.region;
+    }
+  } catch (e) {
+    console.error('Failed to read S3 region:', e);
+  }
+
+  const s3Endpoint = region === 'us-east-1'
+    ? `https://s3.amazonaws.com/${dist.s3BucketName}`
+    : `https://s3.${region}.amazonaws.com/${dist.s3BucketName}`;
+
+  res.json({
+    AWS_ACCESS_KEY_ID: accessKeyId,
+    AWS_SECRET_ACCESS_KEY: secretAccessKey,
+    AWS_BUCKET_NAME: dist.s3BucketName,
+    AWS_REGION: region,
+    CLOUD_FONT_URL: dist.distributionUrl || 'N/A',
+    AWS_S3_ENDPOINT: s3Endpoint
+  });
+});
+
 // List managed S3 buckets for selection
 app.get('/api/s3-bucket-names', requirePermission('cf','read'), (req, res) => {
   const buckets = readS3DB();
@@ -3006,6 +3055,50 @@ app.post('/api/cf/create', requirePermission('cf','write'), (req, res) => {
       sendLog(distributionName, `Distribution ID: ${outputs.distribution_id ? outputs.distribution_id.value : 'N/A'}`);
       sendLog(distributionName, `Domain: ${outputs.distribution_domain_name ? outputs.distribution_domain_name.value : 'N/A'}`);
       sendLog(distributionName, `URL: ${outputs.distribution_url ? outputs.distribution_url.value : 'N/A'}`);
+
+      // Retrieve and print connection details
+      let accessKeyId = '';
+      let secretAccessKey = '';
+      try {
+        const credPath = getAwsCredentialsPath();
+        if (fs.existsSync(credPath)) {
+          const content = fs.readFileSync(credPath, 'utf8');
+          const profiles = parseAwsCredentialsFile(content);
+          const prof = profiles[awsProfile || 'default'];
+          if (prof) {
+            accessKeyId = prof.aws_access_key_id || '';
+            secretAccessKey = prof.aws_secret_access_key || '';
+          }
+        }
+      } catch (e) {
+        console.error('Failed to read credentials:', e);
+      }
+
+      let bucketRegion = 'us-east-1';
+      try {
+        const s3Buckets = readS3DB();
+        const bucketObj = s3Buckets.find(b => b.name === s3BucketName);
+        if (bucketObj && bucketObj.region) {
+          bucketRegion = bucketObj.region;
+        }
+      } catch (e) {
+        console.error('Failed to read S3 region:', e);
+      }
+
+      const s3Endpoint = bucketRegion === 'us-east-1'
+        ? `https://s3.amazonaws.com/${s3BucketName}`
+        : `https://s3.${bucketRegion}.amazonaws.com/${s3BucketName}`;
+
+      const finalUrl = outputs.distribution_url ? outputs.distribution_url.value : 'N/A';
+
+      sendLog(distributionName, `\n=== CLOUDFRONT CONNECTION DETAILS ===\n` +
+        `AWS_ACCESS_KEY_ID=${accessKeyId}\n` +
+        `AWS_SECRET_ACCESS_KEY=${secretAccessKey}\n` +
+        `AWS_BUCKET_NAME=${s3BucketName}\n` +
+        `AWS_REGION=${bucketRegion}\n` +
+        `CLOUD_FONT_URL=${finalUrl}\n` +
+        `AWS_S3_ENDPOINT=${s3Endpoint}\n` +
+        `======================================`);
     } catch (err) {
       sendLog(distributionName, `=== CLOUDFRONT CREATION FAILED ===\nError: ${err.message}`);
       const currentDB = readCfDB();
