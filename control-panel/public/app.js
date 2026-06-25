@@ -8886,7 +8886,7 @@ function connectCodePipelineLogs(name) {
     const line = data.text;
 
     // Check if it is a pipeline stage update
-    const stageMatch = line.match(/^\[PIPELINE_STAGE\]\s+(\w+)\s+//\s+([\w\s]+)\s+//\s+(.+)$/) || line.match(/^\[PIPELINE_STAGE\]\s+(\w+)\s+\|\s+([\w\s]+)\s+\|\s+(.+)$/);
+    const stageMatch = line.match(/^\[PIPELINE_STAGE\]\s+(\w+)\s+\/\/\s+([\w\s]+)\s+\/\/\s+(.+)$/) || line.match(/^\[PIPELINE_STAGE\]\s+(\w+)\s+\|\s+([\w\s]+)\s+\|\s+(.+)$/);
     if (stageMatch) {
       const stage = stageMatch[1].toLowerCase();
       const status = stageMatch[2].trim();
