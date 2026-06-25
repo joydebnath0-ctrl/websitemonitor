@@ -1990,7 +1990,7 @@ async function fetchAwsProfiles(selectProfileName = null) {
   try {
     const res = await fetch('/api/aws-profiles');
     const profiles = await res.json();
-    const selects = ['aws-profile', 'vpc-profile', 's3-profile', 'cf-profile', 'ecs-profile', 'billing-profile', 'rds-profile'];
+    const selects = ['aws-profile', 'vpc-profile', 's3-profile', 'cf-profile', 'ecs-profile', 'billing-profile', 'rds-profile', 'cp-aws-profile'];
     selects.forEach(id => {
       const sel = document.getElementById(id);
       if (!sel) return;
@@ -3672,6 +3672,7 @@ function initializeDashboard(user) {
   initS3UI();
   initCfUI();
   initRdsUI();
+  initCodePipelineUI();
   fetchAwsProfiles();
 
   // Gate service sidebar navigation buttons by permissions
@@ -3691,6 +3692,13 @@ function initializeDashboard(user) {
       }
     }
   });
+
+  // CodePipeline visibility maps to ECS permissions
+  const btnCp = document.getElementById('svc-btn-codepipeline');
+  if (btnCp) {
+    const hasCpRead = user.isAdmin || (perms.ecs && perms.ecs.includes('read'));
+    btnCp.style.display = hasCpRead ? 'inline-flex' : 'none';
+  }
 
   // Set active service based on permissions
   if (defaultService) {
@@ -8448,3 +8456,489 @@ function renderMonitoringTable(data) {
     }
   }
 }
+
+// ===== CODEPIPELINE SERVICE WIZARD =====
+
+function initCodePipelineUI() {
+  const cpTabs = document.querySelectorAll('#svc-panel-codepipeline .ec2-tab');
+  const cpTabContents = document.querySelectorAll('#svc-panel-codepipeline .ec2-tab-content');
+  const cpDeployBtnWrapper = document.querySelector('#svc-panel-codepipeline .ec2-deploy-btn-container');
+
+  cpTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const targetTab = tab.dataset.tab;
+      cpTabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      cpTabContents.forEach(c => {
+        c.classList.toggle('active', c.id === `tab-content-${targetTab}`);
+      });
+      if (targetTab === 'cp-deployments') {
+        if (cpDeployBtnWrapper) cpDeployBtnWrapper.style.display = 'none';
+        fetchCodePipelines();
+      } else {
+        if (cpDeployBtnWrapper) cpDeployBtnWrapper.style.display = 'block';
+        if (targetTab === 'cp-preview') {
+          fetchCodePipelinePreview();
+        }
+      }
+    });
+  });
+
+  // Source provider toggle for Connection ARN
+  const sourceProvider = document.getElementById('cp-source-provider');
+  const connectionArnGroup = document.getElementById('cp-connection-arn-group');
+  if (sourceProvider && connectionArnGroup) {
+    sourceProvider.addEventListener('change', () => {
+      const val = sourceProvider.value;
+      if (val === 'GitHub' || val === 'Bitbucket') {
+        connectionArnGroup.style.display = 'block';
+      } else {
+        connectionArnGroup.style.display = 'none';
+      }
+    });
+  }
+
+  // Handle right-column execution logs tab switching hooks
+  const tabTerraform = document.getElementById('tab-logs-terraform');
+  const tabStartup = document.getElementById('tab-logs-startup');
+  const tabPipeline = document.getElementById('tab-logs-pipeline-execution');
+  const termPipeline = document.getElementById('pipeline-execution-container');
+
+  if (tabTerraform) {
+    tabTerraform.addEventListener('click', () => {
+      if (termPipeline) termPipeline.style.display = 'none';
+      if (tabPipeline) {
+        tabPipeline.classList.remove('active');
+        tabPipeline.style.color = '#8b949e';
+        tabPipeline.style.borderBottomColor = 'transparent';
+      }
+    });
+  }
+  if (tabStartup) {
+    tabStartup.addEventListener('click', () => {
+      if (termPipeline) termPipeline.style.display = 'none';
+      if (tabPipeline) {
+        tabPipeline.classList.remove('active');
+        tabPipeline.style.color = '#8b949e';
+        tabPipeline.style.borderBottomColor = 'transparent';
+      }
+    });
+  }
+  if (tabPipeline) {
+    tabPipeline.addEventListener('click', () => {
+      [tabTerraform, tabStartup, tabPipeline].forEach(t => {
+        if (t) {
+          t.classList.remove('active');
+          t.style.color = '#8b949e';
+          t.style.borderBottomColor = 'transparent';
+        }
+      });
+      tabPipeline.classList.add('active');
+      tabPipeline.style.color = '#58a6ff';
+      tabPipeline.style.borderBottomColor = '#58a6ff';
+
+      if (document.getElementById('log-terminal-container')) document.getElementById('log-terminal-container').style.display = 'none';
+      if (document.getElementById('startup-terminal-container')) document.getElementById('startup-terminal-container').style.display = 'none';
+      if (termPipeline) termPipeline.style.display = 'block';
+    });
+  }
+
+  // Submit button
+  const createBtn = document.getElementById('btn-cp-create');
+  if (createBtn) {
+    createBtn.addEventListener('click', () => {
+      createCodePipeline();
+    });
+  }
+  
+  // Custom script load or validation triggers
+  const fields = ['cp-name', 'cp-source-repo', 'cp-source-branch', 'cp-source-connection-arn', 'cp-build-project', 'cp-deploy-app'];
+  fields.forEach(fid => {
+    const input = document.getElementById(fid);
+    if (input) {
+      input.addEventListener('input', () => {
+        input.classList.remove('ec2-input-error');
+        const err = document.getElementById(`err-${fid}`);
+        if (err) err.style.display = 'none';
+      });
+    }
+  });
+}
+
+function getCodePipelineFormData() {
+  const name = document.getElementById('cp-name').value.trim();
+  const awsProfile = document.getElementById('cp-aws-profile').value;
+  const awsRegion = document.getElementById('cp-aws-region').value;
+  
+  const sourceProvider = document.getElementById('cp-source-provider').value;
+  const sourceRepo = document.getElementById('cp-source-repo').value.trim();
+  const sourceBranch = document.getElementById('cp-source-branch').value.trim();
+  const connectionArn = document.getElementById('cp-source-connection-arn').value.trim();
+  
+  const buildProvider = document.getElementById('cp-build-provider').value;
+  const buildProject = document.getElementById('cp-build-project').value.trim();
+  const buildImage = document.getElementById('cp-build-image').value.trim();
+  const buildspec = document.getElementById('cp-buildspec').value.trim();
+  const buildCompute = document.getElementById('cp-build-compute').value;
+  
+  const deployProvider = document.getElementById('cp-deploy-provider').value;
+  const deployConfig = document.getElementById('cp-deploy-config').value;
+  const deployApp = document.getElementById('cp-deploy-app').value.trim();
+
+  return {
+    name,
+    awsProfile,
+    awsRegion,
+    sourceProvider,
+    sourceRepo,
+    sourceBranch,
+    connectionArn,
+    buildProvider,
+    buildProject,
+    buildImage,
+    buildspec,
+    buildCompute,
+    deployProvider,
+    deployConfig,
+    deployApp
+  };
+}
+
+async function fetchCodePipelinePreview() {
+  const previewTextarea = document.getElementById('cp-preview-textarea');
+  if (!previewTextarea) return;
+
+  const data = getCodePipelineFormData();
+  if (!data.name) {
+    previewTextarea.value = "# Please specify a Pipeline Name in the Basic tab to generate Terraform code.";
+    return;
+  }
+
+  previewTextarea.value = "Generating Terraform configuration preview...";
+  try {
+    const res = await fetch('/api/codepipeline/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    const result = await res.json();
+    if (res.ok) {
+      previewTextarea.value = result.terraformCode;
+    } else {
+      previewTextarea.value = `# Error: ${result.error}`;
+    }
+  } catch (err) {
+    previewTextarea.value = `# Error calling preview API: ${err.message}`;
+  }
+}
+
+function showFieldValidationError(fieldId, errorMsg, tabId) {
+  const input = document.getElementById(fieldId);
+  if (input) {
+    input.classList.add('ec2-input-error');
+    // Visual shake animation
+    input.style.animation = 'shake 0.3s ease-in-out';
+    setTimeout(() => { input.style.animation = ''; }, 300);
+    
+    let errField = document.getElementById(`err-${fieldId}`);
+    if (!errField) {
+      errField = document.createElement('p');
+      errField.id = `err-${fieldId}`;
+      errField.className = 'field-err';
+      errField.style.color = '#f85149';
+      errField.style.fontSize = '11px';
+      errField.style.margin = '4px 0 0';
+      input.parentNode.appendChild(errField);
+    }
+    errField.textContent = errorMsg;
+    errField.style.display = 'block';
+  }
+
+  if (tabId) {
+    // Switch sub-tab
+    const tabBtn = document.querySelector(`#svc-panel-codepipeline .ec2-tab[data-tab="${tabId}"]`);
+    if (tabBtn) tabBtn.click();
+  }
+}
+
+async function createCodePipeline() {
+  const data = getCodePipelineFormData();
+
+  // Validate basic
+  if (!data.name) {
+    showFieldValidationError('cp-name', 'Pipeline Name is required.', 'cp-basic');
+    return;
+  }
+  if (!/^[a-zA-Z0-9-]+$/.test(data.name)) {
+    showFieldValidationError('cp-name', 'Name must be alphanumeric and dashes only.', 'cp-basic');
+    return;
+  }
+
+  // Validate source
+  if (!data.sourceRepo) {
+    showFieldValidationError('cp-source-repo', 'Repository Name or Bucket Name is required.', 'cp-source');
+    return;
+  }
+  if ((data.sourceProvider === 'GitHub' || data.sourceProvider === 'Bitbucket') && !data.connectionArn) {
+    showFieldValidationError('cp-source-connection-arn', 'Connection ARN is required for GitHub/Bitbucket.', 'cp-source');
+    return;
+  }
+
+  // Validate build
+  if (!data.buildProject) {
+    showFieldValidationError('cp-build-project', 'Project Name is required.', 'cp-build');
+    return;
+  }
+
+  // Validate deploy
+  if (!data.deployApp) {
+    showFieldValidationError('cp-deploy-app', 'Deploy App/Cluster/Bucket Name is required.', 'cp-deploy');
+    return;
+  }
+
+  const createBtn = document.getElementById('btn-cp-create');
+  if (createBtn) {
+    createBtn.disabled = true;
+    createBtn.innerHTML = '🕒 Provisioning Pipeline...';
+  }
+
+  try {
+    const res = await fetch('/api/codepipeline/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || 'Failed to create pipeline');
+    
+    // Connect to log stream
+    connectCodePipelineLogs(data.name);
+    
+    // Switch sub-tab to deployments tab to see new entry
+    const deploymentsTab = document.querySelector('#svc-panel-codepipeline .ec2-tab[data-tab="cp-deployments"]');
+    if (deploymentsTab) deploymentsTab.click();
+  } catch (err) {
+    alert('Error creating pipeline: ' + err.message);
+  } finally {
+    if (createBtn) {
+      createBtn.disabled = false;
+      createBtn.innerHTML = '🚀 Create Pipeline';
+    }
+  }
+}
+
+async function fetchCodePipelines() {
+  const cardsContainer = document.getElementById('cp-cards-container');
+  const tbody = document.getElementById('cp-deployments-list-body');
+  if (!cardsContainer || !tbody) return;
+
+  try {
+    const res = await fetch('/api/codepipelines');
+    if (!res.ok) throw new Error('Failed to load pipelines list');
+    const list = await res.json();
+
+    if (list.length === 0) {
+      cardsContainer.innerHTML = '<div style="font-size:12px;color:#8b949e;text-align:center;padding:20px;background:#1a1a1a;border-radius:6px;border:1px dashed #2a2a2a;">No pipelines deployed. Use the tabs above to configure and create one.</div>';
+      tbody.innerHTML = '<tr><td colspan="5" style="padding:16px;text-align:center;color:#8b949e;">No pipelines found.</td></tr>';
+      return;
+    }
+
+    // Populate Cards
+    cardsContainer.innerHTML = list.map(item => {
+      let statusColor = '#8b949e';
+      let statusBg = '#30363d';
+      if (item.status === 'Succeeded' || item.status === 'active') { statusColor = '#3fb950'; statusBg = 'rgba(56,139,60,0.15)'; }
+      else if (item.status === 'Failed' || item.status === 'error') { statusColor = '#f85149'; statusBg = 'rgba(248,81,73,0.15)'; }
+      else if (item.status === 'In Progress' || item.status === 'creating') { statusColor = '#d29922'; statusBg = 'rgba(187,128,9,0.15)'; }
+
+      return `
+        <div class="pipeline-card" style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px; display:flex; flex-direction:column; gap:12px; border-color:#2a2a2a; position:relative;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="display:flex; flex-direction:column;">
+              <strong style="font-size:14px; color:#e2e8f0; font-family:'Inter',sans-serif;">${escapeHtml(item.name)}</strong>
+              <span style="font-size:11px; color:#8b949e; margin-top:2px;">Region: ${escapeHtml(item.awsRegion)}</span>
+            </div>
+            <span style="font-size:11px; font-weight:600; padding:4px 8px; border-radius:12px; color:${statusColor}; background:${statusBg};">${escapeHtml(item.status)}</span>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:8px; font-size:11px; color:#8b949e; background:#0d0d0d; border:1px solid #2a2a2a; border-radius:6px; padding:8px 12px;">
+            <div style="flex:1;">
+              <strong>Source:</strong> ${escapeHtml(item.sourceProvider)} (${escapeHtml(item.sourceRepo)})
+            </div>
+            <div style="width:1px; background:#2a2a2a; align-self:stretch;"></div>
+            <div style="flex:1;">
+              <strong>Stage:</strong> <span style="color:#e2e8f0;">${escapeHtml(item.stage || 'idle')}</span>
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+            <span style="font-size:10px; color:#8b949e;">Last Execution: ${escapeHtml(item.lastExecution ? new Date(item.lastExecution).toLocaleString() : 'Never')}</span>
+            <div style="display:flex; gap:8px;">
+              <button class="ec2-btn-secondary" onclick="runCodePipeline('${escapeHtml(item.name)}')" style="padding:4px 10px; font-size:11px; border-radius:4px; height:28px;">▶️ Run</button>
+              <button class="ec2-btn-secondary" onclick="connectCodePipelineLogs('${escapeHtml(item.name)}')" style="padding:4px 10px; font-size:11px; border-radius:4px; height:28px;">📋 Logs</button>
+              <button class="ec2-btn-secondary" onclick="destroyCodePipeline('${escapeHtml(item.name)}')" style="padding:4px 10px; font-size:11px; border-radius:4px; height:28px; color:#f85149; border-color:rgba(248,81,73,0.3); background:rgba(248,81,73,0.05);">🗑️ Destroy</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Populate Detailed Rows
+    tbody.innerHTML = list.map(item => {
+      let statusColor = '#8b949e';
+      if (item.status === 'Succeeded' || item.status === 'active') statusColor = '#3fb950';
+      else if (item.status === 'Failed' || item.status === 'error') statusColor = '#f85149';
+      else if (item.status === 'In Progress' || item.status === 'creating') statusColor = '#d29922';
+
+      return `
+        <tr style="border-bottom: 1px solid #2a2a2a;">
+          <td style="padding: 10px 12px; font-weight: 600; color: #c9d1d9;">${escapeHtml(item.name)}</td>
+          <td style="padding: 10px 12px; color: ${statusColor};">${escapeHtml(item.status)}</td>
+          <td style="padding: 10px 12px; color: #8b949e;">${escapeHtml(item.lastExecution ? new Date(item.lastExecution).toLocaleString() : 'Never')}</td>
+          <td style="padding: 10px 12px; color: #e2e8f0;">${escapeHtml(item.stage || 'idle')}</td>
+          <td style="padding: 10px 12px; text-align: right;">
+            <button class="ec2-btn-secondary" onclick="runCodePipeline('${escapeHtml(item.name)}')" style="padding:2px 8px; font-size:10px; border-radius:4px; height:24px; margin-right:4px;">▶️ Run</button>
+            <button class="ec2-btn-secondary" onclick="connectCodePipelineLogs('${escapeHtml(item.name)}')" style="padding:2px 8px; font-size:10px; border-radius:4px; height:24px; margin-right:4px;">📋 Logs</button>
+            <button class="ec2-btn-secondary" onclick="destroyCodePipeline('${escapeHtml(item.name)}')" style="padding:2px 8px; font-size:10px; border-radius:4px; height:24px; color:#f85149; border-color:rgba(248,81,73,0.3); background:rgba(248,81,73,0.05);">🗑️ Destroy</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function runCodePipeline(name) {
+  try {
+    const res = await fetch(`/api/codepipeline/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || 'Failed to trigger run');
+    
+    // Connect to log stream
+    connectCodePipelineLogs(name);
+  } catch (err) {
+    alert('Error running pipeline: ' + err.message);
+  }
+}
+
+async function destroyCodePipeline(name) {
+  if (!confirm(`Are you sure you want to destroy CodePipeline "${name}" and all associated Terraform resources?`)) {
+    return;
+  }
+  try {
+    const res = await fetch(`/api/codepipeline/destroy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || 'Failed to trigger destroy');
+
+    // Connect to logs
+    connectCodePipelineLogs(name);
+  } catch (err) {
+    alert('Error destroying pipeline: ' + err.message);
+  }
+}
+
+function connectCodePipelineLogs(name) {
+  // Switch to the Pipeline Execution Logs tab
+  const tab = document.getElementById('tab-logs-pipeline-execution');
+  if (tab) {
+    tab.style.display = 'block';
+    tab.click(); // Select the tab
+  }
+
+  // Reset stage cards
+  const stages = ['source', 'build', 'deploy'];
+  stages.forEach(s => {
+    const icon = document.getElementById(`stage-icon-${s}`);
+    const time = document.getElementById(`stage-time-${s}`);
+    const logs = document.getElementById(`stage-logs-${s}`);
+    if (icon) icon.textContent = '⚪';
+    if (time) time.textContent = '--:--:--';
+    if (logs) logs.textContent = 'Waiting to start...';
+  });
+
+  if (eventSource) {
+    eventSource.close();
+  }
+
+  currentLogTarget = name;
+  const badge = document.getElementById('log-status-badge');
+  if (badge) {
+    badge.textContent = 'LIVE';
+    badge.style.background = '#e3b341';
+    badge.style.color = '#000';
+    badge.style.display = 'inline-block';
+  }
+
+  let currentStage = 'source';
+
+  eventSource = new EventSource(`/api/stream-logs?name=${encodeURIComponent(name)}`);
+  eventSource.onmessage = event => {
+    const data = JSON.parse(event.data);
+    const line = data.text;
+
+    // Check if it is a pipeline stage update
+    const stageMatch = line.match(/^\[PIPELINE_STAGE\]\s+(\w+)\s+//\s+([\w\s]+)\s+//\s+(.+)$/) || line.match(/^\[PIPELINE_STAGE\]\s+(\w+)\s+\|\s+([\w\s]+)\s+\|\s+(.+)$/);
+    if (stageMatch) {
+      const stage = stageMatch[1].toLowerCase();
+      const status = stageMatch[2].trim();
+      const timestamp = stageMatch[3];
+      
+      let icon = '⚪';
+      if (status === 'In Progress') {
+        icon = '🟡';
+        currentStage = stage;
+        const stageLogs = document.getElementById(`stage-logs-${stage}`);
+        if (stageLogs && stageLogs.textContent === 'Waiting to start...') {
+          stageLogs.textContent = '';
+        }
+      } else if (status === 'Succeeded') {
+        icon = '🟢';
+      } else if (status === 'Failed') {
+        icon = '🔴';
+      }
+      
+      const iconEl = document.getElementById(`stage-icon-${stage}`);
+      const timeEl = document.getElementById(`stage-time-${stage}`);
+      if (iconEl) iconEl.textContent = icon;
+      if (timeEl) timeEl.textContent = timestamp;
+    } else {
+      // Normal logs, append to current stage console, and also to main logs
+      appendLogLine(line);
+      
+      const stageLogs = document.getElementById(`stage-logs-${currentStage}`);
+      if (stageLogs) {
+        if (stageLogs.textContent === 'Waiting to start...') {
+          stageLogs.textContent = '';
+        }
+        stageLogs.textContent += line + '\n';
+        stageLogs.scrollTop = stageLogs.scrollHeight;
+      }
+    }
+  };
+
+  eventSource.onerror = () => {
+    if (badge) {
+      badge.textContent = 'COMPLETE';
+      badge.style.background = '#238636';
+      badge.style.color = '#fff';
+    }
+    if (eventSource) eventSource.close();
+    fetchCodePipelines(); // Reload list
+  };
+}
+
+// Global functions for inline HTML event click callbacks
+window.runCodePipeline = runCodePipeline;
+window.destroyCodePipeline = destroyCodePipeline;
+window.connectCodePipelineLogs = connectCodePipelineLogs;
+window.fetchCodePipelines = fetchCodePipelines;
+

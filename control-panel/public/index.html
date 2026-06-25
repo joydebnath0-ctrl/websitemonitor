@@ -437,6 +437,10 @@
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
         Monitoring
       </button>
+      <button type="button" class="svc-btn" data-service="codepipeline" id="svc-btn-codepipeline">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        CodePipeline
+      </button>
     </nav>
 
     <!-- Main Grid -->
@@ -2983,6 +2987,182 @@
           </div>
         </div><!-- end svc-panel-monitoring -->
 
+        <!-- ===== CODEPIPELINE SERVICE PANEL ===== -->
+        <div class="service-panel" id="svc-panel-codepipeline">
+          <div class="ec2-tabs-bar">
+            <button type="button" class="ec2-tab active" data-tab="cp-basic">Basic</button>
+            <button type="button" class="ec2-tab" data-tab="cp-source">Source</button>
+            <button type="button" class="ec2-tab" data-tab="cp-build">Build</button>
+            <button type="button" class="ec2-tab" data-tab="cp-deploy">Deploy</button>
+            <button type="button" class="ec2-tab" data-tab="cp-preview">Code Preview</button>
+            <button type="button" class="ec2-tab" data-tab="cp-deployments">Deployments</button>
+          </div>
+
+          <div class="ec2-tab-contents-container">
+            <!-- BASIC TAB -->
+            <div class="ec2-tab-content active" id="tab-content-cp-basic">
+              <div class="ec2-form-group">
+                <label class="ec2-label">Pipeline Name</label>
+                <input type="text" id="cp-name" class="ec2-input" placeholder="my-app-pipeline" pattern="[a-zA-Z0-9-]+" title="Alphanumeric and dashes only">
+                <p class="field-err" id="err-cp-name" style="display:none;"></p>
+              </div>
+
+              <div class="ec2-form-group">
+                <label class="ec2-label">AWS Account/Profile</label>
+                <select id="cp-aws-profile" class="ec2-select">
+                  <option value="default">default</option>
+                </select>
+              </div>
+
+              <div class="ec2-form-group">
+                <label class="ec2-label">AWS Region</label>
+                <select id="cp-aws-region" class="ec2-select">
+                  <option value="us-east-1">us-east-1 (N. Virginia)</option>
+                  <option value="us-east-2">us-east-2 (Ohio)</option>
+                  <option value="us-west-1">us-west-1 (N. California)</option>
+                  <option value="us-west-2">us-west-2 (Oregon)</option>
+                  <option value="eu-west-1">eu-west-1 (Ireland)</option>
+                  <option value="eu-central-1">eu-central-1 (Frankfurt)</option>
+                  <option value="ap-south-1">ap-south-1 (Mumbai)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- SOURCE TAB -->
+            <div class="ec2-tab-content" id="tab-content-cp-source">
+              <div class="ec2-form-group">
+                <label class="ec2-label">Source Provider</label>
+                <select id="cp-source-provider" class="ec2-select">
+                  <option value="GitHub">GitHub (via Connection)</option>
+                  <option value="CodeCommit">AWS CodeCommit</option>
+                  <option value="S3">Amazon S3</option>
+                  <option value="Bitbucket">Bitbucket</option>
+                </select>
+              </div>
+
+              <div class="ec2-form-group">
+                <label class="ec2-label">Repository Name / S3 Bucket</label>
+                <input type="text" id="cp-source-repo" class="ec2-input" placeholder="e.g. my-org/my-repo or s3-bucket-name">
+              </div>
+
+              <div class="ec2-form-group">
+                <label class="ec2-label">Branch Name / S3 Key</label>
+                <input type="text" id="cp-source-branch" class="ec2-input" placeholder="main (or source.zip for S3)" value="main">
+              </div>
+
+              <div class="ec2-form-group" id="cp-connection-arn-group">
+                <label class="ec2-label">Connection ARN</label>
+                <input type="text" id="cp-source-connection-arn" class="ec2-input" placeholder="arn:aws:codestar-connections:us-east-1:...">
+                <p style="font-size:11px;color:#8b949e;margin-top:4px;">Required for GitHub and Bitbucket providers.</p>
+              </div>
+            </div>
+
+            <!-- BUILD TAB -->
+            <div class="ec2-tab-content" id="tab-content-cp-build">
+              <div class="ec2-form-group">
+                <label class="ec2-label">Build Provider</label>
+                <select id="cp-build-provider" class="ec2-select">
+                  <option value="CodeBuild">AWS CodeBuild</option>
+                  <option value="Jenkins">Jenkins</option>
+                </select>
+              </div>
+
+              <div class="ec2-form-group">
+                <label class="ec2-label">Project Name</label>
+                <input type="text" id="cp-build-project" class="ec2-input" placeholder="my-build-project">
+              </div>
+
+              <div class="ec2-form-group">
+                <label class="ec2-label">Environment Image</label>
+                <input type="text" id="cp-build-image" class="ec2-input" placeholder="aws/codebuild/standard:7.0" value="aws/codebuild/standard:7.0">
+              </div>
+
+              <div class="ec2-form-group">
+                <label class="ec2-label">Buildspec File Path</label>
+                <input type="text" id="cp-buildspec" class="ec2-input" placeholder="buildspec.yml" value="buildspec.yml">
+              </div>
+
+              <div class="ec2-form-group">
+                <label class="ec2-label">Compute Type</label>
+                <select id="cp-build-compute" class="ec2-select">
+                  <option value="BUILD_GENERAL1_SMALL">BUILD_GENERAL1_SMALL (Small)</option>
+                  <option value="BUILD_GENERAL1_MEDIUM" selected>BUILD_GENERAL1_MEDIUM (Medium)</option>
+                  <option value="BUILD_GENERAL1_LARGE">BUILD_GENERAL1_LARGE (Large)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- DEPLOY TAB -->
+            <div class="ec2-tab-content" id="tab-content-cp-deploy">
+              <div class="ec2-form-group">
+                <label class="ec2-label">Deploy Provider</label>
+                <select id="cp-deploy-provider" class="ec2-select">
+                  <option value="ECS">Amazon ECS (Fargate)</option>
+                  <option value="S3">Amazon S3 (Static Web)</option>
+                  <option value="EC2">AWS CodeDeploy (EC2)</option>
+                  <option value="ElasticBeanstalk">AWS Elastic Beanstalk</option>
+                  <option value="Lambda">AWS Lambda</option>
+                </select>
+              </div>
+
+              <div class="ec2-form-group">
+                <label class="ec2-label">Deployment Configuration</label>
+                <select id="cp-deploy-config" class="ec2-select">
+                  <option value="CodeDeployDefault.ECSAllAtOnce">ECSAllAtOnce</option>
+                  <option value="CodeDeployDefault.ECSLinear10PercentEvery1Minutes">ECSLinear10PercentEvery1Minutes</option>
+                  <option value="CodeDeployDefault.ECSCanary10Percent5Minutes">ECSCanary10Percent5Minutes</option>
+                </select>
+              </div>
+
+              <div class="ec2-form-group">
+                <label class="ec2-label">Cluster / App / Bucket Name</label>
+                <input type="text" id="cp-deploy-app" class="ec2-input" placeholder="my-ecs-cluster-or-app">
+              </div>
+            </div>
+
+            <!-- CODE PREVIEW TAB -->
+            <div class="ec2-tab-content" id="tab-content-cp-preview">
+              <div class="ec2-form-group">
+                <label class="ec2-label">Generated Terraform Code (HCL)</label>
+                <textarea id="cp-preview-textarea" class="ec2-input" readonly style="height: 350px; font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.5; color: #22c55e; background: #0d0d0d; border-color: #2a2a2a;"></textarea>
+              </div>
+            </div>
+
+            <!-- DEPLOYMENTS TAB -->
+            <div class="ec2-tab-content" id="tab-content-cp-deployments">
+              <div class="section-heading">Pipeline Card Directory</div>
+              <div id="cp-cards-container" style="display: grid; grid-template-columns: 1fr; gap: 14px; margin-bottom: 24px;">
+                <!-- Dynamically populated cards -->
+              </div>
+
+              <div class="section-heading" style="margin-top: 24px;">Pipeline Detailed Records</div>
+              <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; overflow: hidden; margin-bottom: 12px; border-color:#2a2a2a;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; background:#0d0d0d;">
+                  <thead>
+                    <tr style="border-bottom: 1px solid #2a2a2a; background: #161b22;">
+                      <th style="padding: 10px 12px; color: #8b949e; font-weight: 500;">Pipeline Name</th>
+                      <th style="padding: 10px 12px; color: #8b949e; font-weight: 500;">Status</th>
+                      <th style="padding: 10px 12px; color: #8b949e; font-weight: 500;">Last Execution</th>
+                      <th style="padding: 10px 12px; color: #8b949e; font-weight: 500;">Stage</th>
+                      <th style="padding: 10px 12px; color: #8b949e; font-weight: 500; text-align: right;">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="cp-deployments-list-body">
+                    <!-- Dynamic deployments rows -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Action Container -->
+          <div class="ec2-deploy-btn-container" style="background:#0d0d0d; border-color:#2a2a2a;">
+            <button type="button" class="ec2-btn-primary" id="btn-cp-create" style="width: 100%; background: linear-gradient(135deg, #166534, #22c55e); font-weight: 700; border-radius: 6px; height: 42px;">
+              🚀 Create Pipeline
+            </button>
+          </div>
+        </div><!-- end svc-panel-codepipeline -->
+
       </div><!-- end ec2-left-col -->
 
       <!-- RIGHT: Live Logs (shared across all services) -->
@@ -2991,6 +3171,7 @@
           <div style="display:flex;align-items:center;height:100%;padding-left:20px;">
             <button type="button" class="ec2-tab active" id="tab-logs-terraform" style="background:none;border:none;color:#58a6ff;padding:8px 16px;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;cursor:pointer;border-bottom:2px solid #58a6ff;transition:all 0.15s;height:100%;">Terraform Logs</button>
             <button type="button" class="ec2-tab" id="tab-logs-startup" style="background:none;border:none;color:#8b949e;padding:8px 16px;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;height:100%;">Startup Logs</button>
+            <button type="button" class="ec2-tab" id="tab-logs-pipeline-execution" style="display:none;background:none;border:none;color:#8b949e;padding:8px 16px;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;height:100%;">Pipeline Execution Logs</button>
             <span id="log-status-badge" style="display:none;font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;margin-left:8px;"></span>
           </div>
           <button type="button" id="btn-clear-logs" style="background:none;border:1px solid #30363d;border-radius:4px;color:#8b949e;font-size:11px;padding:4px 10px;cursor:pointer;font-family:inherit;margin-right:20px;">Clear</button>
@@ -3002,6 +3183,44 @@
         <div class="ec2-log-terminal" id="startup-terminal-container" style="display:none;">
           <div class="log-line" style="color:#484f58;">— Select an active deployment and click "Startup Logs" to monitor execution —</div>
         </div>
+        <div class="ec2-log-terminal" id="pipeline-execution-container" style="display:none; background:#0d0d0d; padding:20px; overflow-y:auto; height:calc(100% - 45px); border-top:1px solid #2a2a2a;">
+          <div class="pipeline-execution-flow" style="display:flex; flex-direction:column; gap:20px;">
+            <!-- Stage: Source -->
+            <div class="pipeline-stage-card" id="exec-stage-source" style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:8px; padding:16px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <span class="stage-status-icon" id="stage-icon-source" style="font-size:16px;">⚪</span>
+                  <strong style="font-size:13px; color:#e2e8f0; font-family:'Inter',sans-serif;">Source Stage</strong>
+                </div>
+                <span class="stage-time-badge" id="stage-time-source" style="font-size:11px; color:#8b949e; font-family:'JetBrains Mono',monospace;">--:--:--</span>
+              </div>
+              <pre class="stage-logs" id="stage-logs-source" style="margin:0; background:#0d0d0d; border:1px solid #2a2a2a; border-radius:4px; padding:10px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#8b949e; max-height:120px; overflow-y:auto; white-space:pre-wrap; word-break:break-all;">Waiting to start...</pre>
+            </div>
+
+            <!-- Stage: Build -->
+            <div class="pipeline-stage-card" id="exec-stage-build" style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:8px; padding:16px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <span class="stage-status-icon" id="stage-icon-build" style="font-size:16px;">⚪</span>
+                  <strong style="font-size:13px; color:#e2e8f0; font-family:'Inter',sans-serif;">Build Stage</strong>
+                </div>
+                <span class="stage-time-badge" id="stage-time-build" style="font-size:11px; color:#8b949e; font-family:'JetBrains Mono',monospace;">--:--:--</span>
+              </div>
+              <pre class="stage-logs" id="stage-logs-build" style="margin:0; background:#0d0d0d; border:1px solid #2a2a2a; border-radius:4px; padding:10px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#8b949e; max-height:120px; overflow-y:auto; white-space:pre-wrap; word-break:break-all;">Waiting to start...</pre>
+            </div>
+
+            <!-- Stage: Deploy -->
+            <div class="pipeline-stage-card" id="exec-stage-deploy" style="background:#1a1a1a; border:1px solid #2a2a2a; border-radius:8px; padding:16px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <span class="stage-status-icon" id="stage-icon-deploy" style="font-size:16px;">⚪</span>
+                  <strong style="font-size:13px; color:#e2e8f0; font-family:'Inter',sans-serif;">Deploy Stage</strong>
+                </div>
+                <span class="stage-time-badge" id="stage-time-deploy" style="font-size:11px; color:#8b949e; font-family:'JetBrains Mono',monospace;">--:--:--</span>
+              </div>
+              <pre class="stage-logs" id="stage-logs-deploy" style="margin:0; background:#0d0d0d; border:1px solid #2a2a2a; border-radius:4px; padding:10px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#8b949e; max-height:120px; overflow-y:auto; white-space:pre-wrap; word-break:break-all;">Waiting to start...</pre>
+            </div>
+          </div>
 
         <!-- EC2 SSH Banner -->
         <div id="ssh-connect-banner" style="display:none;padding:16px 20px;border-top:1px solid #30363d;background:#0d1117;">

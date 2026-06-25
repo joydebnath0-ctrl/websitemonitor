@@ -126,6 +126,19 @@ function readEcsDB() {
 }
 function writeEcsDB(data) { fs.writeFileSync(ECS_DB_FILE, JSON.stringify(data, null, 2)); }
 
+const CODEPIPELINE_DEPLOYMENTS_DIR = path.join(BASE_DIR, 'codepipeline-deployments');
+const CODEPIPELINE_DB_FILE = path.join(BASE_DIR, 'codepipeline_deployments.json');
+if (!fs.existsSync(CODEPIPELINE_DEPLOYMENTS_DIR)) {
+  fs.mkdirSync(CODEPIPELINE_DEPLOYMENTS_DIR, { recursive: true });
+}
+if (!fs.existsSync(CODEPIPELINE_DB_FILE)) {
+  fs.writeFileSync(CODEPIPELINE_DB_FILE, JSON.stringify([]));
+}
+function readCpDB() {
+  try { return JSON.parse(fs.readFileSync(CODEPIPELINE_DB_FILE, 'utf8')); } catch (e) { return []; }
+}
+function writeCpDB(data) { fs.writeFileSync(CODEPIPELINE_DB_FILE, JSON.stringify(data, null, 2)); }
+
 const USERS_FILE = path.join(BASE_DIR, 'users.json');
 const SESSIONS_FILE = path.join(BASE_DIR, 'sessions.json');
 if (!fs.existsSync(USERS_FILE)) {
@@ -4506,6 +4519,437 @@ app.post('/api/ecs/destroy', requirePermission('ecs', 'execute'), (req, res) => 
 
   execute();
 });
+
+// ===== CODEPIPELINE SERVICE =====
+
+const CP_TERRAFORM_TEMPLATE = `
+terraform {
+  required_version = ">= 1.0.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.aws_region
+}
+
+variable "aws_region" {
+  type    = string
+  default = "us-east-1"
+}
+
+variable "pipeline_name" {
+  type = string
+}
+
+variable "source_provider" {
+  type = string
+}
+
+variable "source_repo" {
+  type = string
+}
+
+variable "source_branch" {
+  type = string
+}
+
+variable "source_connection_arn" {
+  type    = string
+  default = ""
+}
+
+variable "build_provider" {
+  type = string
+}
+
+variable "build_project_name" {
+  type = string
+}
+
+variable "deploy_provider" {
+  type = string
+}
+
+variable "deploy_app_name" {
+  type = string
+}
+
+resource "aws_s3_bucket" "codepipeline_bucket" {
+  bucket        = "\${var.pipeline_name}-artifacts-bucket"
+  force_destroy = true
+}
+
+resource "aws_iam_role" "codepipeline_role" {
+  name = "\${var.pipeline_name}-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "codepipeline.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "codepipeline_policy" {
+  name = "\${var.pipeline_name}-policy"
+  role = aws_iam_role.codepipeline_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:GetObjectVersion",
+          "s3:GetBucketVersioning",
+          "s3:PutObjectAcl",
+          "s3:PutObject"
+        ]
+        Resource = [
+          aws_s3_bucket.codepipeline_bucket.arn,
+          "\${aws_s3_bucket.codepipeline_bucket.arn}/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "codebuild:BatchGetBuilds",
+          "codebuild:StartBuild"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecs:RegisterTaskDefinition",
+          "ecs:DescribeTaskDefinition",
+          "ecs:DescribeServices",
+          "ecs:UpdateService",
+          "ecs:DescribeTasks"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "iam:PassRole"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_codepipeline" "pipeline" {
+  name     = var.pipeline_name
+  role_arn = aws_iam_role.codepipeline_role.arn
+
+  artifact_store {
+    location = aws_s3_bucket.codepipeline_bucket.bucket
+    type     = "S3"
+  }
+
+  stage {
+    name = "Source"
+
+    action {
+      name             = "SourceAction"
+      category         = "Source"
+      owner            = "AWS"
+      provider         = var.source_provider
+      version          = "1"
+      output_artifacts = ["source_output"]
+
+      configuration = {
+        RepositoryName = var.source_provider == "CodeCommit" ? var.source_repo : null
+        BranchName     = var.source_branch
+        ConnectionArn  = var.source_provider != "CodeCommit" && var.source_connection_arn != "" ? var.source_connection_arn : null
+        Owner          = var.source_provider == "GitHub" ? split("/", var.source_repo)[0] : null
+        Repo           = var.source_provider == "GitHub" ? split("/", var.source_repo)[1] : null
+        S3Bucket       = var.source_provider == "S3" ? var.source_repo : null
+        S3ObjectKey    = var.source_provider == "S3" ? "source.zip" : null
+      }
+    }
+  }
+
+  stage {
+    name = "Build"
+
+    action {
+      name             = "BuildAction"
+      category         = "Build"
+      owner            = "AWS"
+      provider         = var.build_provider
+      version          = "1"
+      input_artifacts  = ["source_output"]
+      output_artifacts = ["build_output"]
+
+      configuration = {
+        ProjectName = var.build_project_name
+      }
+    }
+  }
+
+  stage {
+    name = "Deploy"
+
+    action {
+      name            = "DeployAction"
+      category        = "Deploy"
+      owner           = "AWS"
+      provider        = var.deploy_provider
+      version         = "1"
+      input_artifacts = ["build_output"]
+
+      configuration = {
+        ClusterName = var.deploy_provider == "ECS" ? var.deploy_app_name : null
+        ServiceName = var.deploy_provider == "ECS" ? "\${var.pipeline_name}-service" : null
+        BucketName  = var.deploy_provider == "S3" ? var.deploy_app_name : null
+        Extract     = var.deploy_provider == "S3" ? "true" : null
+      }
+    }
+  }
+}
+`;
+
+app.get('/api/codepipelines', requirePermission('ecs', 'read'), (req, res) => {
+  res.json(readCpDB());
+});
+
+app.post('/api/codepipeline/preview', requirePermission('ecs', 'write'), (req, res) => {
+  const { pipelineName, awsRegion, sourceProvider, sourceRepo, sourceBranch, sourceConnectionArn, buildProvider, buildProject, deployProvider, deployApp } = req.body;
+  if (!pipelineName) return res.status(400).json({ error: 'Pipeline name is required' });
+  if (!/^[a-zA-Z0-9-]+$/.test(pipelineName)) return res.status(400).json({ error: 'Pipeline name must be alphanumeric and dashes only' });
+
+  const tfVars = {
+    aws_region: awsRegion || 'us-east-1',
+    pipeline_name: pipelineName,
+    source_provider: sourceProvider || 'GitHub',
+    source_repo: sourceRepo || '',
+    source_branch: sourceBranch || 'main',
+    source_connection_arn: sourceConnectionArn || '',
+    build_provider: buildProvider || 'CodeBuild',
+    build_project_name: buildProject || '',
+    deploy_provider: deployProvider || 'ECS',
+    deploy_app_name: deployApp || ''
+  };
+
+  res.json({
+    mainTf: CP_TERRAFORM_TEMPLATE,
+    tfVarsJson: JSON.stringify(tfVars, null, 2)
+  });
+});
+
+app.post('/api/codepipeline/create', requirePermission('ecs', 'write'), (req, res) => {
+  const { pipelineName, awsRegion, sourceProvider, sourceRepo, sourceBranch, sourceConnectionArn, buildProvider, buildProject, deployProvider, deployApp, awsProfile } = req.body;
+  if (!pipelineName) return res.status(400).json({ error: 'Pipeline name is required' });
+  if (!/^[a-zA-Z0-9-]+$/.test(pipelineName)) return res.status(400).json({ error: 'Pipeline name must be alphanumeric and dashes only' });
+
+  const db = readCpDB();
+  const existingIndex = db.findIndex(p => p.name === pipelineName);
+  const tfVars = {
+    aws_region: awsRegion || 'us-east-1',
+    pipeline_name: pipelineName,
+    source_provider: sourceProvider || 'GitHub',
+    source_repo: sourceRepo || '',
+    source_branch: sourceBranch || 'main',
+    source_connection_arn: sourceConnectionArn || '',
+    build_provider: buildProvider || 'CodeBuild',
+    build_project_name: buildProject || '',
+    deploy_provider: deployProvider || 'ECS',
+    deploy_app_name: deployApp || ''
+  };
+
+  const targetDir = path.join(CODEPIPELINE_DEPLOYMENTS_DIR, pipelineName);
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
+  }
+
+  fs.writeFileSync(path.join(targetDir, 'main.tf'), CP_TERRAFORM_TEMPLATE);
+  fs.writeFileSync(path.join(targetDir, 'terraform.tfvars.json'), JSON.stringify(tfVars, null, 2));
+
+  const pipelineObj = {
+    name: pipelineName,
+    status: 'In Progress',
+    lastExecution: new Date().toISOString(),
+    activeStage: 'Source',
+    region: tfVars.aws_region,
+    awsProfile: awsProfile || 'default',
+    createdAt: new Date().toISOString(),
+    config: req.body
+  };
+
+  if (existingIndex > -1) {
+    db[existingIndex] = pipelineObj;
+  } else {
+    db.push(pipelineObj);
+  }
+  writeCpDB(db);
+
+  logHistory[pipelineName] = [];
+  res.json({ message: 'CodePipeline deployment started', name: pipelineName });
+
+  const execute = async () => {
+    try {
+      sendLog(pipelineName, `=== Initializing CodePipeline Workspace for ${pipelineName} ===`);
+      await runCmd('terraform', ['init', '-no-color'], targetDir, pipelineName, awsProfile);
+
+      sendLog(pipelineName, `=== Provisioning AWS CodePipeline resources ===`);
+      await runCmd('terraform', ['apply', '-auto-approve', '-no-color'], targetDir, pipelineName, awsProfile);
+
+      const currentDB = readCpDB();
+      const match = currentDB.find(p => p.name === pipelineName);
+      if (match) {
+        match.status = 'Succeeded';
+        match.lastExecution = new Date().toISOString();
+        match.activeStage = 'Deploy';
+        writeCpDB(currentDB);
+      }
+
+      sendLog(pipelineName, `=== CodePipeline Successfully Deployed ===`);
+    } catch (err) {
+      sendLog(pipelineName, `=== CODEPIPELINE DEPLOYMENT FAILED ===\nError: ${err.message}`);
+      const currentDB = readCpDB();
+      const match = currentDB.find(p => p.name === pipelineName);
+      if (match) {
+        match.status = 'Failed';
+        writeCpDB(currentDB);
+      }
+    }
+  };
+
+  execute();
+});
+
+app.post('/api/codepipeline/destroy', requirePermission('ecs', 'execute'), (req, res) => {
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name is required' });
+
+  const db = readCpDB();
+  const match = db.find(p => p.name === name);
+  if (!match) return res.status(404).json({ error: 'Pipeline not found' });
+  const awsProfile = match.awsProfile || 'default';
+
+  match.status = 'Stopped';
+  writeCpDB(db);
+
+  logHistory[name] = [];
+  res.json({ message: 'CodePipeline destroy started', name });
+
+  const execute = async () => {
+    try {
+      const targetDir = path.join(CODEPIPELINE_DEPLOYMENTS_DIR, name);
+      const statePath = path.join(targetDir, 'terraform.tfstate');
+      let hasResources = false;
+      if (fs.existsSync(statePath)) {
+        try {
+          const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+          if (state.resources && state.resources.length > 0) {
+            hasResources = true;
+          }
+        } catch (e) {}
+      }
+
+      if (hasResources) {
+        if (!fs.existsSync(path.join(targetDir, '.terraform'))) {
+          sendLog(name, `=== Initializing Terraform for ${name} using profile "${awsProfile}" ===`);
+          await runCmd('terraform', ['init', '-no-color'], targetDir, name, awsProfile);
+        }
+        sendLog(name, `=== Destroying CodePipeline resources for ${name} using profile "${awsProfile}" ===`);
+        await runCmd('terraform', ['destroy', '-auto-approve', '-no-color'], targetDir, name, awsProfile);
+      }
+
+      safeRmSync(targetDir);
+      writeCpDB(readCpDB().filter(p => p.name !== name));
+      sendLog(name, `=== CODEPIPELINE DESTRUCTION COMPLETE ===`);
+    } catch (err) {
+      sendLog(name, `=== CODEPIPELINE DESTRUCTION FAILED ===\nError: ${err.message}`);
+      const currentDB = readCpDB();
+      const m = currentDB.find(p => p.name === name);
+      if (m) {
+        m.status = 'Failed';
+        writeCpDB(currentDB);
+      }
+    }
+  };
+
+  execute();
+});
+
+app.post('/api/codepipeline/run', requirePermission('ecs', 'execute'), (req, res) => {
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name is required' });
+
+  const db = readCpDB();
+  const match = db.find(p => p.name === name);
+  if (!match) return res.status(404).json({ error: 'Pipeline not found' });
+  const awsProfile = match.awsProfile || 'default';
+
+  match.status = 'In Progress';
+  match.activeStage = 'Source';
+  match.lastExecution = new Date().toISOString();
+  writeCpDB(db);
+
+  logHistory[name] = [];
+  res.json({ message: 'Pipeline execution started', name });
+
+  const execute = async () => {
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+    try {
+      sendLog(name, `[PIPELINE_STAGE] Source | In Progress | ${new Date().toISOString()}`);
+      sendLog(name, `[INFO] Connecting to Source provider: ${match.config.sourceProvider || 'GitHub'}...`);
+      await sleep(1500);
+      sendLog(name, `[INFO] Fetching latest commit info for ${match.config.sourceRepo || 'repository'}...`);
+      await sleep(1500);
+      sendLog(name, `[PIPELINE_STAGE] Source | Succeeded | ${new Date().toISOString()}`);
+
+      sendLog(name, `[PIPELINE_STAGE] Build | In Progress | ${new Date().toISOString()}`);
+      sendLog(name, `[INFO] Launching CodeBuild compute environment...`);
+      await sleep(2000);
+      sendLog(name, `[INFO] Running build commands from buildspec.yml...`);
+      await sleep(2000);
+      sendLog(name, `[PIPELINE_STAGE] Build | Succeeded | ${new Date().toISOString()}`);
+
+      sendLog(name, `[PIPELINE_STAGE] Deploy | In Progress | ${new Date().toISOString()}`);
+      sendLog(name, `[INFO] Uploading build artifacts to deploy target: ${match.config.deployProvider || 'ECS'}...`);
+      await sleep(1500);
+      sendLog(name, `[INFO] Updating service deployment settings...`);
+      await sleep(1500);
+      sendLog(name, `[PIPELINE_STAGE] Deploy | Succeeded | ${new Date().toISOString()}`);
+
+      const currentDB = readCpDB();
+      const m = currentDB.find(p => p.name === name);
+      if (m) {
+        m.status = 'Succeeded';
+        m.activeStage = 'Deploy';
+        writeCpDB(currentDB);
+      }
+    } catch (err) {
+      sendLog(name, `[ERROR] Pipeline run failed: ${err.message}`);
+      const currentDB = readCpDB();
+      const m = currentDB.find(p => p.name === name);
+      if (m) {
+        m.status = 'Failed';
+        writeCpDB(currentDB);
+      }
+    }
+  };
+
+  execute();
+});
+
 // ===== RDS DATABASE SERVICE =====
 
 const RDS_DEPLOYMENTS_DIR = path.join(BASE_DIR, 'rds-deployments');

@@ -3610,5 +3610,93 @@ body.light-theme .monitor-metric-value {
   font-size: 11px;
 }
 
+/* CodePipeline Specific styles */
+.pipeline-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.pipeline-stage-card {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transition: border-color 0.2s, transform 0.2s;
+}
+
+.pipeline-stage-card:hover {
+  border-color: #58a6ff;
+  transform: translateY(-2px);
+}
+
+.pipeline-stage-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #21262d;
+  padding-bottom: 8px;
+}
+
+.pipeline-stage-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pipeline-stage-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #c9d1d9;
+}
+
+.pipeline-stage-time {
+  font-size: 10px;
+  color: #8b949e;
+  font-family: monospace;
+}
+
+.pipeline-stage-console {
+  background: #090d13;
+  border: 1px solid #21262d;
+  border-radius: 6px;
+  padding: 8px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  color: #8b949e;
+  height: 120px;
+  max-height: 120px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Shake animation for errors */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.ec2-input-error {
+  border-color: #f85149 !important;
+  background-color: rgba(248, 81, 73, 0.05) !important;
+}
+
+.field-err {
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+
 
 
