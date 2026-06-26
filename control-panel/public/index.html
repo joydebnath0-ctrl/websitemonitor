@@ -606,7 +606,13 @@
               </div>
               <div class="ec2-form-group">
                 <label class="ec2-label">Key Pair / PEM Name</label>
-                <input type="text" id="ec2-key-name" class="ec2-input" placeholder="e.g. my-key-pair">
+                <div style="display:flex;gap:8px;">
+                  <select id="ec2-key-name-select" class="ec2-select" style="flex:1;margin:0;">
+                    <option value="">-- Loading Key Pairs... --</option>
+                  </select>
+                  <input type="text" id="ec2-key-name" class="ec2-input" placeholder="Or enter new name..." style="flex:1;margin:0;display:none;">
+                  <button type="button" class="ec2-btn-outline" id="btn-toggle-key-input" style="width:auto;padding:0 12px;font-size:12px;border-radius:6px;cursor:pointer;margin:0;" title="Enter Custom Name">✏️</button>
+                </div>
                 <p class="field-err" id="err-ec2-key-name" style="display:none;"></p>
                 <p style="font-size:11px;color:#8b949e;margin-top:4px;">Define a custom name for the created key pair and .pem file. Alphanumeric, hyphens, and underscores only.</p>
               </div>
@@ -1362,11 +1368,25 @@
                       <p class="field-err" id="err-ecs-name" style="display:none;"></p>
                     </div>
 
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px;">
                       <div>
                         <label class="ec2-label">AWS Profile</label>
                         <select id="ecs-profile" class="ec2-select">
                           <option value="default">default</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="ec2-label">AWS Region</label>
+                        <select id="ecs-region" class="ec2-select">
+                          <option value="us-east-1">us-east-1 (N. Virginia)</option>
+                          <option value="us-east-2">us-east-2 (Ohio)</option>
+                          <option value="us-west-1">us-west-1 (N. California)</option>
+                          <option value="us-west-2">us-west-2 (Oregon)</option>
+                          <option value="eu-west-1">eu-west-1 (Ireland)</option>
+                          <option value="eu-central-1">eu-central-1 (Frankfurt)</option>
+                          <option value="ap-south-1">ap-south-1 (Mumbai)</option>
+                          <option value="ap-southeast-1">ap-southeast-1 (Singapore)</option>
+                          <option value="ap-northeast-1">ap-northeast-1 (Tokyo)</option>
                         </select>
                       </div>
                       <div>

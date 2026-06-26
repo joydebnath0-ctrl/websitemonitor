@@ -2264,6 +2264,152 @@ function readS3DB() {
 }
 function writeS3DB(data) { fs.writeFileSync(S3_DB_FILE, JSON.stringify(data, null, 2)); }
 
+// === REAL-TIME AWS API RESOURCE DISCOVERY ===
+
+app.get('/api/aws/vpcs', requirePermission('vpc', 'read'), async (req, res) => {
+  const profile = req.query.profile || 'default';
+  const region = req.query.region || 'us-east-1';
+  try {
+    const data = await runCliJson(['ec2', 'describe-vpcs', '--region', region], profile);
+    const vpcs = (data.Vpcs || []).map(v => {
+      const nameTag = (v.Tags || []).find(t => t.Key === 'Name');
+      return {
+        vpcId: v.VpcId,
+        cidrBlock: v.CidrBlock,
+        name: nameTag ? nameTag.Value : v.VpcId,
+        status: v.State,
+        region,
+        awsProfile: profile
+      };
+    });
+    res.json(vpcs);
+  } catch (err) {
+    console.error('Failed to fetch AWS VPCs:', err);
+    res.status(500).json({ error: 'Failed to fetch AWS VPCs: ' + err.message });
+  }
+});
+
+app.get('/api/aws/subnets', requirePermission('vpc', 'read'), async (req, res) => {
+  const profile = req.query.profile || 'default';
+  const region = req.query.region || 'us-east-1';
+  const vpcId = req.query.vpcId;
+  if (!vpcId) {
+    return res.status(400).json({ error: 'vpcId query parameter is required' });
+  }
+  try {
+    const data = await runCliJson(['ec2', 'describe-subnets', '--region', region, '--filters', `Name=vpc-id,Values=${vpcId}`], profile);
+    const subnets = (data.Subnets || []).map(s => {
+      const nameTag = (s.Tags || []).find(t => t.Key === 'Name');
+      return {
+        subnetId: s.SubnetId,
+        cidrBlock: s.CidrBlock,
+        name: nameTag ? nameTag.Value : s.SubnetId,
+        availabilityZone: s.AvailabilityZone,
+        mapPublicIpOnLaunch: s.MapPublicIpOnLaunch,
+        vpcId
+      };
+    });
+    res.json(subnets);
+  } catch (err) {
+    console.error('Failed to fetch AWS subnets:', err);
+    res.status(500).json({ error: 'Failed to fetch AWS subnets: ' + err.message });
+  }
+});
+
+app.get('/api/aws/key-pairs', requirePermission('ec2', 'read'), async (req, res) => {
+  const profile = req.query.profile || 'default';
+  const region = req.query.region || 'us-east-1';
+  try {
+    const data = await runCliJson(['ec2', 'describe-key-pairs', '--region', region], profile);
+    const keyPairs = (data.KeyPairs || []).map(k => ({
+      keyName: k.KeyName,
+      keyPairId: k.KeyPairId
+    }));
+    res.json(keyPairs);
+  } catch (err) {
+    console.error('Failed to fetch AWS key pairs:', err);
+    res.status(500).json({ error: 'Failed to fetch AWS key pairs: ' + err.message });
+  }
+});
+
+app.get('/api/aws/s3-buckets', requirePermission('s3', 'read'), async (req, res) => {
+  const profile = req.query.profile || 'default';
+  try {
+    const data = await runCliJson(['s3api', 'list-buckets'], profile);
+    const buckets = (data.Buckets || []).map(b => ({
+      name: b.Name,
+      creationDate: b.CreationDate,
+      awsProfile: profile
+    }));
+    res.json(buckets);
+  } catch (err) {
+    console.error('Failed to fetch AWS S3 buckets:', err);
+    res.status(500).json({ error: 'Failed to fetch AWS S3 buckets: ' + err.message });
+  }
+});
+
+app.get('/api/aws/rds-instances', requirePermission('rds', 'read'), async (req, res) => {
+  const profile = req.query.profile || 'default';
+  const region = req.query.region || 'us-east-1';
+  try {
+    const data = await runCliJson(['rds', 'describe-db-instances', '--region', region], profile);
+    const instances = (data.DBInstances || []).map(db => ({
+      dbInstanceIdentifier: db.DBInstanceIdentifier,
+      dbInstanceClass: db.DBInstanceClass,
+      engine: db.Engine,
+      status: db.DBInstanceStatus,
+      endpoint: db.Endpoint ? db.Endpoint.Address : null,
+      region,
+      awsProfile: profile
+    }));
+    res.json(instances);
+  } catch (err) {
+    console.error('Failed to fetch AWS RDS instances:', err);
+    res.status(500).json({ error: 'Failed to fetch AWS RDS instances: ' + err.message });
+  }
+});
+
+app.get('/api/aws/ecs-clusters', requirePermission('ecs', 'read'), async (req, res) => {
+  const profile = req.query.profile || 'default';
+  const region = req.query.region || 'us-east-1';
+  try {
+    const data = await runCliJson(['ecs', 'list-clusters', '--region', region], profile);
+    const clusters = (data.clusterArns || []).map(arn => {
+      const parts = arn.split('/');
+      return {
+        clusterName: parts[parts.length - 1],
+        clusterArn: arn,
+        region,
+        awsProfile: profile
+      };
+    });
+    res.json(clusters);
+  } catch (err) {
+    console.error('Failed to fetch AWS ECS clusters:', err);
+    res.status(500).json({ error: 'Failed to fetch AWS ECS clusters: ' + err.message });
+  }
+});
+
+app.get('/api/aws/codepipelines', requirePermission('ecs', 'read'), async (req, res) => {
+  const profile = req.query.profile || 'default';
+  const region = req.query.region || 'us-east-1';
+  try {
+    const data = await runCliJson(['codepipeline', 'list-pipelines', '--region', region], profile);
+    const pipelines = (data.pipelines || []).map(p => ({
+      name: p.name,
+      version: p.version,
+      createdAt: p.created,
+      updatedAt: p.updated,
+      region,
+      awsProfile: profile
+    }));
+    res.json(pipelines);
+  } catch (err) {
+    console.error('Failed to fetch AWS CodePipelines:', err);
+    res.status(500).json({ error: 'Failed to fetch AWS CodePipelines: ' + err.message });
+  }
+});
+
 // === VPC ROUTES ===
 
 app.get('/api/vpcs', requirePermission('vpc','read'), (req, res) => {

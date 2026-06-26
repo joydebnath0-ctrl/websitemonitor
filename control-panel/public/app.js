@@ -865,9 +865,34 @@ function initEC2UI() {
   });
 
   nameInput.addEventListener('input', () => { document.getElementById('err-instance-name').style.display = 'none'; updateEC2Summary(); });
-  regionSelect.addEventListener('change', () => { updateVpcOptionsForEC2(); updateEC2Summary(); });
+  regionSelect.addEventListener('change', () => { syncAwsDiscovery('ec2'); updateEC2Summary(); });
   instanceTypeSelect.addEventListener('change', updateEC2Summary);
-  profileSelect.addEventListener('change', updateEC2Summary);
+  profileSelect.addEventListener('change', () => { syncAwsDiscovery('ec2'); updateEC2Summary(); });
+
+  const keyNameSelect = document.getElementById('ec2-key-name-select');
+  const keyNameInput = document.getElementById('ec2-key-name');
+  const btnToggleKeyInput = document.getElementById('btn-toggle-key-input');
+  
+  if (keyNameSelect && keyNameInput && btnToggleKeyInput) {
+    keyNameSelect.addEventListener('change', () => {
+      keyNameInput.value = keyNameSelect.value;
+      updateEC2Summary();
+    });
+    
+    btnToggleKeyInput.addEventListener('click', () => {
+      const showInput = keyNameInput.style.display === 'none';
+      keyNameInput.style.display = showInput ? 'block' : 'none';
+      keyNameSelect.style.display = showInput ? 'none' : 'block';
+      btnToggleKeyInput.textContent = showInput ? '📋' : '✏️';
+      btnToggleKeyInput.title = showInput ? 'Select Existing Key Pair' : 'Enter Custom Name';
+      if (!showInput) {
+        keyNameInput.value = keyNameSelect.value;
+      } else {
+        keyNameInput.value = '';
+      }
+      updateEC2Summary();
+    });
+  }
 
   const btnAddRule = document.getElementById('btn-add-rule');
   const rulePortInput = document.getElementById('rule-port');
@@ -1955,6 +1980,13 @@ function initCfUI() {
     });
   });
 
+  const cfProfileSelect = document.getElementById('cf-profile');
+  if (cfProfileSelect) {
+    cfProfileSelect.addEventListener('change', () => {
+      syncAwsDiscovery('cf');
+    });
+  }
+
   ['cf-name','cf-s3-bucket','cf-price-class','cf-protocol-policy','cf-default-ttl','cf-min-ttl','cf-max-ttl','cf-compress'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', updateCfSummary);
@@ -2028,8 +2060,222 @@ async function fetchAwsProfiles(selectProfileName = null) {
     updateVpcSummary();
     updateS3Summary();
     updateCfSummary();
+
+    // Trigger real-time resource discovery for newly loaded profiles
+    setTimeout(() => {
+      syncAwsDiscovery('ec2');
+      syncAwsDiscovery('ecs');
+      syncAwsDiscovery('cf');
+    }, 100);
   } catch (err) {
     console.error('Error loading AWS profiles:', err);
+  }
+}
+
+// ===== REAL-TIME AWS RESOURCE DISCOVERY =====
+
+let awsVpcsCache = {};
+let awsSubnetsCache = {};
+let awsKeyPairsCache = {};
+let awsS3BucketsCache = {};
+
+async function fetchRealAwsVpcs(profile, region) {
+  const cacheKey = `${profile}:${region}`;
+  if (awsVpcsCache[cacheKey]) return awsVpcsCache[cacheKey];
+  try {
+    const res = await fetch(`/api/aws/vpcs?profile=${encodeURIComponent(profile)}&region=${encodeURIComponent(region)}`);
+    if (!res.ok) throw new Error('API error');
+    const data = await res.json();
+    awsVpcsCache[cacheKey] = data;
+    return data;
+  } catch (err) {
+    console.error('Error fetching real AWS VPCs:', err);
+    return [];
+  }
+}
+
+async function fetchRealAwsSubnets(profile, region, vpcId) {
+  const cacheKey = `${profile}:${region}:${vpcId}`;
+  if (awsSubnetsCache[cacheKey]) return awsSubnetsCache[cacheKey];
+  try {
+    const res = await fetch(`/api/aws/subnets?profile=${encodeURIComponent(profile)}&region=${encodeURIComponent(region)}&vpcId=${encodeURIComponent(vpcId)}`);
+    if (!res.ok) throw new Error('API error');
+    const data = await res.json();
+    awsSubnetsCache[cacheKey] = data;
+    return data;
+  } catch (err) {
+    console.error('Error fetching real AWS subnets:', err);
+    return [];
+  }
+}
+
+async function fetchRealAwsKeyPairs(profile, region) {
+  const cacheKey = `${profile}:${region}`;
+  if (awsKeyPairsCache[cacheKey]) return awsKeyPairsCache[cacheKey];
+  try {
+    const res = await fetch(`/api/aws/key-pairs?profile=${encodeURIComponent(profile)}&region=${encodeURIComponent(region)}`);
+    if (!res.ok) throw new Error('API error');
+    const data = await res.json();
+    awsKeyPairsCache[cacheKey] = data;
+    return data;
+  } catch (err) {
+    console.error('Error fetching real AWS key pairs:', err);
+    return [];
+  }
+}
+
+async function fetchRealAwsS3Buckets(profile) {
+  const cacheKey = profile;
+  if (awsS3BucketsCache[cacheKey]) return awsS3BucketsCache[cacheKey];
+  try {
+    const res = await fetch(`/api/aws/s3-buckets?profile=${encodeURIComponent(profile)}`);
+    if (!res.ok) throw new Error('API error');
+    const data = await res.json();
+    awsS3BucketsCache[cacheKey] = data;
+    return data;
+  } catch (err) {
+    console.error('Error fetching real AWS S3 buckets:', err);
+    return [];
+  }
+}
+
+async function syncAwsDiscovery(service) {
+  if (service === 'ec2') {
+    const profile = document.getElementById('aws-profile') ? document.getElementById('aws-profile').value : 'default';
+    const region = document.getElementById('aws-region') ? document.getElementById('aws-region').value : 'us-east-1';
+    
+    // Fetch real VPCs
+    const realVpcs = await fetchRealAwsVpcs(profile, region);
+    const vpcSelect = document.getElementById('ec2-vpc');
+    if (vpcSelect) {
+      const previouslySelected = vpcSelect.value;
+      vpcSelect.innerHTML = '<option value="">Default VPC</option>';
+      
+      // Add local active VPCs
+      activeVpcs.filter(v => v.status === 'active' && v.region === region).forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v.name;
+        opt.textContent = `${v.name} (${v.vpcId || 'Local'}) [Local]`;
+        opt.dataset.type = 'local';
+        vpcSelect.appendChild(opt);
+      });
+      
+      // Add real AWS VPCs
+      realVpcs.forEach(v => {
+        const existsLocally = activeVpcs.some(lv => lv.vpcId === v.vpcId);
+        if (!existsLocally) {
+          const opt = document.createElement('option');
+          opt.value = v.vpcId;
+          opt.textContent = `${v.name || 'Unnamed VPC'} (${v.vpcId}) [AWS]`;
+          opt.dataset.type = 'aws';
+          opt.dataset.profile = profile;
+          opt.dataset.region = region;
+          vpcSelect.appendChild(opt);
+        }
+      });
+      
+      vpcSelect.value = previouslySelected;
+      updateSubnetOptionsForEC2();
+    }
+    
+    // Fetch real Key Pairs
+    const keySelect = document.getElementById('ec2-key-name-select');
+    if (keySelect) {
+      const previouslySelected = keySelect.value;
+      keySelect.innerHTML = '<option value="">-- Select Key Pair --</option>';
+      const realKeys = await fetchRealAwsKeyPairs(profile, region);
+      realKeys.forEach(k => {
+        const opt = document.createElement('option');
+        opt.value = k.keyName;
+        opt.textContent = k.keyName;
+        keySelect.appendChild(opt);
+      });
+      keySelect.value = previouslySelected;
+      const keyNameInput = document.getElementById('ec2-key-name');
+      if (keySelect.value && keyNameInput) {
+        keyNameInput.value = keySelect.value;
+      }
+    }
+  } else if (service === 'ecs') {
+    const profile = document.getElementById('ecs-profile') ? document.getElementById('ecs-profile').value : 'default';
+    const region = document.getElementById('ecs-region') ? document.getElementById('ecs-region').value : 'us-east-1';
+    
+    // Fetch real VPCs
+    const realVpcs = await fetchRealAwsVpcs(profile, region);
+    const vpcSelect = document.getElementById('ecs-vpc');
+    if (vpcSelect) {
+      const previouslySelected = vpcSelect.value;
+      vpcSelect.innerHTML = '<option value="">-- Select VPC --</option>';
+      
+      // Add local active VPCs
+      activeVpcs.filter(v => v.status === 'active' && v.region === region).forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v.name;
+        opt.textContent = `${v.name} (${v.vpcId || 'Local'}) [Local]`;
+        opt.dataset.type = 'local';
+        opt.dataset.profile = profile;
+        opt.dataset.region = region;
+        vpcSelect.appendChild(opt);
+      });
+      
+      // Add real AWS VPCs
+      realVpcs.forEach(v => {
+        const existsLocally = activeVpcs.some(lv => lv.vpcId === v.vpcId);
+        if (!existsLocally) {
+          const opt = document.createElement('option');
+          opt.value = v.vpcId;
+          opt.textContent = `${v.name || 'Unnamed VPC'} (${v.vpcId}) [AWS]`;
+          opt.dataset.type = 'aws';
+          opt.dataset.profile = profile;
+          opt.dataset.region = region;
+          vpcSelect.appendChild(opt);
+        }
+      });
+      
+      vpcSelect.value = previouslySelected;
+      updateSubnetOptionsForEcs();
+    }
+    
+    // Trigger role/ECR/SG/ALB/Cert/EFS/SSM/Secrets loading
+    if (typeof fetchEcsRoles === 'function') fetchEcsRoles(profile);
+    if (typeof fetchEcsRepositories === 'function') fetchEcsRepositories(profile, region);
+    if (typeof fetchEcsSecurityGroups === 'function') fetchEcsSecurityGroups(profile, region);
+    if (typeof fetchEcsLoadBalancers === 'function') fetchEcsLoadBalancers(profile, region);
+    if (typeof fetchEcsCertificates === 'function') fetchEcsCertificates(profile, region);
+    if (typeof fetchEcsFileSystems === 'function') fetchEcsFileSystems(profile, region);
+    if (typeof fetchEcsSsmParameters === 'function') fetchEcsSsmParameters(profile, region);
+    if (typeof fetchEcsSecrets === 'function') fetchEcsSecrets(profile, region);
+  } else if (service === 'cf') {
+    const profile = document.getElementById('cf-profile') ? document.getElementById('cf-profile').value : 'default';
+    const realBuckets = await fetchRealAwsS3Buckets(profile);
+    const bucketSelect = document.getElementById('cf-s3-bucket');
+    if (bucketSelect) {
+      const previouslySelected = bucketSelect.value;
+      bucketSelect.innerHTML = '<option value="">-- Select S3 Bucket --</option>';
+      
+      // Add local active S3 buckets
+      activeS3Buckets.filter(b => b.status === 'active').forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b.name;
+        opt.textContent = `${b.name} [Local]`;
+        opt.dataset.type = 'local';
+        bucketSelect.appendChild(opt);
+      });
+      
+      // Add real S3 buckets
+      realBuckets.forEach(b => {
+        const existsLocally = activeS3Buckets.some(lb => lb.name === b.name);
+        if (!existsLocally) {
+          const opt = document.createElement('option');
+          opt.value = b.name;
+          opt.textContent = `${b.name} [AWS]`;
+          opt.dataset.type = 'aws';
+          bucketSelect.appendChild(opt);
+        }
+      });
+      
+      bucketSelect.value = previouslySelected;
+    }
   }
 }
 
@@ -3372,64 +3618,93 @@ function updateVpcOptionsForEC2() {
   updateSubnetOptionsForEC2();
 }
 
-function updateSubnetOptionsForEC2() {
+async function updateSubnetOptionsForEC2() {
   const vpcSelect = document.getElementById('ec2-vpc');
   const subnetSelect = document.getElementById('ec2-subnet');
   const container = document.getElementById('ec2-subnet-container');
   if (!vpcSelect || !subnetSelect || !container) return;
 
-  const vpcName = vpcSelect.value;
-  if (!vpcName) {
+  const vpcVal = vpcSelect.value;
+  if (!vpcVal) {
     container.style.display = 'none';
     subnetSelect.innerHTML = '<option value="">Default Subnet</option>';
     subnetSelect.value = '';
     return;
   }
 
-  const vpc = activeVpcs.find(v => v.name === vpcName);
-  if (!vpc) {
-    container.style.display = 'none';
-    subnetSelect.innerHTML = '<option value="">Default Subnet</option>';
-    subnetSelect.value = '';
-    return;
-  }
-
+  const selectedOption = vpcSelect.options[vpcSelect.selectedIndex];
+  const isAws = selectedOption ? selectedOption.dataset.type === 'aws' : false;
   container.style.display = 'block';
+
   const previouslySelected = subnetSelect.value;
-  subnetSelect.innerHTML = '';
+  subnetSelect.innerHTML = '<option value="">-- Loading Subnets... --</option>';
 
-  const subnets = [];
-  if (Array.isArray(vpc.publicSubnetIds)) {
-    vpc.publicSubnetIds.forEach((id, idx) => {
-      subnets.push({ value: id, label: `Public Subnet ${idx + 1} (${id})` });
-    });
-  }
-  if (Array.isArray(vpc.privateSubnetIds)) {
-    vpc.privateSubnetIds.forEach((id, idx) => {
-      subnets.push({ value: id, label: `Private Subnet ${idx + 1} (${id})` });
-    });
-  }
-
-  if (subnets.length === 0) {
-    const opt = document.createElement('option');
-    opt.value = '';
-    opt.textContent = 'No Subnets Available (Apply VPC first)';
-    subnetSelect.appendChild(opt);
-    subnetSelect.value = '';
-    return;
-  }
-
-  subnets.forEach(sub => {
-    const opt = document.createElement('option');
-    opt.value = sub.value;
-    opt.textContent = sub.label;
-    subnetSelect.appendChild(opt);
-  });
-
-  if (subnets.find(s => s.value === previouslySelected)) {
-    subnetSelect.value = previouslySelected;
+  if (isAws) {
+    const profile = selectedOption.dataset.profile;
+    const region = selectedOption.dataset.region;
+    const realSubnets = await fetchRealAwsSubnets(profile, region, vpcVal);
+    subnetSelect.innerHTML = '';
+    if (realSubnets.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'No Subnets Found';
+      subnetSelect.appendChild(opt);
+      subnetSelect.value = '';
+    } else {
+      realSubnets.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.subnetId;
+        opt.textContent = `${s.name || s.subnetId} (${s.cidrBlock}) [${s.availabilityZone}]`;
+        subnetSelect.appendChild(opt);
+      });
+      if (realSubnets.some(s => s.subnetId === previouslySelected)) {
+        subnetSelect.value = previouslySelected;
+      } else {
+        subnetSelect.selectedIndex = 0;
+      }
+    }
   } else {
-    subnetSelect.value = subnets[0].value;
+    const vpc = activeVpcs.find(v => v.name === vpcVal);
+    if (!vpc) {
+      container.style.display = 'none';
+      subnetSelect.innerHTML = '<option value="">Default Subnet</option>';
+      subnetSelect.value = '';
+      return;
+    }
+    subnetSelect.innerHTML = '';
+    const subnets = [];
+    if (Array.isArray(vpc.publicSubnetIds)) {
+      vpc.publicSubnetIds.forEach((id, idx) => {
+        subnets.push({ value: id, label: `Public Subnet ${idx + 1} (${id})` });
+      });
+    }
+    if (Array.isArray(vpc.privateSubnetIds)) {
+      vpc.privateSubnetIds.forEach((id, idx) => {
+        subnets.push({ value: id, label: `Private Subnet ${idx + 1} (${id})` });
+      });
+    }
+
+    if (subnets.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'No Subnets Available (Apply VPC first)';
+      subnetSelect.appendChild(opt);
+      subnetSelect.value = '';
+      return;
+    }
+
+    subnets.forEach(sub => {
+      const opt = document.createElement('option');
+      opt.value = sub.value;
+      opt.textContent = sub.label;
+      subnetSelect.appendChild(opt);
+    });
+
+    if (subnets.find(s => s.value === previouslySelected)) {
+      subnetSelect.value = previouslySelected;
+    } else {
+      subnetSelect.value = subnets[0].value;
+    }
   }
 }
 
@@ -4590,6 +4865,20 @@ function initEcsUI() {
     }
   });
 
+  // Bind profile and region change listeners to trigger ECS discovery
+  const ecsProfileSelect = document.getElementById('ecs-profile');
+  const ecsRegionSelect = document.getElementById('ecs-region');
+  if (ecsProfileSelect) {
+    ecsProfileSelect.addEventListener('change', () => {
+      syncAwsDiscovery('ecs');
+    });
+  }
+  if (ecsRegionSelect) {
+    ecsRegionSelect.addEventListener('change', () => {
+      syncAwsDiscovery('ecs');
+    });
+  }
+
   // Section 1: Launch Type switch
   document.querySelectorAll('input[name="ecs-launch-type"]').forEach(radio => {
     radio.addEventListener('change', (e) => {
@@ -4792,44 +5081,89 @@ function updateEcsSummary() {
   document.getElementById('ecs-summary-vpc').textContent = vpc ? `${vpc} (${pubCount} pub, ${privCount} priv subnets)` : '\u2014';
 }
 
-function updateSubnetOptionsForEcs() {
+async function updateSubnetOptionsForEcs() {
   const vpcSelect = document.getElementById('ecs-vpc');
   const pubContainer = document.getElementById('ecs-public-subnets-container');
   const privContainer = document.getElementById('ecs-private-subnets-container');
   if (!vpcSelect || !pubContainer || !privContainer) return;
-  const vpcName = vpcSelect.value;
-  if (!vpcName) {
+  const vpcVal = vpcSelect.value;
+  if (!vpcVal) {
     pubContainer.innerHTML = '<p style="margin:0;color:#8b949e;">Select a VPC first</p>';
     privContainer.innerHTML = '<p style="margin:0;color:#8b949e;">Select a VPC first</p>';
     return;
   }
-  const vpc = activeVpcs.find(v => v.name === vpcName);
-  if (!vpc) {
-    pubContainer.innerHTML = '<p style="margin:0;color:#8b949e;">VPC not found</p>';
-    privContainer.innerHTML = '<p style="margin:0;color:#8b949e;">VPC not found</p>';
-    return;
-  }
-  // Public Subnets checkboxes
-  if (Array.isArray(vpc.publicSubnetIds) && vpc.publicSubnetIds.length > 0) {
-    pubContainer.innerHTML = vpc.publicSubnetIds.map((id, idx) => `
-      <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;">
-        <input type="checkbox" name="ecs-pub-sub" value="${id}" checked onchange="updateEcsSummary(); runEcsPreflightChecks();">
-        <span>Pub Subnet ${idx+1} (${id})</span>
-      </label>
-    `).join('');
+
+  const selectedOption = vpcSelect.options[vpcSelect.selectedIndex];
+  const isAws = selectedOption ? selectedOption.dataset.type === 'aws' : false;
+
+  if (isAws) {
+    pubContainer.innerHTML = '<p style="margin:0;color:#8b949e;">Loading public subnets...</p>';
+    privContainer.innerHTML = '<p style="margin:0;color:#8b949e;">Loading private subnets...</p>';
+    const profile = selectedOption.dataset.profile;
+    const region = selectedOption.dataset.region;
+    const realSubnets = await fetchRealAwsSubnets(profile, region, vpcVal);
+    
+    // Distribute subnets: if mapPublicIpOnLaunch is true, it is public, otherwise private
+    const publicSubnets = realSubnets.filter(s => s.mapPublicIpOnLaunch);
+    const privateSubnets = realSubnets.filter(s => !s.mapPublicIpOnLaunch);
+
+    if (publicSubnets.length > 0) {
+      pubContainer.innerHTML = publicSubnets.map((s, idx) => `
+        <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;">
+          <input type="checkbox" name="ecs-pub-sub" value="${s.subnetId}" checked onchange="updateEcsSummary(); runEcsPreflightChecks();">
+          <span>Pub Subnet ${idx+1} (${s.subnetId})</span>
+        </label>
+      `).join('');
+    } else if (realSubnets.length > 0) {
+      pubContainer.innerHTML = realSubnets.map((s, idx) => `
+        <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;">
+          <input type="checkbox" name="ecs-pub-sub" value="${s.subnetId}" checked onchange="updateEcsSummary(); runEcsPreflightChecks();">
+          <span>Subnet ${idx+1} (${s.subnetId})</span>
+        </label>
+      `).join('');
+    } else {
+      pubContainer.innerHTML = '<p style="margin:0;color:#ff7b72;">No subnets found</p>';
+    }
+
+    if (privateSubnets.length > 0) {
+      privContainer.innerHTML = privateSubnets.map((s, idx) => `
+        <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;">
+          <input type="checkbox" name="ecs-priv-sub" value="${s.subnetId}" checked onchange="updateEcsSummary(); runEcsPreflightChecks();">
+          <span>Priv Subnet ${idx+1} (${s.subnetId})</span>
+        </label>
+      `).join('');
+    } else {
+      privContainer.innerHTML = '<p style="margin:0;color:#8b949e;">No private subnets found</p>';
+    }
   } else {
-    pubContainer.innerHTML = '<p style="margin:0;color:#ff7b72;">No public subnets</p>';
-  }
-  // Private Subnets checkboxes
-  if (Array.isArray(vpc.privateSubnetIds) && vpc.privateSubnetIds.length > 0) {
-    privContainer.innerHTML = vpc.privateSubnetIds.map((id, idx) => `
-      <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;">
-        <input type="checkbox" name="ecs-priv-sub" value="${id}" checked onchange="updateEcsSummary(); runEcsPreflightChecks();">
-        <span>Priv Subnet ${idx+1} (${id})</span>
-      </label>
-    `).join('');
-  } else {
-    privContainer.innerHTML = '<p style="margin:0;color:#ff7b72;">No private subnets</p>';
+    const vpc = activeVpcs.find(v => v.name === vpcVal);
+    if (!vpc) {
+      pubContainer.innerHTML = '<p style="margin:0;color:#8b949e;">VPC not found</p>';
+      privContainer.innerHTML = '<p style="margin:0;color:#8b949e;">VPC not found</p>';
+      return;
+    }
+    // Public Subnets checkboxes
+    if (Array.isArray(vpc.publicSubnetIds) && vpc.publicSubnetIds.length > 0) {
+      pubContainer.innerHTML = vpc.publicSubnetIds.map((id, idx) => `
+        <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;">
+          <input type="checkbox" name="ecs-pub-sub" value="${id}" checked onchange="updateEcsSummary(); runEcsPreflightChecks();">
+          <span>Pub Subnet ${idx+1} (${id})</span>
+        </label>
+      `).join('');
+    } else {
+      pubContainer.innerHTML = '<p style="margin:0;color:#ff7b72;">No public subnets</p>';
+    }
+    // Private Subnets checkboxes
+    if (Array.isArray(vpc.privateSubnetIds) && vpc.privateSubnetIds.length > 0) {
+      privContainer.innerHTML = vpc.privateSubnetIds.map((id, idx) => `
+        <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;">
+          <input type="checkbox" name="ecs-priv-sub" value="${id}" checked onchange="updateEcsSummary(); runEcsPreflightChecks();">
+          <span>Priv Subnet ${idx+1} (${id})</span>
+        </label>
+      `).join('');
+    } else {
+      privContainer.innerHTML = '<p style="margin:0;color:#ff7b72;">No private subnets</p>';
+    }
   }
   updateEcsSummary();
   runEcsPreflightChecks();
