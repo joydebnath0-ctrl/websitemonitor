@@ -2081,7 +2081,7 @@ let awsS3BucketsCache = {};
 
 async function fetchRealAwsVpcs(profile, region) {
   const cacheKey = `${profile}:${region}`;
-  if (awsVpcsCache[cacheKey]) return awsVpcsCache[cacheKey];
+  if (awsVpcsCache[cacheKey] && awsVpcsCache[cacheKey].length > 0) return awsVpcsCache[cacheKey];
   try {
     const res = await fetch(`/api/aws/vpcs?profile=${encodeURIComponent(profile)}&region=${encodeURIComponent(region)}`);
     if (!res.ok) throw new Error('API error');
@@ -2096,7 +2096,7 @@ async function fetchRealAwsVpcs(profile, region) {
 
 async function fetchRealAwsSubnets(profile, region, vpcId) {
   const cacheKey = `${profile}:${region}:${vpcId}`;
-  if (awsSubnetsCache[cacheKey]) return awsSubnetsCache[cacheKey];
+  if (awsSubnetsCache[cacheKey] && awsSubnetsCache[cacheKey].length > 0) return awsSubnetsCache[cacheKey];
   try {
     const res = await fetch(`/api/aws/subnets?profile=${encodeURIComponent(profile)}&region=${encodeURIComponent(region)}&vpcId=${encodeURIComponent(vpcId)}`);
     if (!res.ok) throw new Error('API error');
@@ -2111,7 +2111,7 @@ async function fetchRealAwsSubnets(profile, region, vpcId) {
 
 async function fetchRealAwsKeyPairs(profile, region) {
   const cacheKey = `${profile}:${region}`;
-  if (awsKeyPairsCache[cacheKey]) return awsKeyPairsCache[cacheKey];
+  if (awsKeyPairsCache[cacheKey] && awsKeyPairsCache[cacheKey].length > 0) return awsKeyPairsCache[cacheKey];
   try {
     const res = await fetch(`/api/aws/key-pairs?profile=${encodeURIComponent(profile)}&region=${encodeURIComponent(region)}`);
     if (!res.ok) throw new Error('API error');
@@ -2126,7 +2126,7 @@ async function fetchRealAwsKeyPairs(profile, region) {
 
 async function fetchRealAwsS3Buckets(profile) {
   const cacheKey = profile;
-  if (awsS3BucketsCache[cacheKey]) return awsS3BucketsCache[cacheKey];
+  if (awsS3BucketsCache[cacheKey] && awsS3BucketsCache[cacheKey].length > 0) return awsS3BucketsCache[cacheKey];
   try {
     const res = await fetch(`/api/aws/s3-buckets?profile=${encodeURIComponent(profile)}`);
     if (!res.ok) throw new Error('API error');
@@ -2273,6 +2273,12 @@ async function syncAwsDiscovery(service) {
           bucketSelect.appendChild(opt);
         }
       });
+
+      // Optionally add a manual input option
+      const manualOpt = document.createElement('option');
+      manualOpt.value = '__manual__';
+      manualOpt.textContent = '→ Enter bucket name manually...';
+      bucketSelect.appendChild(manualOpt);
       
       bucketSelect.value = previouslySelected;
     }
@@ -3100,48 +3106,31 @@ function updateCfSummary() {
 
 // ===== S3 BUCKET OPTIONS FOR CF =====
 async function fetchS3BucketOptions() {
+  await syncAwsDiscovery('cf');
   const sel = document.getElementById('cf-s3-bucket');
-  try {
-    const res = await fetch('/api/s3-bucket-names');
-    const buckets = await res.json();
-    sel.innerHTML = '<option value="">\u2014 Select or enter bucket name \u2014</option>';
-    buckets.forEach(b => {
-      const opt = document.createElement('option');
-      opt.value = b.name;
-      opt.textContent = `${b.name} (${b.region}) [${b.status}]`;
-      if (b.status !== 'active') opt.style.color = '#8b949e';
-      sel.appendChild(opt);
-    });
-    // Optionally add a manual input option
-    const manualOpt = document.createElement('option');
-    manualOpt.value = '__manual__';
-    manualOpt.textContent = '\u2192 Enter bucket name manually...';
-    sel.appendChild(manualOpt);
-  } catch (e) {
-    sel.innerHTML = '<option value="">Error loading buckets</option>';
-  }
-  // Handle manual input
-  sel.onchange = () => {
-    document.getElementById('err-cf-s3-bucket').style.display = 'none';
-    const manualInput = document.getElementById('cf-bucket-manual-input');
-    if (sel.value === '__manual__') {
-      if (!manualInput) {
-        const inp = document.createElement('input');
-        inp.type = 'text';
-        inp.id = 'cf-bucket-manual-input';
-        inp.className = 'ec2-input';
-        inp.placeholder = 'my-existing-bucket-name';
-        inp.style.marginTop = '8px';
-        inp.addEventListener('input', updateCfSummary);
-        sel.parentNode.appendChild(inp);
+  if (sel) {
+    sel.onchange = () => {
+      document.getElementById('err-cf-s3-bucket').style.display = 'none';
+      if (sel.value === '__manual__') {
+        const manualName = prompt('Enter S3 bucket name:');
+        if (manualName && manualName.trim()) {
+          const customOpt = document.createElement('option');
+          customOpt.value = manualName.trim();
+          customOpt.textContent = `${manualName.trim()} [Manual Input]`;
+          const manualOpt = Array.from(sel.options).find(opt => opt.value === '__manual__');
+          if (manualOpt) {
+            sel.insertBefore(customOpt, manualOpt);
+          } else {
+            sel.appendChild(customOpt);
+          }
+          sel.value = manualName.trim();
+        } else {
+          sel.value = '';
+        }
       }
-    } else {
-      const existing = document.getElementById('cf-bucket-manual-input');
-      if (existing) existing.remove();
-    }
-    updateCfSummary();
-  };
-  updateCfSummary();
+      updateCfSummary();
+    };
+  }
 }
 
 // ===== CF VALIDATION =====
@@ -3594,28 +3583,7 @@ function updateCfBanner() {
 
 // ===== VPC & SUBNET INTEGRATION FOR EC2 =====
 function updateVpcOptionsForEC2() {
-  const vpcSelect = document.getElementById('ec2-vpc');
-  if (!vpcSelect) return;
-  const selectedRegion = document.getElementById('aws-region').value;
-  const previouslySelected = vpcSelect.value;
-
-  vpcSelect.innerHTML = '<option value="">Default VPC</option>';
-
-  const filtered = activeVpcs.filter(vpc => vpc.status === 'active' && vpc.region === selectedRegion);
-  filtered.forEach(vpc => {
-    const opt = document.createElement('option');
-    opt.value = vpc.name;
-    opt.textContent = `${vpc.name} (${vpc.vpcId})`;
-    vpcSelect.appendChild(opt);
-  });
-
-  // Keep selection if still valid
-  if (filtered.find(v => v.name === previouslySelected)) {
-    vpcSelect.value = previouslySelected;
-  } else {
-    vpcSelect.value = '';
-  }
-  updateSubnetOptionsForEC2();
+  syncAwsDiscovery('ec2');
 }
 
 async function updateSubnetOptionsForEC2() {
@@ -5182,22 +5150,7 @@ async function fetchS3BucketOptionsForEcs() {
 }
 
 async function fetchVpcOptionsForEcs() {
-  const select = document.getElementById('ecs-vpc');
-  if (!select) return;
-  const previouslySelected = select.value;
-  select.innerHTML = '<option value="">-- Select VPC --</option>';
-  activeVpcs.filter(v => v.status === 'active').forEach(v => {
-    const opt = document.createElement('option');
-    opt.value = v.name;
-    opt.textContent = `${v.name} (${v.vpcId})`;
-    select.appendChild(opt);
-  });
-  if (activeVpcs.find(v => v.name === previouslySelected)) {
-    select.value = previouslySelected;
-  } else {
-    select.selectedIndex = 0;
-  }
-  updateSubnetOptionsForEcs();
+  syncAwsDiscovery('ecs');
 }
 
 // Global toggles/search helper for SSM/Secrets modal
