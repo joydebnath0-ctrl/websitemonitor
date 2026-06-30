@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
@@ -9,6 +10,22 @@ const net = require('net');
 const path = require('path');
 const tls = require('tls');
 const multer = require('multer');
+
+// Load environment variables from .env file if present
+const envPath = path.join(__dirname, '.env');
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, 'utf8');
+  envContent.split(/\r?\n/).forEach(line => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) return;
+    const parts = trimmed.split('=');
+    const key = parts[0].trim();
+    let value = parts.slice(1).join('=').trim();
+    if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+    if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
+    process.env[key] = value;
+  });
+}
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
