@@ -736,7 +736,20 @@ async function processFileUploadJob(job) {
   const blob = new Blob([job.fileBuffer]);
   formData.append('file', blob, job.filename);
 
-  const res = await fetch('https://www.virustotal.com/api/v3/files', {
+  let uploadUrl = 'https://www.virustotal.com/api/v3/files';
+  if (job.fileBuffer.length >= 32 * 1000 * 1000) {
+    const urlRes = await fetch('https://www.virustotal.com/api/v3/files/upload_url', {
+      headers: { 'x-apikey': process.env.VIRUSTOTAL_API_KEY }
+    });
+    if (!urlRes.ok) {
+      const errText = await urlRes.text();
+      throw new Error(`VirusTotal get upload_url failed: ${urlRes.statusText} - ${errText}`);
+    }
+    const urlData = await urlRes.json();
+    uploadUrl = urlData.data;
+  }
+
+  const res = await fetch(uploadUrl, {
     method: 'POST',
     headers: { 'x-apikey': process.env.VIRUSTOTAL_API_KEY },
     body: formData
