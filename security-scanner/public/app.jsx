@@ -228,7 +228,7 @@ function App() {
                     {file ? (
                       <p className="font-semibold text-sky-600">Selected file: {file.name} ({Math.round(file.size / 1024)} KB)</p>
                     ) : (
-                      <p>Drag and drop a file here, or click to browse (Max 32MB)</p>
+                      <p>Drag and drop a file here, or click to browse (Max 2GB)</p>
                     )}
                   </div>
                 </div>

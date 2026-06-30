@@ -40,7 +40,7 @@ const RATE_LIMIT_MAX = 12;
 const jobs = new Map();
 const rateLimit = new Map();
 
-const upload = multer({ limits: { fileSize: 32 * 1024 * 1024 } });
+const upload = multer({ limits: { fileSize: 2 * 1024 * 1024 * 1024 } });
 const vtQueue = [];
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
