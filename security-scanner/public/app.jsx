@@ -557,6 +557,90 @@ function CategoryGrid({ categories }) {
 function CategoryCard({ category }) {
   const icon = category.status === 'pass' ? 'Check' : category.status === 'warning' ? 'Warn' : 'Fail';
   const first = category.issues[0];
+
+  if (category.id === 'cves' && category.technicalDetails?.findings) {
+    const findings = category.technicalDetails.findings;
+    const nvd = category.technicalDetails.nvd || [];
+
+    // Group findings by category
+    const grouped = {};
+    findings.forEach(f => {
+      const cat = f.category || 'Other';
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(f);
+    });
+
+    return (
+      <article className="panel p-5 col-span-1 lg:col-span-2">
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <span className={`status-${category.status} border rounded px-2 py-1 text-xs font-bold`}>{icon}</span>
+              <h3 className="font-semibold text-lg">{category.name}</h3>
+            </div>
+            <p className="text-sm text-slate-600 dark:text-slate-300">{category.summary}</p>
+          </div>
+          <div className="text-right">
+            <div className="text-2xl font-bold">{category.score}</div>
+            <div className="text-xs text-slate-500">score</div>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <h4 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-3 uppercase tracking-wider">Website Technology Profile</h4>
+          {findings.length === 0 ? (
+            <p className="text-xs text-slate-500">No technology clues could be fingerprinted from this website response.</p>
+          ) : (
+            <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {Object.entries(grouped).map(([cat, techList]) => (
+                <div key={cat} className="border border-slate-100 dark:border-slate-800/80 rounded-lg p-3 bg-slate-50/50 dark:bg-slate-900/50">
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block mb-2">{cat}</span>
+                  <div className="flex flex-wrap gap-2">
+                    {techList.map(t => (
+                      <span key={t.name} className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 dark:bg-sky-950/40 border border-sky-100 dark:border-sky-900/50 px-2.5 py-1 text-xs font-semibold text-sky-800 dark:text-sky-300">
+                        <span className="h-1.5 w-1.5 rounded-full bg-sky-500"></span>
+                        {t.name} <span className="text-[10px] opacity-75 font-normal">v{t.version}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {first && (
+          <div className="mt-5 rounded-md bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 p-4">
+            <p className="text-sm"><strong>Recommended action:</strong> {first.fix}</p>
+          </div>
+        )}
+
+        {nvd.length > 0 && (
+          <div className="mt-5">
+            <h4 className="text-sm font-bold text-rose-500 mb-3 uppercase tracking-wider">Potential CVE Vulnerabilities</h4>
+            <div className="space-y-3">
+              {nvd.map(cve => (
+                <div key={cve.id} className="border border-red-100 dark:border-red-950/40 bg-red-50/20 dark:bg-red-950/10 rounded-md p-3 text-xs">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-bold text-red-600 dark:text-red-400">{cve.id}</span>
+                    <span className="rounded bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 px-2 py-0.5 font-bold">CVSS {cve.cvss}</span>
+                  </div>
+                  <p className="text-slate-600 dark:text-slate-300 leading-relaxed mb-2">{cve.summary}</p>
+                  <span className="text-[10px] text-slate-400 block">Matched Technology: {cve.matched?.name} {cve.matched?.version}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <details className="mt-5 border-t pt-3 border-slate-200 dark:border-slate-800">
+          <summary className="cursor-pointer text-sm font-semibold text-sky-600">Technical details (JSON)</summary>
+          <pre className="mt-3 overflow-auto rounded-md bg-slate-950 text-slate-100 p-4 text-xs">{JSON.stringify(category.technicalDetails, null, 2)}</pre>
+        </details>
+      </article>
+    );
+  }
+
   return (
     <article className="panel p-5">
       <div className="flex items-start justify-between gap-4">

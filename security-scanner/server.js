@@ -381,24 +381,136 @@ async function scanFingerprint(domain) {
   const body = res.body || '';
   const findings = [];
   const issues = [];
-  if (headers.server) findings.push({ name: 'Server', version: headers.server, source: 'server header' });
+
+  const addFinding = (category, name, version = 'detected', source = 'unknown') => {
+    if (!findings.some(f => f.name.toLowerCase() === name.toLowerCase())) {
+      findings.push({ category, name, version, source });
+    }
+  };
+
+  // 1. Web Servers / CDNs / Proxies
+  if (headers.server) {
+    let serverStr = headers.server.toLowerCase();
+    if (serverStr.includes('nginx')) addFinding('Web Server / CDN', 'Nginx', headers.server, 'server header');
+    else if (serverStr.includes('apache')) addFinding('Web Server / CDN', 'Apache', headers.server, 'server header');
+    else if (serverStr.includes('litespeed')) addFinding('Web Server / CDN', 'LiteSpeed', headers.server, 'server header');
+    else if (serverStr.includes('iis') || serverStr.includes('microsoft-iis')) addFinding('Web Server / CDN', 'Microsoft-IIS', headers.server, 'server header');
+    else if (serverStr.includes('cloudflare')) addFinding('Web Server / CDN', 'Cloudflare Proxy', 'detected', 'server header');
+    else if (serverStr.includes('caddy')) addFinding('Web Server / CDN', 'Caddy Server', headers.server, 'server header');
+    else addFinding('Web Server / CDN', 'Web Server', headers.server, 'server header');
+  }
+  if (headers['cf-ray'] || headers['cf-cache-status'] || headers['server'] === 'cloudflare') {
+    addFinding('Web Server / CDN', 'Cloudflare CDN', 'detected', 'headers');
+  }
+  if (headers['x-fastly-request-id'] || headers['fastly-rekey']) {
+    addFinding('Web Server / CDN', 'Fastly CDN', 'detected', 'headers');
+  }
+
+  // 2. Programming Languages / Runtimes
+  if (headers['x-powered-by']) {
+    let poweredBy = headers['x-powered-by'].toLowerCase();
+    if (poweredBy.includes('php')) {
+      const phpVer = headers['x-powered-by'].match(/php\/([0-9.]+)/i);
+      addFinding('Programming Language', 'PHP', phpVer ? phpVer[1] : headers['x-powered-by'], 'x-powered-by header');
+    } else if (poweredBy.includes('asp.net') || poweredBy.includes('aspnet')) {
+      addFinding('Programming Language', 'ASP.NET', 'detected', 'x-powered-by header');
+    } else if (poweredBy.includes('express')) {
+      addFinding('Programming Language', 'Node.js (Express)', 'detected', 'x-powered-by header');
+    } else {
+      addFinding('Programming Language', 'Backend Framework', headers['x-powered-by'], 'x-powered-by header');
+    }
+  }
+  if (headers['x-aspnet-version']) {
+    addFinding('Programming Language', 'ASP.NET', headers['x-aspnet-version'], 'x-aspnet-version header');
+  }
+
+  // 3. Meta Generator Detection
   const generator = body.match(/<meta[^>]+name=["']generator["'][^>]+content=["']([^"']+)["']/i);
-  if (generator) findings.push({ name: 'Generator', version: generator[1], source: 'meta generator' });
-  const libs = [
-    ['jQuery', /jquery[-.]([0-9.]+)(?:\.min)?\.js/i],
-    ['React', /react@([0-9.]+)|react[-.]([0-9.]+)(?:\.min)?\.js/i],
-    ['Vue', /vue@([0-9.]+)|vue[-.]([0-9.]+)(?:\.min)?\.js/i],
-    ['Angular', /angular(?:\.min)?\.js\?ver=([0-9.]+)|angular[-.]([0-9.]+)(?:\.min)?\.js/i],
-    ['Bootstrap', /bootstrap[-.]([0-9.]+)(?:\.min)?\.(?:js|css)/i]
+  if (generator) {
+    const genName = generator[1];
+    let genLower = genName.toLowerCase();
+    if (genLower.includes('wordpress')) {
+      const wpVer = genName.match(/wordpress\s+([0-9.]+)/i);
+      addFinding('CMS', 'WordPress', wpVer ? wpVer[1] : 'detected', 'meta generator');
+    } else if (genLower.includes('shopify')) {
+      addFinding('CMS', 'Shopify', 'detected', 'meta generator');
+    } else if (genLower.includes('joomla')) {
+      const jVer = genName.match(/joomla!\s*([0-9.]+)/i);
+      addFinding('CMS', 'Joomla', jVer ? jVer[1] : 'detected', 'meta generator');
+    } else if (genLower.includes('drupal')) {
+      const dVer = genName.match(/drupal\s*([0-9.]+)/i);
+      addFinding('CMS', 'Drupal', dVer ? dVer[1] : 'detected', 'meta generator');
+    } else if (genLower.includes('webflow')) {
+      addFinding('CMS', 'Webflow', 'detected', 'meta generator');
+    } else if (genLower.includes('squarespace')) {
+      addFinding('CMS', 'Squarespace', 'detected', 'meta generator');
+    } else if (genLower.includes('wix')) {
+      addFinding('CMS', 'Wix', 'detected', 'meta generator');
+    } else if (genLower.includes('ghost')) {
+      const gVer = genName.match(/ghost\s*([0-9.]+)/i);
+      addFinding('CMS', 'Ghost CMS', gVer ? gVer[1] : 'detected', 'meta generator');
+    } else {
+      addFinding('CMS', genName, 'detected', 'meta generator');
+    }
+  }
+
+  // 4. HTML / Script / Asset matching
+  if (/wp-content|wp-includes/i.test(body)) {
+    addFinding('CMS', 'WordPress', 'detected', 'page paths');
+  }
+  if (body.includes('cdn.shopify.com') || body.includes('/services/shopify_active_log')) {
+    addFinding('CMS', 'Shopify', 'detected', 'page assets');
+  }
+  if (body.includes('sites/default/files') || body.includes('drupal.js')) {
+    addFinding('CMS', 'Drupal', 'detected', 'page assets');
+  }
+
+  const libPatterns = [
+    ['React', /react@([0-9.]+)|react[-.]([0-9.]+)(?:\.min)?\.js/i, 'JavaScript Library'],
+    ['Vue', /vue@([0-9.]+)|vue[-.]([0-9.]+)(?:\.min)?\.js/i, 'JavaScript Library'],
+    ['Angular', /angular(?:\.min)?\.js\?ver=([0-9.]+)|angular[-.]([0-9.]+)(?:\.min)?\.js/i, 'Frontend Framework'],
+    ['jQuery', /jquery[-.]([0-9.]+)(?:\.min)?\.js/i, 'JavaScript Library'],
+    ['Bootstrap', /bootstrap[-.]([0-9.]+)(?:\.min)?\.(?:js|css)/i, 'CSS Framework'],
+    ['Tailwind CSS', /tailwind[-.]([0-9.]+)(?:\.min)?\.(?:js|css)|tailwindcss/i, 'CSS Framework'],
+    ['Alpine.js', /alpine[-.]([0-9.]+)(?:\.min)?\.js|alpinejs/i, 'JavaScript Library'],
+    ['HTMX', /htmx@([0-9.]+)|htmx[-.]([0-9.]+)(?:\.min)?\.js|htmx\.org/i, 'JavaScript Library'],
+    ['Next.js', /_next\/static/i, 'Frontend Framework'],
+    ['Nuxt.js', /__NUXT__/i, 'Frontend Framework'],
+    ['Gatsby', /gatsby-image|id="___gatsby"/i, 'Frontend Framework'],
+    ['Lodash', /lodash[-.]([0-9.]+)(?:\.min)?\.js|lodash\.org/i, 'JavaScript Library'],
+    ['Moment.js', /moment[-.]([0-9.]+)(?:\.min)?\.js|moment\.js/i, 'JavaScript Library'],
+    ['GSAP', /gsap[-.]([0-9.]+)(?:\.min)?\.js|gsap\.min\.js/i, 'JavaScript Library']
   ];
-  libs.forEach(([name, rx]) => {
+
+  libPatterns.forEach(([name, rx, category]) => {
     const match = body.match(rx);
-    if (match) findings.push({ name, version: match[1] || match[2] || 'detected', source: 'page assets' });
+    if (match) {
+      const ver = match[1] || match[2] || 'detected';
+      addFinding(category, name, ver, 'page content/assets');
+    }
   });
-  if (/wp-content|wp-includes/i.test(body)) findings.push({ name: 'WordPress', version: 'detected', source: 'page paths' });
+
   if (/jquery[-.]1\.|jquery[-.]2\./i.test(body)) {
     issues.push(issue('high', 'Old jQuery version detected', 'An older JavaScript library may contain known security bugs.', 'Upgrade jQuery and test affected UI behavior.', { evidence: 'jQuery 1.x/2.x pattern' }));
   }
+
+  // 5. Analytics & Tracking
+  if (body.includes('googletagmanager.com/gtm.js') || body.includes('gtag(')) {
+    addFinding('Analytics / Tracking', 'Google Tag Manager', 'detected', 'page scripts');
+  }
+  if (body.includes('google-analytics.com/analytics.js') || body.includes('google-analytics.com/ga.js') || body.includes('analytics.google.com')) {
+    addFinding('Analytics / Tracking', 'Google Analytics', 'detected', 'page scripts');
+  }
+  if (body.includes('connect.facebook.net/en_US/fbevents.js') || body.includes('fbq(')) {
+    addFinding('Analytics / Tracking', 'Facebook Pixel', 'detected', 'page scripts');
+  }
+  if (body.includes('static.hotjar.com') || body.includes('hj(')) {
+    addFinding('Analytics / Tracking', 'Hotjar', 'detected', 'page scripts');
+  }
+  if (body.includes('js.hs-scripts.com') || body.includes('hubspot')) {
+    addFinding('Analytics / Tracking', 'HubSpot Analytics', 'detected', 'page scripts');
+  }
+
   const cves = await lookupNvd(findings);
   cves.forEach(cve => issues.push(issue(cve.cvss >= 9 ? 'critical' : 'high', `Possible known vulnerability: ${cve.id}`, 'One detected technology may match a public vulnerability listing.', 'Confirm the exact product/version and patch or mitigate if affected.', cve)));
   const score = Math.max(10, 100 - issues.reduce((sum, i) => sum + severityWeight(i.severity), 0));
@@ -1326,6 +1438,23 @@ function buildPdf(job) {
         addLine(`  - ${c.name}: ${c.score}/100 (${c.status})`);
       });
       addLine('');
+      const cvesCat = job.domainScan.categories.find(c => c.id === 'cves');
+      if (cvesCat && cvesCat.technicalDetails && cvesCat.technicalDetails.findings) {
+        const findings = cvesCat.technicalDetails.findings;
+        if (findings.length > 0) {
+          addLine('Website Technology Profile:');
+          const grouped = {};
+          findings.forEach(f => {
+            const cat = f.category || 'Other';
+            if (!grouped[cat]) grouped[cat] = [];
+            grouped[cat].push(`${f.name} (v${f.version})`);
+          });
+          Object.entries(grouped).forEach(([cat, techs]) => {
+            addLine(`  - ${cat}: ${techs.join(', ')}`);
+          });
+          addLine('');
+        }
+      }
       addLine('Domain Infrastructure Issues:');
       if (job.domainScan.issues && job.domainScan.issues.length > 0) {
         job.domainScan.issues.forEach(i => {
@@ -1509,6 +1638,23 @@ function buildPdf(job) {
       addLine(`  - ${c.name}: ${c.score}/100 (${c.status})`);
     });
     addLine('');
+    const cvesCat = job.categories.find(c => c.id === 'cves');
+    if (cvesCat && cvesCat.technicalDetails && cvesCat.technicalDetails.findings) {
+      const findings = cvesCat.technicalDetails.findings;
+      if (findings.length > 0) {
+        addLine('Website Technology Profile:');
+        const grouped = {};
+        findings.forEach(f => {
+          const cat = f.category || 'Other';
+          if (!grouped[cat]) grouped[cat] = [];
+          grouped[cat].push(`${f.name} (v${f.version})`);
+        });
+        Object.entries(grouped).forEach(([cat, techs]) => {
+          addLine(`  - ${cat}: ${techs.join(', ')}`);
+        });
+        addLine('');
+      }
+    }
     addLine('Issues:');
     if (job.issues && job.issues.length > 0) {
       job.issues.forEach(i => {
