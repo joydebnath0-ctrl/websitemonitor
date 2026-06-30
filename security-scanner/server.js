@@ -383,7 +383,7 @@ async function scanFingerprint(domain) {
   const issues = [];
 
   const addFinding = (category, name, version = 'detected', source = 'unknown') => {
-    if (!findings.some(f => f.name.toLowerCase() === name.toLowerCase())) {
+    if (!findings.some(f => f.name.toLowerCase() === name.toLowerCase() && f.category.toLowerCase() === category.toLowerCase())) {
       findings.push({ category, name, version, source });
     }
   };
@@ -391,19 +391,37 @@ async function scanFingerprint(domain) {
   // 1. Web Servers / CDNs / Proxies
   if (headers.server) {
     let serverStr = headers.server.toLowerCase();
-    if (serverStr.includes('nginx')) addFinding('Web Server / CDN', 'Nginx', headers.server, 'server header');
-    else if (serverStr.includes('apache')) addFinding('Web Server / CDN', 'Apache', headers.server, 'server header');
-    else if (serverStr.includes('litespeed')) addFinding('Web Server / CDN', 'LiteSpeed', headers.server, 'server header');
-    else if (serverStr.includes('iis') || serverStr.includes('microsoft-iis')) addFinding('Web Server / CDN', 'Microsoft-IIS', headers.server, 'server header');
-    else if (serverStr.includes('cloudflare')) addFinding('Web Server / CDN', 'Cloudflare Proxy', 'detected', 'server header');
-    else if (serverStr.includes('caddy')) addFinding('Web Server / CDN', 'Caddy Server', headers.server, 'server header');
-    else addFinding('Web Server / CDN', 'Web Server', headers.server, 'server header');
+    if (serverStr.includes('nginx')) {
+      const match = headers.server.match(/nginx\/([0-9.]+)/i);
+      addFinding('Web servers', 'Nginx', match ? match[1] : 'detected', 'server header');
+    } else if (serverStr.includes('apache')) {
+      const match = headers.server.match(/apache\/([0-9.]+)/i);
+      addFinding('Web servers', 'Apache HTTP Server', match ? match[1] : 'detected', 'server header');
+    } else if (serverStr.includes('litespeed')) {
+      addFinding('Web servers', 'LiteSpeed', 'detected', 'server header');
+    } else if (serverStr.includes('iis') || serverStr.includes('microsoft-iis')) {
+      const match = headers.server.match(/iis\/([0-9.]+)/i);
+      addFinding('Web servers', 'Microsoft-IIS', match ? match[1] : 'detected', 'server header');
+    } else if (serverStr.includes('cloudflare')) {
+      addFinding('CDN', 'Cloudflare Proxy', 'detected', 'server header');
+    } else if (serverStr.includes('caddy')) {
+      addFinding('Web servers', 'Caddy Server', 'detected', 'server header');
+    } else {
+      addFinding('Web servers', 'Web Server', headers.server, 'server header');
+    }
+
+    // Try to extract PHP version from Server header
+    const phpMatch = headers.server.match(/php\/([0-9.]+)/i);
+    if (phpMatch) {
+      addFinding('Programming languages', 'PHP', phpMatch[1], 'server header');
+    }
   }
-  if (headers['cf-ray'] || headers['cf-cache-status'] || headers['server'] === 'cloudflare') {
-    addFinding('Web Server / CDN', 'Cloudflare CDN', 'detected', 'headers');
+
+  if (headers['cf-ray'] || headers['cf-cache-status'] || (headers['server'] && headers['server'].toLowerCase() === 'cloudflare')) {
+    addFinding('CDN', 'Cloudflare CDN', 'detected', 'headers');
   }
   if (headers['x-fastly-request-id'] || headers['fastly-rekey']) {
-    addFinding('Web Server / CDN', 'Fastly CDN', 'detected', 'headers');
+    addFinding('CDN', 'Fastly CDN', 'detected', 'headers');
   }
 
   // 2. Programming Languages / Runtimes
@@ -411,17 +429,17 @@ async function scanFingerprint(domain) {
     let poweredBy = headers['x-powered-by'].toLowerCase();
     if (poweredBy.includes('php')) {
       const phpVer = headers['x-powered-by'].match(/php\/([0-9.]+)/i);
-      addFinding('Programming Language', 'PHP', phpVer ? phpVer[1] : headers['x-powered-by'], 'x-powered-by header');
+      addFinding('Programming languages', 'PHP', phpVer ? phpVer[1] : 'detected', 'x-powered-by header');
     } else if (poweredBy.includes('asp.net') || poweredBy.includes('aspnet')) {
-      addFinding('Programming Language', 'ASP.NET', 'detected', 'x-powered-by header');
+      addFinding('Programming languages', 'ASP.NET', 'detected', 'x-powered-by header');
     } else if (poweredBy.includes('express')) {
-      addFinding('Programming Language', 'Node.js (Express)', 'detected', 'x-powered-by header');
+      addFinding('Programming languages', 'Node.js (Express)', 'detected', 'x-powered-by header');
     } else {
-      addFinding('Programming Language', 'Backend Framework', headers['x-powered-by'], 'x-powered-by header');
+      addFinding('Programming languages', 'Backend Framework', headers['x-powered-by'], 'x-powered-by header');
     }
   }
   if (headers['x-aspnet-version']) {
-    addFinding('Programming Language', 'ASP.NET', headers['x-aspnet-version'], 'x-aspnet-version header');
+    addFinding('Programming languages', 'ASP.NET', headers['x-aspnet-version'], 'x-aspnet-version header');
   }
 
   // 3. Meta Generator Detection
@@ -466,20 +484,20 @@ async function scanFingerprint(domain) {
   }
 
   const libPatterns = [
-    ['React', /react@([0-9.]+)|react[-.]([0-9.]+)(?:\.min)?\.js/i, 'JavaScript Library'],
-    ['Vue', /vue@([0-9.]+)|vue[-.]([0-9.]+)(?:\.min)?\.js/i, 'JavaScript Library'],
-    ['Angular', /angular(?:\.min)?\.js\?ver=([0-9.]+)|angular[-.]([0-9.]+)(?:\.min)?\.js/i, 'Frontend Framework'],
-    ['jQuery', /jquery[-.]([0-9.]+)(?:\.min)?\.js/i, 'JavaScript Library'],
-    ['Bootstrap', /bootstrap[-.]([0-9.]+)(?:\.min)?\.(?:js|css)/i, 'CSS Framework'],
-    ['Tailwind CSS', /tailwind[-.]([0-9.]+)(?:\.min)?\.(?:js|css)|tailwindcss/i, 'CSS Framework'],
-    ['Alpine.js', /alpine[-.]([0-9.]+)(?:\.min)?\.js|alpinejs/i, 'JavaScript Library'],
-    ['HTMX', /htmx@([0-9.]+)|htmx[-.]([0-9.]+)(?:\.min)?\.js|htmx\.org/i, 'JavaScript Library'],
-    ['Next.js', /_next\/static/i, 'Frontend Framework'],
-    ['Nuxt.js', /__NUXT__/i, 'Frontend Framework'],
-    ['Gatsby', /gatsby-image|id="___gatsby"/i, 'Frontend Framework'],
-    ['Lodash', /lodash[-.]([0-9.]+)(?:\.min)?\.js|lodash\.org/i, 'JavaScript Library'],
-    ['Moment.js', /moment[-.]([0-9.]+)(?:\.min)?\.js|moment\.js/i, 'JavaScript Library'],
-    ['GSAP', /gsap[-.]([0-9.]+)(?:\.min)?\.js|gsap\.min\.js/i, 'JavaScript Library']
+    ['React', /react@([0-9.]+)|react[-.]([0-9.]+)(?:\.min)?\.js/i, 'JavaScript libraries'],
+    ['Vue', /vue@([0-9.]+)|vue[-.]([0-9.]+)(?:\.min)?\.js/i, 'JavaScript libraries'],
+    ['Angular', /angular(?:\.min)?\.js\?ver=([0-9.]+)|angular[-.]([0-9.]+)(?:\.min)?\.js/i, 'Frontend frameworks'],
+    ['jQuery', /jquery[-.]([0-9.]+)(?:\.min)?\.js/i, 'JavaScript libraries'],
+    ['Bootstrap', /bootstrap[-.]([0-9.]+)(?:\.min)?\.(?:js|css)/i, 'CSS frameworks'],
+    ['Tailwind CSS', /tailwind[-.]([0-9.]+)(?:\.min)?\.(?:js|css)|tailwindcss/i, 'CSS frameworks'],
+    ['Alpine.js', /alpine[-.]([0-9.]+)(?:\.min)?\.js|alpinejs/i, 'JavaScript libraries'],
+    ['HTMX', /htmx@([0-9.]+)|htmx[-.]([0-9.]+)(?:\.min)?\.js|htmx\.org/i, 'JavaScript libraries'],
+    ['Next.js', /_next\/static/i, 'Frontend frameworks'],
+    ['Nuxt.js', /__NUXT__/i, 'Frontend frameworks'],
+    ['Gatsby', /gatsby-image|id="___gatsby"/i, 'Frontend frameworks'],
+    ['Lodash', /lodash[-.]([0-9.]+)(?:\.min)?\.js|lodash\.org/i, 'JavaScript libraries'],
+    ['Moment.js', /moment[-.]([0-9.]+)(?:\.min)?\.js|moment\.js/i, 'JavaScript libraries'],
+    ['GSAP', /gsap[-.]([0-9.]+)(?:\.min)?\.js|gsap\.min\.js/i, 'JavaScript libraries']
   ];
 
   libPatterns.forEach(([name, rx, category]) => {
@@ -496,19 +514,50 @@ async function scanFingerprint(domain) {
 
   // 5. Analytics & Tracking
   if (body.includes('googletagmanager.com/gtm.js') || body.includes('gtag(')) {
-    addFinding('Analytics / Tracking', 'Google Tag Manager', 'detected', 'page scripts');
+    addFinding('Analytics', 'Google Tag Manager', 'detected', 'page scripts');
   }
   if (body.includes('google-analytics.com/analytics.js') || body.includes('google-analytics.com/ga.js') || body.includes('analytics.google.com')) {
-    addFinding('Analytics / Tracking', 'Google Analytics', 'detected', 'page scripts');
+    addFinding('Analytics', 'Google Analytics', 'detected', 'page scripts');
   }
   if (body.includes('connect.facebook.net/en_US/fbevents.js') || body.includes('fbq(')) {
-    addFinding('Analytics / Tracking', 'Facebook Pixel', 'detected', 'page scripts');
+    addFinding('Analytics', 'Facebook Pixel', 'detected', 'page scripts');
   }
   if (body.includes('static.hotjar.com') || body.includes('hj(')) {
-    addFinding('Analytics / Tracking', 'Hotjar', 'detected', 'page scripts');
+    addFinding('Analytics', 'Hotjar', 'detected', 'page scripts');
   }
   if (body.includes('js.hs-scripts.com') || body.includes('hubspot')) {
-    addFinding('Analytics / Tracking', 'HubSpot Analytics', 'detected', 'page scripts');
+    addFinding('Analytics', 'HubSpot Analytics', 'detected', 'page scripts');
+  }
+
+  // 6. Database and Blog Implications (Wappalyzer-like rules)
+  const hasWordPress = findings.some(f => f.name === 'WordPress');
+  if (hasWordPress) {
+    const wpFinding = findings.find(f => f.name === 'WordPress');
+    addFinding('Blogs', 'WordPress', wpFinding.version, 'implied by WordPress CMS');
+    addFinding('Databases', 'MySQL', 'detected', 'implied by WordPress CMS');
+    if (!findings.some(f => f.name === 'PHP')) {
+      addFinding('Programming languages', 'PHP', 'detected', 'implied by WordPress CMS');
+    }
+  }
+
+  const hasJoomla = findings.some(f => f.name === 'Joomla');
+  if (hasJoomla) {
+    const jFinding = findings.find(f => f.name === 'Joomla');
+    addFinding('Blogs', 'Joomla', jFinding.version, 'implied by Joomla CMS');
+    addFinding('Databases', 'MySQL', 'detected', 'implied by Joomla CMS');
+    if (!findings.some(f => f.name === 'PHP')) {
+      addFinding('Programming languages', 'PHP', 'detected', 'implied by Joomla CMS');
+    }
+  }
+
+  const hasDrupal = findings.some(f => f.name === 'Drupal');
+  if (hasDrupal) {
+    const dFinding = findings.find(f => f.name === 'Drupal');
+    addFinding('Blogs', 'Drupal', dFinding.version, 'implied by Drupal CMS');
+    addFinding('Databases', 'MySQL', 'detected', 'implied by Drupal CMS');
+    if (!findings.some(f => f.name === 'PHP')) {
+      addFinding('Programming languages', 'PHP', 'detected', 'implied by Drupal CMS');
+    }
   }
 
   const cves = await lookupNvd(findings);
