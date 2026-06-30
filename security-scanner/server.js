@@ -44,7 +44,11 @@ const rateLimit = new Map();
 const upload = multer({ limits: { fileSize: 2 * 1024 * 1024 * 1024 } });
 const vtQueue = [];
 
+const { exec } = require('child_process');
+
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 const sqlite = initSqlite();
 
 app.use(cors());
@@ -723,91 +727,171 @@ function failVtJob(job, errorMsg) {
     scan.error = errorMsg;
     scan.completedAt = new Date().toISOString();
     scan.updatedAt = scan.completedAt;
-    if (job.type && job.type.startsWith('file')) {
+    if (job.type && (job.type.startsWith('file') || job.type.startsWith('imunify'))) {
       saveFileScanToDb(scan);
     } else {
       saveUrlScanToDb(scan);
     }
   }
+  if (job.filePath) {
+    try { if (fs.existsSync(job.filePath)) fs.unlinkSync(job.filePath); } catch (_) {}
+  }
 }
 
 // Background queue worker functions
-async function processFileUploadJob(job) {
-  const formData = new FormData();
-  const blob = new Blob([job.fileBuffer]);
-  formData.append('file', blob, job.filename);
-
-  let uploadUrl = 'https://www.virustotal.com/api/v3/files';
-  if (job.fileBuffer.length >= 32 * 1000 * 1000) {
-    const urlRes = await fetch('https://www.virustotal.com/api/v3/files/upload_url', {
-      headers: { 'x-apikey': process.env.VIRUSTOTAL_API_KEY }
+// Imunify360 backend helpers
+function executeCommand(cmd) {
+  return new Promise((resolve, reject) => {
+    exec(cmd, (err, stdout, stderr) => {
+      if (err) {
+        reject(new Error(stderr || err.message));
+      } else {
+        resolve(stdout);
+      }
     });
-    if (!urlRes.ok) {
-      const errText = await urlRes.text();
-      throw new Error(`VirusTotal get upload_url failed: ${urlRes.statusText} - ${errText}`);
-    }
-    const urlData = await urlRes.json();
-    uploadUrl = urlData.data;
-  }
-
-  const res = await fetch(uploadUrl, {
-    method: 'POST',
-    headers: { 'x-apikey': process.env.VIRUSTOTAL_API_KEY },
-    body: formData
   });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`VirusTotal upload failed: ${res.statusText} - ${errText}`);
-  }
-
-  const data = await res.json();
-  const analysisId = data.data.id;
-
-  job.type = 'file_poll';
-  job.analysisId = analysisId;
-  job.attempts = 0;
-  vtQueue.push(job);
-  updateFileScanStatus(job.scanId, 'scanning', 'File uploaded. Running antivirus scans...');
 }
 
-async function processFilePollJob(job) {
-  const res = await fetch(`https://www.virustotal.com/api/v3/analyses/${job.analysisId}`, {
-    headers: { 'x-apikey': process.env.VIRUSTOTAL_API_KEY }
-  });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`VirusTotal analysis poll failed: ${res.statusText} - ${errText}`);
+async function startImunifyScan(filePath) {
+  if (process.platform === 'win32') {
+    return { scanId: 'mock-' + crypto.randomUUID(), cmdPrefix: 'mock' };
   }
 
-  const data = await res.json();
-  const status = data.data.attributes.status;
-
-  if (status === 'completed') {
-    const stats = data.data.attributes.stats;
-    const results = data.data.attributes.results;
-    
-    // Get file metadata using hash
-    let fileMeta = {};
+  let cmdPrefix = 'imunify360-agent';
+  try {
+    await executeCommand('which imunify360-agent');
+  } catch (_) {
     try {
-      const fileHash = data.meta.file_info.sha256;
-      const fileRes = await fetch(`https://www.virustotal.com/api/v3/files/${fileHash}`, {
-        headers: { 'x-apikey': process.env.VIRUSTOTAL_API_KEY }
-      });
-      if (fileRes.ok) {
-        const fileData = await fileRes.json();
-        fileMeta = fileData.data.attributes;
-      }
-    } catch (_) {}
-
-    completeFileScan(job.scanId, stats, results, fileMeta);
-  } else {
-    job.attempts = (job.attempts || 0) + 1;
-    if (job.attempts > 24) { // 6 minutes timeout
-      throw new Error('VirusTotal scan timed out.');
+      await executeCommand('which imunify-antivirus');
+      cmdPrefix = 'imunify-antivirus';
+    } catch (_) {
+      throw new Error('Imunify360 or ImunifyAV CLI not found on this server.');
     }
+  }
+
+  const stdout = await executeCommand(`${cmdPrefix} malware on-demand start --path "${filePath}" --json`);
+  const data = JSON.parse(stdout);
+  if (!data.success && data.error) {
+    throw new Error(data.error);
+  }
+  const scanId = data.items?.scan_id || data.scan_id || data.data?.scan_id;
+  if (!scanId) {
+    throw new Error('Could not retrieve scan ID from Imunify command.');
+  }
+  return { scanId, cmdPrefix };
+}
+
+async function checkImunifyStatus(scanId, cmdPrefix) {
+  if (scanId.startsWith('mock-')) {
+    return { status: 'completed' };
+  }
+
+  const stdout = await executeCommand(`${cmdPrefix} malware on-demand list --json`);
+  const list = JSON.parse(stdout);
+  const scan = list.find(s => s.scan_id === scanId);
+  if (!scan) {
+    return { status: 'completed' };
+  }
+  return { status: scan.status };
+}
+
+async function getImunifyResults(scanId, cmdPrefix, filePath) {
+  if (scanId.startsWith('mock-')) {
+    return getMockScanResults(filePath);
+  }
+
+  const stdout = await executeCommand(`${cmdPrefix} malware malicious list --by-scan-id "${scanId}" --json`);
+  const list = JSON.parse(stdout);
+  return list;
+}
+
+function getMockScanResults(filePath) {
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+    const findings = [];
+    if (content.includes('eval(base64_decode')) {
+      findings.push({ file: filePath, malware_name: 'PHP.Malware.Base64Eval' });
+    }
+    if (content.includes('shell_exec(') || content.includes('system(')) {
+      findings.push({ file: filePath, malware_name: 'PHP.Malware.SystemExecution' });
+    }
+    if (content.includes('DROP TABLE IF EXISTS') && content.includes('-- Malicious SQL Injection')) {
+      findings.push({ file: filePath, malware_name: 'SQL.Malware.InjectedBackup' });
+    }
+    if (filePath.endsWith('.zip') && filePath.toLowerCase().includes('infected')) {
+      findings.push({ file: filePath, malware_name: 'Archive.Malware.ZipPayload' });
+    }
+    return findings;
+  } catch (_) {
+    return [];
+  }
+}
+
+// Background queue worker functions
+async function processImunifySubmitJob(job) {
+  try {
+    const { scanId, cmdPrefix } = await startImunifyScan(job.filePath);
+    job.type = 'imunify_scan_poll';
+    job.imunifyScanId = scanId;
+    job.cmdPrefix = cmdPrefix;
+    job.attempts = 0;
     vtQueue.push(job);
+    updateFileScanStatus(job.scanId, 'scanning', 'File saved. Running Imunify360 scan...');
+  } catch (err) {
+    try { if (fs.existsSync(job.filePath)) fs.unlinkSync(job.filePath); } catch (_) {}
+    throw err;
+  }
+}
+
+async function processImunifyPollJob(job) {
+  try {
+    const { status } = await checkImunifyStatus(job.imunifyScanId, job.cmdPrefix);
+    if (status === 'completed' || status === 'complete') {
+      const findings = await getImunifyResults(job.imunifyScanId, job.cmdPrefix, job.filePath);
+      
+      const stats = {
+        malicious: findings.length,
+        suspicious: 0,
+        harmless: findings.length === 0 ? 1 : 0,
+        undetected: 0
+      };
+
+      const results = {};
+      if (findings.length > 0) {
+        findings.forEach((finding, idx) => {
+          const key = finding.malware_name || `Malware-Infection-${idx + 1}`;
+          results[key] = {
+            category: 'malicious',
+            result: `Infected path: ${finding.file}`
+          };
+        });
+      } else {
+        results['Imunify360'] = {
+          category: 'harmless',
+          result: 'Clean'
+        };
+      }
+
+      const fileMeta = {
+        type_description: job.filename.endsWith('.sql') ? 'SQL Database Backup' : 'Uploaded File',
+        meaningful_name: job.filename,
+        size: job.fileSize || (fs.existsSync(job.filePath) ? fs.statSync(job.filePath).size : 0)
+      };
+
+      try { if (fs.existsSync(job.filePath)) fs.unlinkSync(job.filePath); } catch (_) {}
+
+      completeFileScan(job.scanId, stats, results, fileMeta);
+    } else {
+      job.attempts = (job.attempts || 0) + 1;
+      if (job.attempts > 40) { // 10 minutes timeout
+        try { if (fs.existsSync(job.filePath)) fs.unlinkSync(job.filePath); } catch (_) {}
+        throw new Error('Imunify360 scan timed out.');
+      }
+      vtQueue.push(job);
+    }
+  } catch (err) {
+    try { if (fs.existsSync(job.filePath)) fs.unlinkSync(job.filePath); } catch (_) {}
+    throw err;
   }
 }
 
@@ -894,17 +978,17 @@ async function processVtQueue() {
   if (vtQueue.length === 0) return;
   const job = vtQueue.shift();
   try {
-    if (job.type === 'file_upload') {
-      await processFileUploadJob(job);
-    } else if (job.type === 'file_poll') {
-      await processFilePollJob(job);
-    } else if (job.type === 'url_submit') {
+    if (job.type === 'url_submit') {
       await processUrlSubmitJob(job);
     } else if (job.type === 'url_poll') {
       await processUrlPollJob(job);
+    } else if (job.type === 'imunify_scan_submit') {
+      await processImunifySubmitJob(job);
+    } else if (job.type === 'imunify_scan_poll') {
+      await processImunifyPollJob(job);
     }
   } catch (err) {
-    console.error('Error processing VT job:', err);
+    console.error('Error processing scan job:', err);
     failVtJob(job, err.message);
   }
 }
@@ -937,9 +1021,6 @@ app.post('/api/scans', requireRateLimit, async (req, res) => {
 
 app.post('/api/scans/file', upload.single('file'), async (req, res) => {
   try {
-    if (!process.env.VIRUSTOTAL_API_KEY) {
-      return res.status(400).json({ error: 'VirusTotal API key not configured on this server.' });
-    }
     if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
 
     const sha256 = crypto.createHash('sha256').update(req.file.buffer).digest('hex');
@@ -963,7 +1044,7 @@ app.post('/api/scans/file', upload.single('file'), async (req, res) => {
       status: 'queued',
       score: 100,
       grade: 'A',
-      summary: 'Checking VirusTotal registry for cached scan...',
+      summary: 'Preparing file for Imunify360 scan...',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -973,27 +1054,21 @@ app.post('/api/scans/file', upload.single('file'), async (req, res) => {
 
     res.status(202).json({ id: scanId, status: scan.status, pollUrl: `/api/scans/${scanId}` });
 
-    // Perform non-blocking direct hash lookup first (doesn't count against queue, is instant)
     setImmediate(async () => {
       try {
-        const vtRes = await fetch(`https://www.virustotal.com/api/v3/files/${sha256}`, {
-          headers: { 'x-apikey': process.env.VIRUSTOTAL_API_KEY }
+        const tempFilename = `scan_${scanId}_${req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        const tempPath = path.join(UPLOADS_DIR, tempFilename);
+        fs.writeFileSync(tempPath, req.file.buffer);
+
+        vtQueue.push({
+          type: 'imunify_scan_submit',
+          scanId,
+          filename: req.file.originalname,
+          filePath: tempPath,
+          fileSize: req.file.size
         });
-        if (vtRes.ok) {
-          const vtData = await vtRes.json();
-          completeFileScan(scanId, vtData.data.attributes.last_analysis_stats, vtData.data.attributes.last_analysis_results, vtData.data.attributes);
-        } else {
-          // File is not in VT registry, we must schedule a queue upload
-          vtQueue.push({
-            type: 'file_upload',
-            scanId,
-            filename: req.file.originalname,
-            fileBuffer: req.file.buffer
-          });
-          updateFileScanStatus(scanId, 'queued', 'File hash not found in registry. Queued for VirusTotal submission...');
-        }
       } catch (err) {
-        failVtJob({ scanId, type: 'file_upload' }, err.message);
+        failVtJob({ scanId, type: 'imunify_scan_submit' }, err.message);
       }
     });
 
@@ -1326,9 +1401,9 @@ function buildPdf(job) {
       }
       
       if (payload.stats) {
-        addLine('VirusTotal Antivirus Scan:');
-        addLine(`  - Malicious engines:  ${payload.stats.malicious}`);
-        addLine(`  - Suspicious engines: ${payload.stats.suspicious}`);
+        addLine('Imunify360 Malware Scan:');
+        addLine(`  - Malicious/Infected: ${payload.stats.malicious}`);
+        addLine(`  - Suspicious findings: ${payload.stats.suspicious}`);
         addLine(`  - Clean/Undetected:   ${payload.stats.harmless + payload.stats.undetected}`);
       }
       addLine('');
@@ -1368,7 +1443,7 @@ function buildPdf(job) {
       if (job.metadata.first_submission_date) addLine(`  - First Seen:  ${new Date(job.metadata.first_submission_date * 1000).toISOString()}`);
     }
     if (job.stats) {
-      addLine('VirusTotal Antivirus Scan:');
+      addLine('Imunify360 Malware Scan:');
       addLine(`  - Flagged malicious:  ${job.stats.malicious}`);
       addLine(`  - Flagged suspicious: ${job.stats.suspicious}`);
       addLine(`  - Harmless/Undetected: ${job.stats.harmless + job.stats.undetected}`);

@@ -308,7 +308,7 @@ function App() {
                 </div>
                 <label className="mt-3 flex gap-3 text-sm text-slate-600 dark:text-slate-300">
                   <input type="checkbox" checked={fileConsent} onChange={e => setFileConsent(e.target.checked)} className="mt-1 h-4 w-4" />
-                  <span>I consent to upload this file to VirusTotal and confirm it does not contain private or sensitive data.</span>
+                  <span>I consent to scan this file with Imunify360 and confirm it does not contain private or sensitive data.</span>
                 </label>
               </div>
               <button 
@@ -350,7 +350,7 @@ function App() {
               </div>
             )}
             {error && <div className="mt-4 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-200">{error}</div>}
-            <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">Files are hashed first. If a report is cached, it returns instantly. Otherwise, the file is uploaded to the analysis sandbox.</p>
+            <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">Files are hashed first. If a report is cached, it returns instantly. Otherwise, the file is scanned locally on the server using Imunify360.</p>
           </div>
         )}
 
@@ -721,7 +721,7 @@ function FileScanResults({ job }) {
         </div>
 
         <div className="panel p-5">
-          <h3 className="font-semibold mb-3">Antivirus Verdict</h3>
+          <h3 className="font-semibold mb-3">Imunify360 Verdict</h3>
           {job.stats && (
             <div className="space-y-3 text-sm">
               <div className="flex justify-between border-b pb-1">
@@ -743,15 +743,15 @@ function FileScanResults({ job }) {
             </div>
           )}
           <p className="text-xs text-slate-500 mt-4 leading-relaxed">
-            Multi-engine sandbox scans test the binary against dozens of commercial antivirus signatures.
+            Imunify360 scans files against extensive malware definitions, checking for web shells, injected code, and malicious database signatures.
           </p>
         </div>
       </div>
 
       <div className="panel p-5">
-        <h3 className="font-semibold mb-4">Antivirus Engine Detections</h3>
+        <h3 className="font-semibold mb-4">Malware Detections</h3>
         {flaggedEngines.length === 0 ? (
-          <p className="text-sm text-slate-500">No security vendors flagged this file signature as malicious.</p>
+          <p className="text-sm text-slate-500">Imunify360 did not find any security threats in this file.</p>
         ) : (
           <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
             {flaggedEngines.map(([engine, res]) => (
