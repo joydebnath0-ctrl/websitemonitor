@@ -420,12 +420,20 @@ function App() {
         {complete && job.domain && !job.domainScanId && (
           <>
             <Hero job={job} />
+            
+            {/* Prominent Wappalyzer Technology Profile at the top */}
+            {job.categories.find(c => c.id === 'cves') && (
+              <div className="mb-6">
+                <CategoryCard category={job.categories.find(c => c.id === 'cves')} />
+              </div>
+            )}
+
             <div className="grid xl:grid-cols-[1.1fr_.9fr] gap-6 mb-6">
               <Radar categories={job.categories} />
               <Timeline history={history} current={job} />
             </div>
             <IssueList issues={job.issues} />
-            <CategoryGrid categories={job.categories} />
+            <CategoryGrid categories={job.categories.filter(c => c.id !== 'cves')} />
           </>
         )}
 
@@ -890,6 +898,25 @@ function UnifiedScanResults({ job }) {
                 </div>
               ))}
             </div>
+            {(() => {
+              const cvesCat = job.domainScan.categories.find(c => c.id === 'cves');
+              const findings = cvesCat?.technicalDetails?.findings || [];
+              if (findings.length === 0) return null;
+
+              return (
+                <div className="mt-4 border-t pt-4">
+                  <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Detected Technologies (Wappalyzer Profile)</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {findings.map(t => (
+                      <span key={t.name} className="inline-flex items-center gap-1.5 rounded bg-sky-50 dark:bg-sky-950/40 border border-sky-100 dark:border-sky-900/50 px-2.5 py-1 text-xs font-semibold text-sky-800 dark:text-sky-300">
+                        <span className="h-1.5 w-1.5 rounded-full bg-sky-500"></span>
+                        <strong>{t.name}</strong> <span className="text-[10px] opacity-75 font-normal">v{t.version}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 
