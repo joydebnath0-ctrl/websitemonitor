@@ -1135,6 +1135,22 @@ app.get('/api/scans/recent', (req, res) => {
   res.json({ domains, urls, files });
 });
 
+app.get('/api/scans/file/hash/:sha256', (req, res) => {
+  try {
+    const sha256 = String(req.params.sha256 || '').trim().toLowerCase();
+    if (!/^[a-f0-9]{64}$/.test(sha256)) {
+      return res.status(400).json({ error: 'Invalid SHA-256 hash format.' });
+    }
+    const cached = getFileScanByHash(sha256);
+    if (cached) {
+      return res.json({ found: true, scan: cached });
+    }
+    return res.json({ found: false });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/scans/:id', (req, res) => {
   const id = req.params.id;
   let job = jobs.get(id);

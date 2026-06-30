@@ -25,6 +25,8 @@ function App() {
   const [recentScans, setRecentScans] = useState({ domains: [], urls: [], files: [] });
   const [error, setError] = useState('');
   const [dark, setDark] = useState(() => localStorage.getItem('theme') === 'dark');
+  const [uploadProgress, setUploadProgress] = useState(null);
+  const [isHashing, setIsHashing] = useState(false);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
@@ -95,23 +97,95 @@ function App() {
     }
   }
 
+  async function calculateFileHash(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const buffer = e.target.result;
+          const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+          resolve(hashHex);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
   async function startFileScan(e) {
     e.preventDefault();
     setError('');
     setJob(null);
+    setUploadProgress(null);
     try {
       if (!fileConsent) throw new Error('You must provide consent for file sharing and analysis.');
       if (!file) throw new Error('Please select a file to upload.');
+
+      let sha256 = null;
+      if (file.size < 500 * 1024 * 1024) {
+        setIsHashing(true);
+        try {
+          sha256 = await calculateFileHash(file);
+        } catch (err) {
+          console.warn('Local hash calculation failed, proceeding to direct upload:', err);
+        } finally {
+          setIsHashing(false);
+        }
+      }
+
+      if (sha256) {
+        const cacheRes = await fetch(`/api/scans/file/hash/${sha256}`);
+        if (cacheRes.ok) {
+          const cacheData = await cacheRes.json();
+          if (cacheData.found) {
+            setJob(cacheData.scan);
+            return;
+          }
+        }
+      }
+
       const formData = new FormData();
       formData.append('file', file);
 
-      const res = await fetch('/api/scans/file', {
-        method: 'POST',
-        body: formData
+      setUploadProgress(0);
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/scans/file');
+        
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percent = Math.round((event.loaded / event.total) * 100);
+            setUploadProgress(percent);
+          }
+        };
+
+        xhr.onload = () => {
+          setUploadProgress(null);
+          try {
+            const data = JSON.parse(xhr.responseText);
+            if (xhr.status >= 200 && xhr.status < 300) {
+              setJob(data);
+              resolve();
+            } else {
+              reject(new Error(data.error || 'File upload scan could not start.'));
+            }
+          } catch (err) {
+            reject(new Error('Failed to parse upload response.'));
+          }
+        };
+
+        xhr.onerror = () => {
+          setUploadProgress(null);
+          reject(new Error('Network error during file upload.'));
+        };
+
+        xhr.send(formData);
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'File upload scan could not start.');
-      setJob(data);
+
     } catch (err) {
       setError(err.message);
     }
@@ -237,10 +311,44 @@ function App() {
                   <span>I consent to upload this file to VirusTotal and confirm it does not contain private or sensitive data.</span>
                 </label>
               </div>
-              <button disabled={running || !file} className="w-full rounded-md bg-sky-600 px-5 py-3 font-semibold text-white disabled:opacity-50">
-                Upload & Scan File
+              <button 
+                disabled={running || isHashing || uploadProgress !== null || !file} 
+                className="w-full rounded-md bg-sky-600 px-5 py-3 font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isHashing && (
+                  <>
+                    <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    Calculating Hash...
+                  </>
+                )}
+                {!isHashing && uploadProgress !== null && (
+                  <>
+                    <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    Uploading... {uploadProgress}%
+                  </>
+                )}
+                {!isHashing && uploadProgress === null && (
+                  running ? 'Scan Running...' : 'Upload & Scan File'
+                )}
               </button>
             </form>
+            {uploadProgress !== null && (
+              <div className="mt-4">
+                <div className="flex justify-between text-xs font-semibold text-slate-500 mb-1">
+                  <span>Uploading file...</span>
+                  <span>{uploadProgress}%</span>
+                </div>
+                <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-2">
+                  <div className="bg-sky-600 h-2 rounded-full transition-all duration-150" style={{ width: `${uploadProgress}%` }}></div>
+                </div>
+              </div>
+            )}
             {error && <div className="mt-4 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-200">{error}</div>}
             <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">Files are hashed first. If a report is cached, it returns instantly. Otherwise, the file is uploaded to the analysis sandbox.</p>
           </div>
